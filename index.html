@@ -1027,6 +1027,7 @@ const S = {
   editingTask: null,
   editingProject: null,
   modalSubs: [],
+  copyFrom: null,
   saveTimer: null,
   lastCat: null,
   sort: 'default',
@@ -4210,6 +4211,11 @@ function mkCard(task, showReason) {
   editBtn.innerHTML='<i class="ti ti-pencil"></i>Edit';
   editBtn.onclick=e=>{ e.stopPropagation(); openModal(task); };
 
+  const copyBtn=document.createElement('button'); copyBtn.className='action-btn';
+  copyBtn.innerHTML='<i class="ti ti-copy"></i>Copy';
+  copyBtn.title='Duplicate into a new task';
+  copyBtn.onclick=e=>{ e.stopPropagation(); duplicateTask(task); };
+
   const snWrap=document.createElement('div'); snWrap.className='snooze-wrapper';
   const snBtn=document.createElement('button'); snBtn.className='action-btn';
   snBtn.innerHTML='<i class="ti ti-clock-pause"></i>Snooze';
@@ -4226,6 +4232,7 @@ function mkCard(task, showReason) {
   delBtn.onclick=e=>{ e.stopPropagation(); deleteTask(task.id); };
 
   acts.appendChild(editBtn);
+  acts.appendChild(copyBtn);
   if (!task.done) acts.appendChild(snWrap);
   acts.appendChild(delBtn);
   inner.appendChild(acts);
@@ -4478,17 +4485,25 @@ function snooze(id, days) {
   markUnsaved(); render(); showToast('Snoozed until '+t.due);
 }
 
+function duplicateTask(task) {
+  // Open the New Task modal pre-filled from `task`; saving creates a fresh task
+  // (S.editingTask stays null) so the original is untouched.
+  const copy={...task, subtasks:(task.subtasks||[]).map(s=>({...s, done:false}))};
+  openModal(copy, undefined, true);
+}
+
 // ─────────────────────────────────────────────
 // MODAL
 // ─────────────────────────────────────────────
-function openModal(task, presetProjectId) {
-  S.editingTask=task||null;
+function openModal(task, presetProjectId, asCopy) {
+  S.editingTask=(task && !asCopy) ? task : null;
+  S.copyFrom=asCopy ? {wikiPage:task.wikiPage||'', notes:task.notes||'', teamFlag:!!task.teamFlag} : null;
   S.modalSubs=task ? JSON.parse(JSON.stringify(task.subtasks||[])) : [];
-  document.getElementById('modal-title').textContent=task?'Edit Task':'New Task';
+  document.getElementById('modal-title').textContent=asCopy?'Duplicate Task':(task?'Edit Task':'New Task');
   document.getElementById('f-title').value=task?task.title:'';
   document.getElementById('f-priority').value=task?task.priority:3;
   document.getElementById('f-due').value=task?task.due:'';
-  const rv=task?task.recur:'';
+  const rv=(task&&task.recur)||'';
   if (rv.startsWith('every:')) {
     document.getElementById('f-recur').value='every';
     document.getElementById('f-recur-days').value=rv.slice(6)||'7';
@@ -4527,7 +4542,7 @@ function openModal(task, presetProjectId) {
 
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
-  S.editingTask=null; S.modalSubs=[];
+  S.editingTask=null; S.modalSubs=[]; S.copyFrom=null;
 }
 
 function renderModalSubs() {
@@ -4564,7 +4579,7 @@ function saveModal() {
   let recur=document.getElementById('f-recur').value;
   if (recur==='every') { const d=Math.max(1, parseInt(document.getElementById('f-recur-days').value)||7); recur='every:'+d; }
   const projVal=document.getElementById('f-project').value;
-  const wikiPage = S.wikiOnline ? document.getElementById('modal-wiki-page').value : (S.editingTask?.wikiPage||'');
+  const wikiPage = S.wikiOnline ? document.getElementById('modal-wiki-page').value : (S.editingTask?.wikiPage || S.copyFrom?.wikiPage || '');
   const data={title,priority:+document.getElementById('f-priority').value,category:cat,due:document.getElementById('f-due').value,recur,description:document.getElementById('f-desc').value.trim(),subtasks:S.modalSubs,projectId:projVal?parseInt(projVal):null,wikiPage};
   if (S.editingTask) {
     const snap = {...S.editingTask};
@@ -4572,9 +4587,10 @@ function saveModal() {
     Object.assign(S.editingTask, data);
     logChange('task', S.editingTask.id, 'update', `"${S.editingTask.title}"${diff ? ' — ' + diff : ''}`);
   } else {
-    const task={id:nextId(),done:false,aiRank:null,aiReason:'',created:new Date().toISOString(),notes:'',teamFlag:false,...data};
+    const cf=S.copyFrom;
+    const task={id:nextId(),done:false,aiRank:null,aiReason:'',created:new Date().toISOString(),notes:cf?.notes||'',teamFlag:cf?.teamFlag||false,...data};
     S.tasks.push(task);
-    logChange('task', task.id, 'create', 'Created task: "' + task.title + '"');
+    logChange('task', task.id, 'create', (cf?'Duplicated task: "':'Created task: "') + task.title + '"');
   }
   closeModal(); markUnsaved(); render();
 }
