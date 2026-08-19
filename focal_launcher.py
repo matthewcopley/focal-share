@@ -21,8 +21,6 @@ import os
 import signal
 import sys
 import json
-import urllib.request
-import urllib.parse
 
 FOCAL_DIR = Path(__file__).parent
 WIKI_SCRIPT = FOCAL_DIR / 'wiki_server.py'
@@ -59,8 +57,8 @@ def _read_inbox():
     return items
 
 # ---------------------------------------------------------------------------
-# Load .env from the Focal folder for AWS credentials (only fills gaps —
-# existing env vars always take precedence). See .env.example.
+# Load .env from the Focal folder for optional settings like FOCAL_WIKI_ROOT
+# (only fills gaps — existing env vars always take precedence). See .env.example.
 # ---------------------------------------------------------------------------
 def _load_dotenv(path: Path):
     if not path.exists():
@@ -371,184 +369,6 @@ def _on_exit(signum=None, frame=None):
 
 signal.signal(signal.SIGINT, _on_exit)
 signal.signal(signal.SIGTERM, _on_exit)
-
-
-# ---------------------------------------------------------------------------
-# Bedrock AI proxy
-# The browser can't sign AWS requests, so we proxy through the launcher.
-# Handles the full converse + wiki tool-call loop server-side.
-# ---------------------------------------------------------------------------
-WIKI_BASE = 'http://localhost:8765'
-BEDROCK_WIKI_TOOLS = [
-    {
-        'toolSpec': {
-            'name': 'get_page',
-            'description': (
-                'Read a full wiki page by name. Use search_wiki first if you are '
-                'unsure which pages exist.'
-            ),
-            'inputSchema': {
-                'json': {
-                    'type': 'object',
-                    'properties': {'name': {'type': 'string', 'description': 'Page filename without the .md extension'}},
-                    'required': ['name'],
-                }
-            },
-        }
-    },
-    {
-        'toolSpec': {
-            'name': 'search_wiki',
-            'description': 'Search all wiki pages for a keyword or phrase. Returns matching excerpts.',
-            'inputSchema': {
-                'json': {
-                    'type': 'object',
-                    'properties': {'query': {'type': 'string', 'description': 'Search term'}},
-                    'required': ['query'],
-                }
-            },
-        }
-    },
-]
-
-
-def _wiki_fetch(tool_name: str, args: dict) -> str:
-    """Call the local wiki server from the launcher process."""
-    try:
-        if tool_name == 'get_page':
-            url = f"{WIKI_BASE}/page?name={urllib.parse.quote(args.get('name', ''))}"
-        elif tool_name == 'search_wiki':
-            url = f"{WIKI_BASE}/search?q={urllib.parse.quote(args.get('query', ''))}"
-        else:
-            return 'Unknown tool'
-        with urllib.request.urlopen(url, timeout=8) as resp:
-            return resp.read().decode('utf-8')
-    except Exception as e:
-        return f'Wiki lookup failed: {e}'
-
-
-def _openai_to_bedrock(messages: list):
-    """Convert OpenAI-style message list to Bedrock Converse (system, messages)."""
-    system = []
-    bedrock_msgs = []
-    for m in messages:
-        role = m.get('role', '')
-        content = m.get('content') or ''
-        if role == 'system':
-            if content:
-                system.append({'text': content})
-        elif role == 'tool':
-            bedrock_msgs.append({
-                'role': 'user',
-                'content': [{
-                    'toolResult': {
-                        'toolUseId': m.get('tool_call_id', 'unknown'),
-                        'content': [{'text': str(content)}],
-                    }
-                }],
-            })
-        elif role == 'assistant' and m.get('tool_calls'):
-            blocks = []
-            if content:
-                blocks.append({'text': content})
-            for tc in m['tool_calls']:
-                blocks.append({
-                    'toolUse': {
-                        'toolUseId': tc['id'],
-                        'name': tc['function']['name'],
-                        'input': json.loads(tc['function'].get('arguments') or '{}'),
-                    }
-                })
-            bedrock_msgs.append({'role': 'assistant', 'content': blocks})
-        else:
-            if content:
-                bedrock_msgs.append({'role': role, 'content': [{'text': content}]})
-    return system, bedrock_msgs
-
-
-@app.route('/api/ai/bedrock/status')
-def bedrock_status():
-    configured = bool(os.getenv('AWS_ACCESS_KEY_ID'))
-    return jsonify({
-        'configured': configured,
-        'region': os.getenv('AWS_REGION', 'us-east-1'),
-        'model': os.getenv('BEDROCK_MODEL_ID', ''),
-    })
-
-
-@app.route('/api/ai/bedrock', methods=['POST', 'OPTIONS'])
-def bedrock_proxy():
-    if request.method == 'OPTIONS':
-        return Response('', status=200)
-    try:
-        import boto3
-    except ImportError:
-        return jsonify({'error': 'boto3 not installed — run: pip install boto3'}), 500
-
-    try:
-        data = request.get_json(force=True)
-        messages     = list(data.get('messages', []))
-        max_tokens   = int(data.get('max_tokens', 600))
-        temperature  = float(data.get('temperature', 0.3))
-        wiki_online  = bool(data.get('wiki_online', False))
-        region       = os.getenv('AWS_REGION', 'us-east-1')
-        model_id     = os.getenv('BEDROCK_MODEL_ID', '')
-        if not model_id:
-            return jsonify({'error': 'BEDROCK_MODEL_ID not set — add it to the .env file in the Focal folder'}), 500
-
-        bedrock = boto3.client('bedrock-runtime', region_name=region)
-        tools = BEDROCK_WIKI_TOOLS if wiki_online else None
-
-        for _ in range(5):
-            system, bedrock_msgs = _openai_to_bedrock(messages)
-            kwargs = {
-                'modelId':         model_id,
-                'messages':        bedrock_msgs,
-                'inferenceConfig': {'maxTokens': max_tokens, 'temperature': temperature},
-            }
-            if system:
-                kwargs['system'] = system
-            if tools:
-                kwargs['toolConfig'] = {'tools': tools}
-
-            resp = bedrock.converse(**kwargs)
-            stop_reason = resp.get('stopReason', 'end_turn')
-            out_msg     = resp['output']['message']
-
-            if stop_reason == 'tool_use':
-                # Collect tool-use blocks and append assistant turn
-                tool_calls_oa = []
-                text_so_far   = ''
-                for block in out_msg.get('content', []):
-                    if 'text' in block:
-                        text_so_far = block['text']
-                    elif 'toolUse' in block:
-                        tu = block['toolUse']
-                        tool_calls_oa.append({
-                            'id':       tu['toolUseId'],
-                            'type':     'function',
-                            'function': {'name': tu['name'], 'arguments': json.dumps(tu['input'])},
-                        })
-
-                messages.append({'role': 'assistant', 'content': text_so_far, 'tool_calls': tool_calls_oa})
-
-                # Execute each tool and append results
-                for tc in tool_calls_oa:
-                    args   = json.loads(tc['function'].get('arguments') or '{}')
-                    result = _wiki_fetch(tc['function']['name'], args)
-                    messages.append({'role': 'tool', 'tool_call_id': tc['id'], 'content': result})
-
-            else:
-                # Final answer — collect all text blocks
-                text = ''.join(b.get('text', '') for b in out_msg.get('content', []))
-                return jsonify({'text': text.strip()})
-
-        return jsonify({'error': 'Tool call loop exceeded max rounds'}), 500
-
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(exc)}), 500
 
 
 if __name__ == '__main__':

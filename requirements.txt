@@ -1,4 +1,1 @@
 flask
-
-# Optional — only needed for the AWS Bedrock AI backend:
-# boto3

@@ -1022,8 +1022,6 @@ const S = {
   dbHandle: null,
   unsaved: false,
   lmOnline: false,
-  aiBackend: localStorage.getItem('focal_ai_backend') || 'lmstudio', // 'lmstudio' | 'bedrock'
-  bedrockInfo: null, // {configured, region, model} — populated by checkLM
   showAllFocus: false,
   doneFilter: 'today',
   editingTask: null,
@@ -3142,88 +3140,60 @@ async function renderSettings(c) {
   };
   genSec.appendChild(timeoutRow);
 
-  // ── AI backend selector ───────────────────────────────────────────────────
-  const backendRow = document.createElement('div');
-  backendRow.className = 'settings-row';
-  backendRow.innerHTML = `
+  // ── AI settings — any OpenAI-compatible endpoint ──────────────────────────
+  // Local (LM Studio, Ollama, llama.cpp, …) or hosted (OpenAI, OpenRouter, …).
+  const endpointRow = document.createElement('div');
+  endpointRow.className = 'settings-row';
+  endpointRow.innerHTML = `
     <div>
-      <div style="font-size:13px">AI backend</div>
-      <label>Which LLM powers Focal's AI features</label>
+      <div style="font-size:13px">AI endpoint</div>
+      <label>Base URL of an OpenAI-compatible API (LM Studio default: ${LM_DEFAULT_ENDPOINT}, OpenAI: https://api.openai.com)</label>
     </div>
-    <div style="display:flex;gap:6px;align-items:center">
-      <button id="backend-lm-btn" style="padding:4px 12px;border:1px solid ${S.aiBackend==='lmstudio'?'var(--accent)':'var(--border)'};background:transparent;color:${S.aiBackend==='lmstudio'?'var(--accent)':'var(--text-dim)'};cursor:pointer;font-family:var(--font-mono);font-size:11px;letter-spacing:0.05em">Local model</button>
-      <button id="backend-bedrock-btn" style="padding:4px 12px;border:1px solid ${S.aiBackend==='bedrock'?'var(--accent)':'var(--border)'};background:transparent;color:${S.aiBackend==='bedrock'?'var(--accent)':'var(--text-dim)'};cursor:pointer;font-family:var(--font-mono);font-size:11px;letter-spacing:0.05em">Bedrock</button>
-    </div>`;
-  backendRow.querySelector('#backend-lm-btn').onclick = () => {
-    S.aiBackend = 'lmstudio'; localStorage.setItem('focal_ai_backend','lmstudio');
-    checkLM(); renderContent();
+    <input type="text" id="lm-endpoint-input" value="${esc(getLMEndpoint())}" placeholder="${LM_DEFAULT_ENDPOINT}"
+      style="width:220px;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
+  endpointRow.querySelector('#lm-endpoint-input').onchange = function() {
+    const v = this.value.trim().replace(/\/+$/, '');
+    if (v) localStorage.setItem('focal_lm_endpoint', v);
+    else localStorage.removeItem('focal_lm_endpoint');
+    checkLM();
+    showToast('Endpoint saved');
   };
-  backendRow.querySelector('#backend-bedrock-btn').onclick = () => {
-    S.aiBackend = 'bedrock'; localStorage.setItem('focal_ai_backend','bedrock');
-    checkLM(); renderContent();
+  genSec.appendChild(endpointRow);
+
+  const keyRow = document.createElement('div');
+  keyRow.className = 'settings-row';
+  keyRow.innerHTML = `
+    <div>
+      <div style="font-size:13px">API key</div>
+      <label>Optional — leave blank for local servers. Stored in this browser only</label>
+    </div>
+    <input type="password" id="ai-key-input" value="${esc(localStorage.getItem('focal_ai_key')||'')}" placeholder="none"
+      autocomplete="off" style="width:220px;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
+  keyRow.querySelector('#ai-key-input').onchange = function() {
+    const v = this.value.trim();
+    if (v) localStorage.setItem('focal_ai_key', v);
+    else localStorage.removeItem('focal_ai_key');
+    checkLM();
+    showToast(v ? 'API key saved' : 'API key cleared');
   };
-  genSec.appendChild(backendRow);
+  genSec.appendChild(keyRow);
 
-  // Bedrock info row — only shown when Bedrock is selected
-  if (S.aiBackend === 'bedrock') {
-    const bedrockInfoRow = document.createElement('div');
-    bedrockInfoRow.className = 'settings-row';
-    bedrockInfoRow.style.cssText = 'flex-direction:column;align-items:flex-start;gap:4px';
-    const statusColor = (S.lmOnline) ? '#4DC88A' : 'var(--p1)';
-    const statusLabel = (S.lmOnline) ? 'Credentials found' : 'AWS_ACCESS_KEY_ID not set';
-    const bc = S.bedrockInfo;
-    bedrockInfoRow.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;width:100%">
-        <div style="font-size:13px">Bedrock connection</div>
-        <span style="font-size:11px;color:${statusColor}">${statusLabel}</span>
-      </div>
-      ${bc ? `
-        <div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted)">
-          <span>Region: <strong style="color:var(--text)">${bc.region}</strong></span>
-          <span>Model: <strong style="color:var(--text)">${bc.model||'—'}</strong></span>
-        </div>
-        <div style="font-size:11px;color:var(--text-subtle)">Credentials and model ID are configured in the <code style="font-size:10px;background:var(--bg);padding:1px 4px">.env</code> file in the Focal folder</div>
-      ` : '<div style="font-size:11px;color:var(--text-subtle)">Could not reach launcher — is focal_launcher.py running?</div>'}`;
-    genSec.appendChild(bedrockInfoRow);
-  }
-
-  // Local model settings — any OpenAI-compatible server (LM Studio, Ollama, llama.cpp, …)
-  if (S.aiBackend !== 'bedrock') {
-    const localInfoRow = document.createElement('div');
-    localInfoRow.className = 'settings-row';
-    localInfoRow.innerHTML = `
-      <div>
-        <div style="font-size:13px">Local model endpoint</div>
-        <label>Base URL of an OpenAI-compatible server (LM Studio default: ${LM_DEFAULT_ENDPOINT})</label>
-      </div>
-      <input type="text" id="lm-endpoint-input" value="${esc(getLMEndpoint())}" placeholder="${LM_DEFAULT_ENDPOINT}"
-        style="width:220px;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
-    localInfoRow.querySelector('#lm-endpoint-input').onchange = function() {
-      const v = this.value.trim().replace(/\/+$/, '');
-      if (v) localStorage.setItem('focal_lm_endpoint', v);
-      else localStorage.removeItem('focal_lm_endpoint');
-      checkLM();
-      showToast('Endpoint saved');
-    };
-    genSec.appendChild(localInfoRow);
-
-    const modelRow = document.createElement('div');
-    modelRow.className = 'settings-row';
-    modelRow.innerHTML = `
-      <div>
-        <div style="font-size:13px">Local model name</div>
-        <label>Model id sent to the server — leave blank to auto-detect the loaded model</label>
-      </div>
-      <input type="text" id="lm-model-input" value="${esc(localStorage.getItem('focal_lm_model')||'')}" placeholder="auto-detect"
-        style="width:220px;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
-    modelRow.querySelector('#lm-model-input').onchange = function() {
-      const v = this.value.trim();
-      if (v) localStorage.setItem('focal_lm_model', v);
-      else localStorage.removeItem('focal_lm_model');
-      showToast('Model name saved');
-    };
-    genSec.appendChild(modelRow);
-  }
+  const modelRow = document.createElement('div');
+  modelRow.className = 'settings-row';
+  modelRow.innerHTML = `
+    <div>
+      <div style="font-size:13px">Model name</div>
+      <label>Model id sent to the endpoint — leave blank to auto-detect the server's first model</label>
+    </div>
+    <input type="text" id="lm-model-input" value="${esc(localStorage.getItem('focal_lm_model')||'')}" placeholder="auto-detect"
+      style="width:220px;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
+  modelRow.querySelector('#lm-model-input').onchange = function() {
+    const v = this.value.trim();
+    if (v) localStorage.setItem('focal_lm_model', v);
+    else localStorage.removeItem('focal_lm_model');
+    showToast('Model name saved');
+  };
+  genSec.appendChild(modelRow);
 
   // ── Streak pause ──────────────────────────────────
   const pauseRow = document.createElement('div');
@@ -3596,7 +3566,7 @@ async function renderSettings(c) {
   genSumBtn.onclick = async () => {
     const date = datePick.value;
     if (!date) { showToast('Pick a date first'); return; }
-    if (!S.lmOnline) { showToast(S.aiBackend==='bedrock'?'Bedrock not configured':'Local model offline — start your local AI server'); return; }
+    if (!S.lmOnline) { showToast('AI endpoint offline — check Settings'); return; }
 
     const start = new Date(date + 'T00:00:00').getTime();
     const end   = new Date(date + 'T23:59:59').getTime();
@@ -3655,7 +3625,7 @@ Rules: Skip sections with no activity. Use real names from the log. EVERY comple
     ];
 
     try {
-      const result = await callLMStudioWithWiki(messages, { max_tokens: 3000, temperature: 0.3, timeout: getLMTimeout(), skipWiki: true, skipThinking: true });
+      const result = await callLMStudioWithWiki(messages, { max_tokens: 3000, temperature: 0.3, timeout: getLMTimeout(), skipWiki: true });
       const preview = sumPreview.querySelector('#sum-preview-text');
       preview.value = result;
       sumPreview.querySelector('#sum-preview-label').textContent = `Preview (${entries.length} entries → ${date})`;
@@ -4404,6 +4374,15 @@ function getLMModel() {
   return (localStorage.getItem('focal_lm_model') || '').trim() || S.lmDetectedModel || 'local-model';
 }
 
+// Request headers for the AI endpoint — adds Bearer auth when an API key is
+// set (hosted services); local servers need no key.
+function aiHeaders(json=true) {
+  const h = json ? {'Content-Type':'application/json'} : {};
+  const key = (localStorage.getItem('focal_ai_key') || '').trim();
+  if (key) h['Authorization'] = 'Bearer ' + key;
+  return h;
+}
+
 function toggleDone(id) {
   const t=S.tasks.find(x=>x.id===id); if(!t) return;
   if (!t.done) {
@@ -4757,67 +4736,25 @@ function closeWikiModal() {
 }
 
 async function checkLM() {
-  if (S.aiBackend === 'bedrock') {
-    try {
-      const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),4000);
-      const r=await fetch('/api/ai/bedrock/status',{signal:ctrl.signal});
-      if (r.ok) {
-        S.bedrockInfo = await r.json();
-        S.lmOnline = S.bedrockInfo.configured;
-      } else { S.lmOnline=false; }
-    } catch(e){ S.lmOnline=false; }
-    const dot=document.getElementById('lm-dot');
-    dot.className=S.lmOnline?'online':'';
-    dot.title=S.lmOnline
-      ? `Bedrock online — ${S.bedrockInfo?.model||''} (${S.bedrockInfo?.region||''})`
-      : 'Bedrock not configured (missing AWS credentials)';
-  } else {
-    try {
-      const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),3000);
-      const r=await fetch(`${getLMEndpoint()}/v1/models`,{signal:ctrl.signal});
-      S.lmOnline=r.ok;
-      if (r.ok) { try { const d=await r.json(); S.lmDetectedModel=d.data?.[0]?.id||''; } catch(e){} }
-    } catch(e){ S.lmOnline=false; }
-    const dot=document.getElementById('lm-dot');
-    dot.className=S.lmOnline?'online':'';
-    dot.title=S.lmOnline?'Local model online':'Local model offline — start your local AI server';
-  }
+  try {
+    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),4000);
+    const r=await fetch(`${getLMEndpoint()}/v1/models`,{signal:ctrl.signal, headers:aiHeaders(false)});
+    S.lmOnline=r.ok;
+    if (r.ok) { try { const d=await r.json(); S.lmDetectedModel=d.data?.[0]?.id||''; } catch(e){} }
+  } catch(e){ S.lmOnline=false; }
+  const dot=document.getElementById('lm-dot');
+  dot.className=S.lmOnline?'online':'';
+  dot.title=S.lmOnline
+    ? `AI endpoint online${S.lmDetectedModel?' — '+S.lmDetectedModel:''}`
+    : 'AI endpoint offline — check the endpoint (and API key) in Settings';
 }
 
 // ─────────────────────────────────────────────
 // LM STUDIO WIKI-AWARE HELPER
 // ─────────────────────────────────────────────
 async function callLMStudioWithWiki(messages, opts={}) {
-  // ── Bedrock path — proxy handles converse + tool loop server-side ────────
-  if (S.aiBackend === 'bedrock') {
-    // Enrich system prompt the same way as the local-model path
-    const wikiActive = S.wikiOnline && !opts.skipWiki;
-    const msgs = messages.map((m,i) => {
-      if (i===0 && m.role==='system' && wikiActive) {
-        return {...m, content: m.content + '\n\nYou have wiki tools available (get_page, search_wiki). The wiki contains the user\'s personal work documentation. Use them to look up relevant context before answering when it would improve accuracy.'};
-      }
-      return m;
-    });
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), opts.timeout ?? getLMTimeout());
-    const r = await fetch('/api/ai/bedrock', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      signal: ctrl.signal,
-      body: JSON.stringify({
-        messages: msgs,
-        max_tokens: opts.max_tokens ?? 600,
-        temperature: opts.temperature ?? 0.3,
-        wiki_online: wikiActive,
-      }),
-    });
-    if (!r.ok) throw new Error('Bedrock proxy HTTP ' + r.status);
-    const d = await r.json();
-    if (d.error) throw new Error(d.error);
-    return d.text || '';
-  }
-
-  // ── Local model path via an OpenAI-compatible server ─────────────────────
+  // Talks to any OpenAI-compatible /v1/chat/completions endpoint — local
+  // (LM Studio, Ollama, …) or hosted (OpenAI, OpenRouter, …).
   const tools = (S.wikiOnline && !opts.skipWiki) ? [
     {type:'function', function:{name:'get_page',
       description:"Read a full wiki page by name. Use search_wiki first if you are unsure which pages exist.",
@@ -4836,16 +4773,15 @@ async function callLMStudioWithWiki(messages, opts={}) {
   });
 
   for (let round=0; round<5; round++) {
-    const thinkingOpts = opts.skipThinking ? {thinking: {type: 'disabled'}, enable_thinking: false} : {};
     const body = {model:getLMModel(), temperature:opts.temperature??0.3, max_tokens:opts.max_tokens??600,
-      messages:msgs, ...(tools ? {tools, tool_choice:'auto'} : {}), ...thinkingOpts};
+      messages:msgs, ...(tools ? {tools, tool_choice:'auto'} : {})};
     const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), opts.timeout??getLMTimeout());
     const r = await fetch(`${getLMEndpoint()}/v1/chat/completions`,
-      {method:'POST', headers:{'Content-Type':'application/json'}, signal:ctrl.signal, body:JSON.stringify(body)});
+      {method:'POST', headers:aiHeaders(), signal:ctrl.signal, body:JSON.stringify(body)});
     if (!r.ok) throw new Error('HTTP '+r.status);
     const d = await r.json();
     const choice = d.choices?.[0];
-    if (!choice) throw new Error('No response from the local model');
+    if (!choice) throw new Error('No response from the AI endpoint');
     if (choice.finish_reason === 'tool_calls') {
       msgs.push(choice.message);
       for (const tc of (choice.message.tool_calls||[])) {
@@ -4974,7 +4910,7 @@ async function runDigest(startDate, endDate) {
 
 async function runInsight() {
   if (!S.lmOnline) {
-    showToast((S.aiBackend==='bedrock'?'Bedrock not configured':'Local model offline')+' — cross-entity insight requires AI connection');
+    showToast('AI endpoint offline — cross-entity insight requires AI connection');
     return;
   }
   showAIOutput('Cross-Entity Insight', '⏳ Analysing your data…');
@@ -5009,7 +4945,7 @@ async function askNextAction() {
     if (!top) { showToast('No pending tasks to suggest'); return; }
     txt.textContent = `Focus on: "${top.title}"`;
     banner.classList.add('visible');
-    showToast((S.aiBackend==='bedrock'?'Bedrock not configured':'Local model offline')+' — rule-based suggestion');
+    showToast('AI endpoint offline — rule-based suggestion');
     return;
   }
 
@@ -5076,7 +5012,7 @@ function repairRankingJSON(raw) {
 async function prioritize() {
   await checkLM();
   if (!S.lmOnline) {
-    ruleRank(); markUnsaved(); render(); showToast((S.aiBackend==='bedrock'?'Bedrock not configured':'Local model offline')+' — rule-based ranking applied'); return;
+    ruleRank(); markUnsaved(); render(); showToast('AI endpoint offline — rule-based ranking applied'); return;
   }
   const pending = S.tasks.filter(t=>!t.done);
   if (!pending.length) { showToast('No pending tasks'); return; }
@@ -5159,7 +5095,7 @@ Output the JSON array immediately.${futureContext}`;
       {role:'user', content:'/no_think\n' + JSON.stringify(payload)}
     // Use 8× token headroom for reasoning models (1836 thinking + ~500 output at ~17 t/s ≈ 140s min)
     // Hard floor of 5 min regardless of user timeout setting
-    ], {temperature:0.2, max_tokens:8000, timeout:Math.max(300000, getLMTimeout()), skipWiki:true, skipThinking:true});
+    ], {temperature:0.2, max_tokens:8000, timeout:Math.max(300000, getLMTimeout()), skipWiki:true});
     const ranked = repairRankingJSON(content);
     ranked.forEach(x=>{ const t=S.tasks.find(t=>t.id===x.id); if(t){t.aiRank=x.rank;t.aiReason=x.reason||'';} });
 
