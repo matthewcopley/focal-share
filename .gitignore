@@ -1,0 +1,19 @@
+# Personal data — never commit your database
+focal.db
+focal.db.*
+*.db
+*.db.tmp
+*.db.backup
+
+# Task handoff inbox
+.focal_inbox/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
