@@ -21,8 +21,8 @@ A personal productivity app — tasks, projects, ideas, wins, streaks, and a mom
 ## Getting started
 
 ```bash
-git clone <this-repo>
-cd focal
+git clone https://github.com/matthewcopley/focal-share.git
+cd focal-share
 pip install flask
 python3 focal_launcher.py
 ```
