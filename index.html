@@ -1025,7 +1025,7 @@ const S = {
   unsaved: false,
   lmOnline: false,
   showAllFocus: false,
-  doneFilter: 'today',   // 'today'|'yesterday'|'7d'|'30d'|'all'|'custom'
+  doneFilter: 'today',   // 'today'|'yesterday'|'week'|'month'|'all'|'custom'
   doneFrom: '',          // custom completed-on range (inclusive), YYYY-MM-DD
   doneTo: '',
   editingTask: null,
@@ -1080,6 +1080,18 @@ function addDays(base, n) {
   const d = new Date((base || today()) + 'T12:00:00');
   d.setDate(d.getDate() + n);
   return localDate(d);
+}
+
+// Monday-anchored start of base's calendar week, matching the dashboard heatmap grid
+function startOfWeek(base) {
+  const d = new Date((base || today()) + 'T12:00:00');
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return localDate(d);
+}
+
+// First day of base's calendar month
+function startOfMonth(base) {
+  return (base || today()).slice(0, 8) + '01';
 }
 
 // Returns the date string n business days (Mon–Fri) from base (default today)
@@ -2611,8 +2623,8 @@ function renderList(c) {
     const DONE_RANGES = [
       {k:'today',     l:'Today'},
       {k:'yesterday', l:'Yesterday'},
-      {k:'7d',        l:'Last 7d'},
-      {k:'30d',       l:'Last 30d'},
+      {k:'week',      l:'This Week'},
+      {k:'month',     l:'This Month'},
       {k:'all',       l:'All time'},
     ];
     const rangeBar = document.createElement('div');
@@ -2702,9 +2714,10 @@ function renderList(c) {
       });
     } else {
       const todayStr = today();
+      // Calendar-anchored, not rolling: "This Week" starts Monday, "This Month" the 1st
       const fromDate = S.doneFilter === 'yesterday' ? addDays(todayStr, -1)
-                     : S.doneFilter === '7d'        ? addDays(todayStr, -6)
-                     : S.doneFilter === '30d'       ? addDays(todayStr, -29)
+                     : S.doneFilter === 'week'      ? startOfWeek(todayStr)
+                     : S.doneFilter === 'month'     ? startOfMonth(todayStr)
                      : todayStr;
       base = base.filter(t => {
         const d = completedOn.get(t.id);
