@@ -2617,7 +2617,11 @@ function renderList(c) {
   });
   c.appendChild(searchWrap);
 
-  // ── Done-view date range filter ──────────────────────────────────────────
+  // ── Done-view completion-date filter ─────────────────────────────────────
+  // One control group, one leading "Completed on" label: the preset chips and
+  // the from→to pair are alternative ways to set the same completion-date
+  // window, so the label has to lead the whole bar rather than sit between them
+  // (which reads as scoping it to the date inputs alone).
   if (S.view === 'done') {
     const todayStr = today();
     const DONE_RANGES = [
@@ -2645,10 +2649,6 @@ function renderList(c) {
     // leave the other blank for open-ended. Same date in both = that single day.
     const onWrap = document.createElement('div');
     onWrap.style.cssText = 'display:flex;align-items:center;gap:6px';
-    const onLbl = document.createElement('span');
-    onLbl.style.cssText = 'font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-subtle)';
-    onLbl.textContent = 'Completed on';
-    onWrap.appendChild(onLbl);
 
     const mkBound = (prop, title) => {
       const inp = document.createElement('input');
@@ -2678,6 +2678,10 @@ function renderList(c) {
 
     const doneBar = document.createElement('div');
     doneBar.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px';
+    const onLbl = document.createElement('span');
+    onLbl.style.cssText = 'font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-subtle)';
+    onLbl.textContent = 'Completed on';
+    doneBar.appendChild(onLbl);
     doneBar.appendChild(rangeBar);
     doneBar.appendChild(onWrap);
     c.appendChild(doneBar);
