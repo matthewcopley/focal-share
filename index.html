@@ -167,6 +167,8 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .cat-pill{padding:2px 8px;border-radius:var(--r-pill);font-size:11px;font-weight:500;color:#fff;white-space:nowrap}
 .subtask-count{font-size:12px;color:var(--text-subtle);white-space:nowrap}
 .recur-icon{color:var(--text-subtle);font-size:14px;line-height:1}
+.done-badge{padding:2px 8px;border-radius:var(--r-pill);font-size:11px;font-weight:500;white-space:nowrap;background:var(--bg);color:var(--text-muted)}
+.done-badge.late{background:var(--overdue-bg);color:var(--overdue-text)}
 /* ── Expand area ── */
 .task-expand{max-height:0;overflow:hidden;transition:max-height .25s ease}
 .task-expand.open{max-height:1200px}
@@ -1309,7 +1311,7 @@ function dbLoadAll() {
       subtasks:subs, aiRank:o.aiRank!=null?o.aiRank:null, aiReason:o.aiReason||'',
       created:o.created||new Date().toISOString(), notes:o.notes||'',
       projectId:o.projectId!=null?o.projectId:null,
-      teamFlag:o.teamFlag===1, wikiPage:o.wikiPage||'' };
+      teamFlag:o.teamFlag===1, wikiPage:o.wikiPage||'', completedAt:o.completedAt||'' };
   }) : [];
 
   const projRes = S.db.exec('SELECT * FROM projects ORDER BY id');
@@ -1362,6 +1364,8 @@ function dbLoadAll() {
 
   // Backfill complete entries for tasks/subtasks that predate logging
   backfillCompletions();
+  // Backfill task.completedAt from the changelog for tasks done before the column existed
+  backfillCompletedAt();
 }
 
 function toInt(v, fallback) { const n = parseInt(v, 10); return isNaN(n) ? (fallback ?? 0) : n; }
@@ -1371,7 +1375,7 @@ function dbSaveAll() {
   S.db.run('BEGIN TRANSACTION');
   try {
     S.db.run('DELETE FROM tasks');
-    const tSt = S.db.prepare('INSERT INTO tasks (id,title,priority,category,due,recur,description,done,subtasks,aiRank,aiReason,created,notes,projectId,teamFlag,wikiPage) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    const tSt = S.db.prepare('INSERT INTO tasks (id,title,priority,category,due,recur,description,done,subtasks,aiRank,aiReason,created,notes,projectId,teamFlag,wikiPage,completedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const t of S.tasks) {
       tSt.run([
         toInt(t.id, 0),
@@ -1390,6 +1394,7 @@ function dbSaveAll() {
         toIntOrNull(t.projectId),
         t.teamFlag ? 1 : 0,
         String(t.wikiPage || ''),
+        String(t.completedAt || ''),
       ]);
     }
     tSt.free();
@@ -1470,6 +1475,7 @@ function migrateDB() {
     "ALTER TABLE tasks ADD COLUMN teamFlag INTEGER DEFAULT 0",
     "ALTER TABLE tasks ADD COLUMN wikiPage TEXT DEFAULT ''",
     "ALTER TABLE projects ADD COLUMN wikiPage TEXT DEFAULT ''",
+    "ALTER TABLE tasks ADD COLUMN completedAt TEXT DEFAULT ''",
     `CREATE TABLE IF NOT EXISTS changelog (id INTEGER PRIMARY KEY, ts TEXT DEFAULT '', entityType TEXT DEFAULT '', entityId INTEGER, action TEXT DEFAULT '', description TEXT DEFAULT '')`,
     // Billing module removed 2026-07 — drop leftover tables from older DBs
     "DROP TABLE IF EXISTS billing_jobs",
@@ -1880,6 +1886,48 @@ function backfillCompletions() {
   S.changelog.sort((a,b) => b.ts.localeCompare(a.ts) || b.id - a.id);
   S.changelog = capChangelog(S.changelog);
   markUnsaved();
+}
+
+// Populate task.completedAt for tasks completed before the column existed, using
+// the most recent 'complete' changelog entry for that task. Runs after
+// backfillCompletions(), so every done task has at least a synthetic entry
+// (stamped with its creation date) to fall back on. Also clears a stale
+// completedAt on a task that was reopened outside the app.
+function backfillCompletedAt() {
+  let changed = false;
+  const latest = new Map();
+  for (const e of S.changelog) {
+    if (e.action !== 'complete' || e.description.includes('Subtask')) continue;
+    const prev = latest.get(e.entityId);
+    if (!prev || e.ts > prev) latest.set(e.entityId, e.ts);
+  }
+  for (const t of S.tasks) {
+    if (t.done && !t.completedAt) {
+      const ts = latest.get(t.id);
+      if (ts) { t.completedAt = ts; changed = true; }
+    } else if (!t.done && t.completedAt) {
+      t.completedAt = ''; changed = true;
+    }
+  }
+  if (changed) markUnsaved();
+}
+
+// Whole days between a task's due date and when it was actually completed.
+// Positive = late, 0 or null = on time / no due date.
+function daysLate(due, completedAt) {
+  if (!due || !completedAt) return 0;
+  const doneDay = localDate(new Date(completedAt));
+  const a = new Date(due + 'T12:00:00'), b = new Date(doneDay + 'T12:00:00');
+  const d = Math.round((b - a) / 86400000);
+  return d > 0 ? d : 0;
+}
+
+// "Aug 25, 3:41 PM" — completion stamp shown on done tasks
+function fmtCompleted(ts) {
+  const d = new Date(ts);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ', ' +
+         d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
 }
 
 
@@ -2585,7 +2633,8 @@ function renderList(c) {
 
   // Apply done-view date filter using completion timestamps from changelog
   if (S.view === 'done' && S.doneFilter !== 'all') {
-    // Build map: taskId → most-recent completion date string
+    // Build map: taskId → most-recent completion date string. task.completedAt is
+    // authoritative; the changelog is the fallback for rows the backfill couldn't fill.
     const completedOn = new Map();
     for (const e of S.changelog) {
       if (e.action === 'complete' && !e.description.includes('Subtask')) {
@@ -2593,6 +2642,9 @@ function renderList(c) {
         const prev = completedOn.get(e.entityId);
         if (!prev || d > prev) completedOn.set(e.entityId, d);
       }
+    }
+    for (const t of base) {
+      if (t.completedAt) completedOn.set(t.id, localDate(new Date(t.completedAt)));
     }
     const todayStr = today();
     const fromDate = S.doneFilter === 'yesterday' ? addDays(todayStr, -1)
@@ -4175,7 +4227,11 @@ function mkCard(task, showReason) {
   if (totSubs) meta.innerHTML+=`<span class="subtask-count">${doneSubs}/${totSubs}</span>`;
   const pd=document.createElement('span'); pd.className='priority-dot'; pd.style.background=pColor(task.priority); pd.title='P'+task.priority;
   meta.appendChild(pd);
-  if (dueStr) meta.innerHTML+=`<span class="due-badge due-${dueSt||'future'}">${dueStr}</span>`;
+  if (task.done && task.completedAt) {
+    const late=daysLate(task.due, task.completedAt);
+    const stamp=fmtCompleted(task.completedAt);
+    meta.innerHTML+=`<span class="done-badge${late?' late':''}" title="Completed ${esc(stamp)}">${late?`${late}d late`:esc(stamp)}</span>`;
+  } else if (dueStr) meta.innerHTML+=`<span class="due-badge due-${dueSt||'future'}">${dueStr}</span>`;
   if (task.category) meta.innerHTML+=`<span class="cat-pill" style="background:${cc}">${esc(task.category)}</span>`;
 
   const tfBtn = document.createElement('button');
@@ -4397,6 +4453,7 @@ function toggleDone(id) {
     setTimeout(() => _justCompleted.delete(id), 800);
     // Mark done and start grace period — task stays visible for 4s
     t.done=true;
+    t.completedAt=new Date().toISOString();
     logChange('task', id, 'complete', '✓ Completed: "' + (t.title||'') + '"');
     if (S.expandedId===id) S.expandedId=null;
     // Spawn the next occurrence now so it lands in the same save as the completion —
@@ -4405,7 +4462,7 @@ function toggleDone(id) {
     if (t.recur) {
       const nextDue = nextOccurrence(t.due || today(), t.recur);
       if (nextDue) {
-        const spawn={...t,id:nextId(),done:false,aiRank:null,aiReason:'',due:nextDue,created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
+        const spawn={...t,id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',due:nextDue,created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
         S.tasks.push(spawn);
         spawnId=spawn.id;
       }
@@ -4437,6 +4494,7 @@ function toggleDone(id) {
       }
     }
     t.done=false;
+    t.completedAt='';
     logChange('task', id, 'uncomplete', '↩ Reopened: "' + (t.title||'') + '"');
     markUnsaved(); render();
   }
@@ -4488,7 +4546,7 @@ function snooze(id, days) {
 function duplicateTask(task) {
   // Open the New Task modal pre-filled from `task`; saving creates a fresh task
   // (S.editingTask stays null) so the original is untouched.
-  const copy={...task, subtasks:(task.subtasks||[]).map(s=>({...s, done:false}))};
+  const copy={...task, done:false, completedAt:'', subtasks:(task.subtasks||[]).map(s=>({...s, done:false}))};
   openModal(copy, undefined, true);
 }
 
@@ -4588,7 +4646,7 @@ function saveModal() {
     logChange('task', S.editingTask.id, 'update', `"${S.editingTask.title}"${diff ? ' — ' + diff : ''}`);
   } else {
     const cf=S.copyFrom;
-    const task={id:nextId(),done:false,aiRank:null,aiReason:'',created:new Date().toISOString(),notes:cf?.notes||'',teamFlag:cf?.teamFlag||false,...data};
+    const task={id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',created:new Date().toISOString(),notes:cf?.notes||'',teamFlag:cf?.teamFlag||false,...data};
     S.tasks.push(task);
     logChange('task', task.id, 'create', (cf?'Duplicated task: "':'Created task: "') + task.title + '"');
   }
@@ -5350,7 +5408,7 @@ function setupEvents() {
       S.ideas.push(idea); e.target.value=''; markUnsaved(); render();
       setTimeout(()=>openIdeaModal(S.ideas.find(i=>i.id===idea.id)),50);
     } else {
-      const task={id:nextId(),title,priority:3,category:S.lastCat||(S.categories[0]?.name||''),due:'',recur:'',description:'',done:false,subtasks:[],aiRank:null,aiReason:'',created:new Date().toISOString(),notes:'',teamFlag:false,wikiPage:''};
+      const task={id:nextId(),title,priority:3,category:S.lastCat||(S.categories[0]?.name||''),due:'',recur:'',description:'',done:false,completedAt:'',subtasks:[],aiRank:null,aiReason:'',created:new Date().toISOString(),notes:'',teamFlag:false,wikiPage:''};
       S.tasks.push(task); e.target.value=''; markUnsaved(); render();
       setTimeout(()=>openModal(S.tasks.find(t=>t.id===task.id)),50);
     }
