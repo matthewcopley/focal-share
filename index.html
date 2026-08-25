@@ -1025,7 +1025,9 @@ const S = {
   unsaved: false,
   lmOnline: false,
   showAllFocus: false,
-  doneFilter: 'today',
+  doneFilter: 'today',   // 'today'|'yesterday'|'7d'|'30d'|'all'|'custom'
+  doneFrom: '',          // custom completed-on range (inclusive), YYYY-MM-DD
+  doneTo: '',
   editingTask: null,
   editingProject: null,
   modalSubs: [],
@@ -2000,7 +2002,7 @@ function isTaskGroupView(v) { return TASK_GROUP_VIEWS.has(v) || v.startsWith('ca
 
 function setView(v) {
   S.view=v; S.showAllFocus=false; S.filters={p:new Set(),cats:new Set()}; S.sort='default';
-  if (v==='done') S.doneFilter='today';
+  if (v==='done') { S.doneFilter='today'; S.doneFrom=''; S.doneTo=''; }
   if (!isTaskView(v)) S.taskSearch='';
   if (v!=='projects') S.projFilters={ statusSingle:'', type:'', sort:'default', search:'' };
   if (v!=='successes') S.successFilters={ year:'', status:'', impactLevel:'', area:'', search:'' };
@@ -2614,17 +2616,59 @@ function renderList(c) {
       {k:'all',       l:'All time'},
     ];
     const rangeBar = document.createElement('div');
-    rangeBar.style.cssText = 'display:flex;gap:0;border:1px solid var(--border);width:fit-content;margin-bottom:10px';
+    rangeBar.style.cssText = 'display:flex;gap:0;border:1px solid var(--border);width:fit-content';
     for (const {k, l} of DONE_RANGES) {
       const btn = document.createElement('button');
       const active = S.doneFilter === k;
       btn.style.cssText = `padding:4px 12px;border:none;border-right:1px solid var(--border);background:${active?'var(--surface)':'transparent'};color:${active?'var(--accent)':'var(--text-dim)'};cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;transition:color .1s`;
       btn.textContent = l;
-      btn.onclick = () => { S.doneFilter = k; renderContent(); };
+      // Picking a preset drops the custom range, so the two can't disagree
+      btn.onclick = () => { S.doneFilter = k; S.doneFrom = ''; S.doneTo = ''; renderContent(); };
       rangeBar.appendChild(btn);
     }
     rangeBar.lastChild.style.borderRight = 'none';
-    c.appendChild(rangeBar);
+
+    // ── Completed-on range — exact dates, for when the presets are too coarse.
+    // Setting either bound switches doneFilter to 'custom' (no preset chip active);
+    // leave the other blank for open-ended. Same date in both = that single day.
+    const onWrap = document.createElement('div');
+    onWrap.style.cssText = 'display:flex;align-items:center;gap:6px';
+    const onLbl = document.createElement('span');
+    onLbl.style.cssText = 'font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-subtle)';
+    onLbl.textContent = 'Completed on';
+    onWrap.appendChild(onLbl);
+
+    const mkBound = (prop, title) => {
+      const inp = document.createElement('input');
+      inp.type = 'date'; inp.title = title; inp.value = S[prop] || ''; inp.max = todayStr;
+      inp.style.cssText = 'font-size:11px;padding:3px 6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit';
+      inp.onchange = () => {
+        S[prop] = inp.value;
+        S.doneFilter = (S.doneFrom || S.doneTo) ? 'custom' : 'today';
+        renderContent();
+      };
+      return inp;
+    };
+    onWrap.appendChild(mkBound('doneFrom', 'Completed on or after'));
+    const sep = document.createElement('span');
+    sep.style.cssText = 'color:var(--text-subtle);font-size:11px';
+    sep.textContent = '→';
+    onWrap.appendChild(sep);
+    onWrap.appendChild(mkBound('doneTo', 'Completed on or before'));
+
+    if (S.doneFilter === 'custom') {
+      const clr = document.createElement('button');
+      clr.style.cssText = 'padding:3px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase';
+      clr.textContent = 'Clear';
+      clr.onclick = () => { S.doneFrom = ''; S.doneTo = ''; S.doneFilter = 'today'; renderContent(); };
+      onWrap.appendChild(clr);
+    }
+
+    const doneBar = document.createElement('div');
+    doneBar.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px';
+    doneBar.appendChild(rangeBar);
+    doneBar.appendChild(onWrap);
+    c.appendChild(doneBar);
   }
 
   c.appendChild(mkFilterBar());
@@ -2646,16 +2690,28 @@ function renderList(c) {
     for (const t of base) {
       if (t.completedAt) completedOn.set(t.id, localDate(new Date(t.completedAt)));
     }
-    const todayStr = today();
-    const fromDate = S.doneFilter === 'yesterday' ? addDays(todayStr, -1)
-                   : S.doneFilter === '7d'        ? addDays(todayStr, -6)
-                   : S.doneFilter === '30d'       ? addDays(todayStr, -29)
-                   : todayStr;
-    base = base.filter(t => {
-      const d = completedOn.get(t.id);
-      if (!d) return false;
-      return S.doneFilter === 'yesterday' ? d === fromDate : d >= fromDate;
-    });
+    if (S.doneFilter === 'custom') {
+      // Bounds inclusive; either may be blank for open-ended. Swap if the user
+      // picked them out of order rather than silently returning nothing.
+      let from = S.doneFrom, to = S.doneTo;
+      if (from && to && from > to) { const tmp = from; from = to; to = tmp; }
+      base = base.filter(t => {
+        const d = completedOn.get(t.id);
+        if (!d) return false;
+        return (!from || d >= from) && (!to || d <= to);
+      });
+    } else {
+      const todayStr = today();
+      const fromDate = S.doneFilter === 'yesterday' ? addDays(todayStr, -1)
+                     : S.doneFilter === '7d'        ? addDays(todayStr, -6)
+                     : S.doneFilter === '30d'       ? addDays(todayStr, -29)
+                     : todayStr;
+      base = base.filter(t => {
+        const d = completedOn.get(t.id);
+        if (!d) return false;
+        return S.doneFilter === 'yesterday' ? d === fromDate : d >= fromDate;
+      });
+    }
   }
 
   if (S.taskSearch.trim()) {
