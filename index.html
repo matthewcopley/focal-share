@@ -167,7 +167,7 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .cat-pill{padding:2px 8px;border-radius:var(--r-pill);font-size:11px;font-weight:500;color:#fff;white-space:nowrap}
 .subtask-count{font-size:12px;color:var(--text-subtle);white-space:nowrap}
 .recur-icon{color:var(--text-subtle);font-size:14px;line-height:1}
-.done-badge{padding:2px 8px;border-radius:var(--r-pill);font-size:11px;font-weight:500;white-space:nowrap;background:var(--bg);color:var(--text-muted)}
+.done-badge,.added-badge{padding:2px 8px;border-radius:var(--r-pill);font-size:11px;font-weight:500;white-space:nowrap;background:var(--bg);color:var(--text-muted)}
 .done-badge.late{background:var(--overdue-bg);color:var(--overdue-text)}
 /* ── Expand area ── */
 .task-expand{max-height:0;overflow:hidden;transition:max-height .25s ease}
@@ -589,6 +589,7 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
       <div class="nav-item nav-child" data-view="today"><i class="ti ti-calendar-event"></i><span class="nav-label">Today</span><span class="nav-badge" id="badge-today">0</span></div>
       <div class="nav-item nav-child" data-view="upcoming"><i class="ti ti-calendar-week"></i><span class="nav-label">Upcoming</span><span class="nav-badge" id="badge-upcoming">0</span></div>
       <div class="nav-item nav-child" data-view="all"><i class="ti ti-list"></i><span class="nav-label">All Tasks</span><span class="nav-badge" id="badge-all">0</span></div>
+      <div class="nav-item nav-child" data-view="recent"><i class="ti ti-history"></i><span class="nav-label">Recently Added</span><span class="nav-badge" id="badge-recent">0</span></div>
       <div class="nav-item nav-child" data-view="done"><i class="ti ti-check"></i><span class="nav-label">Done</span><span class="nav-badge" id="badge-done">0</span></div>
       <div class="nav-item nav-child" data-view="recurring"><i class="ti ti-refresh"></i><span class="nav-label">Recurring</span><span class="nav-badge" id="badge-recurring">0</span></div>
       <div class="nav-item nav-child" data-view="priority"><i class="ti ti-brain"></i><span class="nav-label">AI Priority</span><span class="nav-badge" id="badge-priority">0</span></div>
@@ -1028,6 +1029,9 @@ const S = {
   doneFilter: 'today',   // 'today'|'yesterday'|'week'|'month'|'all'|'custom'
   doneFrom: '',          // custom completed-on range (inclusive), YYYY-MM-DD
   doneTo: '',
+  addedFilter: 'week',   // Recently Added view — same keys as doneFilter, over tasks.created
+  addedFrom: '',         // custom added-on range (inclusive), YYYY-MM-DD
+  addedTo: '',
   editingTask: null,
   editingProject: null,
   modalSubs: [],
@@ -1587,7 +1591,7 @@ async function drainPendingTasks() {
         created: String(q.created || new Date().toISOString()),
         notes: String(q.notes || ''),
         projectId: (q.projectId != null && q.projectId !== '') ? parseInt(q.projectId, 10) : null,
-        teamFlag: !!q.teamFlag, wikiPage: '',
+        teamFlag: !!q.teamFlag, wikiPage: '', completedAt: '',
       };
       S.tasks.push(t); added.push(t);
     }
@@ -1767,6 +1771,7 @@ function viewTasks() {
   if (S.view==='today') return S.tasks.filter(x=>active(x)&&x.due&&x.due<=t);
   if (S.view==='upcoming') return S.tasks.filter(x=>active(x)&&x.due&&x.due>t&&x.due<=t14);
   if (S.view==='done') return S.tasks.filter(x=>x.done&&!S.pendingDone.has(x.id));
+  if (S.view==='recent') return [...S.tasks];
   if (S.view.startsWith('cat:')) { const n=S.view.slice(4); return S.tasks.filter(x=>active(x)&&x.category===n); }
   if (S.view==='team') return S.tasks.filter(x=>active(x)&&x.teamFlag);
   return S.tasks.filter(active);
@@ -1937,7 +1942,7 @@ function daysLate(due, completedAt) {
 }
 
 // "Aug 25, 3:41 PM" — completion stamp shown on done tasks
-function fmtCompleted(ts) {
+function fmtStamp(ts) {
   const d = new Date(ts);
   if (isNaN(d)) return '';
   return d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ', ' +
@@ -1958,6 +1963,9 @@ function renderSidebar() {
   document.getElementById('badge-upcoming').textContent = S.tasks.filter(x=>!x.done&&x.due&&x.due>t&&x.due<=t14).length;
   document.getElementById('badge-all').textContent = pendingCount;
   document.getElementById('badge-done').textContent = S.tasks.filter(x=>x.done).length;
+  // Matches the view's default filter (This Week), so the badge counts what you'd land on
+  const wkStart = startOfWeek(t);
+  document.getElementById('badge-recent').textContent = S.tasks.filter(x=>x.created && localDate(new Date(x.created)) >= wkStart).length;
   document.getElementById('badge-recurring').textContent = S.tasks.filter(x=>!x.done&&x.recur).length;
   document.getElementById('badge-priority').textContent = pendingCount;
   const projBadge = document.getElementById('badge-projects');
@@ -2007,14 +2015,15 @@ function renderSidebar() {
   });
 }
 
-const TASK_VIEWS = new Set(['focus','today','upcoming','all','done','recurring','priority','team']);
-const TASK_GROUP_VIEWS = new Set(['today','upcoming','all','done','recurring','priority','team']); // excludes focus
+const TASK_VIEWS = new Set(['focus','today','upcoming','all','recent','done','recurring','priority','team']);
+const TASK_GROUP_VIEWS = new Set(['today','upcoming','all','recent','done','recurring','priority','team']); // excludes focus
 function isTaskView(v) { return TASK_VIEWS.has(v) || v.startsWith('cat:'); }
 function isTaskGroupView(v) { return TASK_GROUP_VIEWS.has(v) || v.startsWith('cat:'); }
 
 function setView(v) {
   S.view=v; S.showAllFocus=false; S.filters={p:new Set(),cats:new Set()}; S.sort='default';
   if (v==='done') { S.doneFilter='today'; S.doneFrom=''; S.doneTo=''; }
+  if (v==='recent') { S.addedFilter='week'; S.addedFrom=''; S.addedTo=''; }
   if (!isTaskView(v)) S.taskSearch='';
   if (v!=='projects') S.projFilters={ statusSingle:'', type:'', sort:'default', search:'' };
   if (v!=='successes') S.successFilters={ year:'', status:'', impactLevel:'', area:'', search:'' };
@@ -2586,15 +2595,132 @@ function sortedTasks(tasks) {
     });
   } else if (S.sort==='priority') {
     t.sort((a,b)=>a.priority-b.priority||(!a.due?1:!b.due?-1:a.due.localeCompare(b.due)));
+  } else if (S.view==='recent') {
+    // Newest first — the whole point of the view. Ties break on id, also creation order.
+    t.sort((a,b)=>String(b.created||'').localeCompare(String(a.created||''))||b.id-a.id);
   } else {
     t.sort((a,b)=>(a.aiRank??999)-(b.aiRank??999));
   }
   return t;
 }
 
+// ── Shared date-window filter ────────────────────────────────────────────────
+// Used by the Done view ("Completed on") and Recently Added ("Added on"): the
+// preset chips and the from→to pair are two ways to set the same window, so
+// they're mutually exclusive and the label leads the whole bar rather than
+// sitting between them (which would read as scoping it to the date inputs).
+const DATE_RANGES = [
+  {k:'today',     l:'Today'},
+  {k:'yesterday', l:'Yesterday'},
+  {k:'week',      l:'This Week'},
+  {k:'month',     l:'This Month'},
+  {k:'all',       l:'All time'},
+];
+
+function mkDateRangeBar({label, filterKey, fromKey, toKey, fallback}) {
+  const todayStr = today();
+  const rangeBar = document.createElement('div');
+  rangeBar.style.cssText = 'display:flex;gap:0;border:1px solid var(--border);width:fit-content';
+  for (const {k, l} of DATE_RANGES) {
+    const btn = document.createElement('button');
+    const active = S[filterKey] === k;
+    btn.style.cssText = `padding:4px 12px;border:none;border-right:1px solid var(--border);background:${active?'var(--surface)':'transparent'};color:${active?'var(--accent)':'var(--text-dim)'};cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;transition:color .1s`;
+    btn.textContent = l;
+    // Picking a preset drops the custom range, so the two can't disagree
+    btn.onclick = () => { S[filterKey] = k; S[fromKey] = ''; S[toKey] = ''; renderContent(); };
+    rangeBar.appendChild(btn);
+  }
+  rangeBar.lastChild.style.borderRight = 'none';
+
+  // Exact bounds, for when the presets are too coarse. Setting either switches
+  // the filter to 'custom' (no preset chip active); leave the other blank for
+  // open-ended. Same date in both = that single day.
+  const onWrap = document.createElement('div');
+  onWrap.style.cssText = 'display:flex;align-items:center;gap:6px';
+
+  const mkBound = (prop, title) => {
+    const inp = document.createElement('input');
+    inp.type = 'date'; inp.title = title; inp.value = S[prop] || ''; inp.max = todayStr;
+    inp.style.cssText = 'font-size:11px;padding:3px 6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit';
+    inp.onchange = () => {
+      S[prop] = inp.value;
+      S[filterKey] = (S[fromKey] || S[toKey]) ? 'custom' : fallback;
+      renderContent();
+    };
+    return inp;
+  };
+  onWrap.appendChild(mkBound(fromKey, label + ' or after'));
+  const sep = document.createElement('span');
+  sep.style.cssText = 'color:var(--text-subtle);font-size:11px';
+  sep.textContent = '→';
+  onWrap.appendChild(sep);
+  onWrap.appendChild(mkBound(toKey, label + ' or before'));
+
+  if (S[filterKey] === 'custom') {
+    const clr = document.createElement('button');
+    clr.style.cssText = 'padding:3px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase';
+    clr.textContent = 'Clear';
+    clr.onclick = () => { S[fromKey] = ''; S[toKey] = ''; S[filterKey] = fallback; renderContent(); };
+    onWrap.appendChild(clr);
+  }
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px';
+  const lbl = document.createElement('span');
+  lbl.style.cssText = 'font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-subtle)';
+  lbl.textContent = label;
+  bar.appendChild(lbl);
+  bar.appendChild(rangeBar);
+  bar.appendChild(onWrap);
+  return bar;
+}
+
+// taskId → most-recent completion day (local). task.completedAt is authoritative;
+// the changelog is the fallback for rows backfillCompletedAt() couldn't fill.
+function completionDayMap(tasks) {
+  const m = new Map();
+  for (const e of S.changelog) {
+    if (e.action === 'complete' && !e.description.includes('Subtask')) {
+      const d = localDate(new Date(e.ts));
+      const prev = m.get(e.entityId);
+      if (!prev || d > prev) m.set(e.entityId, d);
+    }
+  }
+  for (const t of tasks) {
+    if (t.completedAt) m.set(t.id, localDate(new Date(t.completedAt)));
+  }
+  return m;
+}
+
+// Inclusive day-window test. `dayOf` maps a task to its local YYYY-MM-DD;
+// tasks with no such day are always excluded.
+function filterByDayRange(tasks, dayOf, filterKey, fromKey, toKey) {
+  if (S[filterKey] === 'all') return tasks;
+  if (S[filterKey] === 'custom') {
+    // Swap out-of-order bounds rather than silently returning nothing
+    let from = S[fromKey], to = S[toKey];
+    if (from && to && from > to) { const tmp = from; from = to; to = tmp; }
+    return tasks.filter(t => {
+      const d = dayOf(t);
+      return d ? (!from || d >= from) && (!to || d <= to) : false;
+    });
+  }
+  const todayStr = today();
+  // Calendar-anchored, not rolling: "This Week" starts Monday, "This Month" the 1st
+  const fromDate = S[filterKey] === 'yesterday' ? addDays(todayStr, -1)
+                 : S[filterKey] === 'week'      ? startOfWeek(todayStr)
+                 : S[filterKey] === 'month'     ? startOfMonth(todayStr)
+                 : todayStr;
+  return tasks.filter(t => {
+    const d = dayOf(t);
+    if (!d) return false;
+    return S[filterKey] === 'yesterday' ? d === fromDate : d >= fromDate;
+  });
+}
+
 function renderList(c) {
   c.innerHTML='';
-  const LABELS={all:'All Tasks',today:'Today',upcoming:'Upcoming',done:'Done',recurring:'Recurring',team:'Team Agenda'};
+  const LABELS={all:'All Tasks',today:'Today',upcoming:'Upcoming',recent:'Recently Added',done:'Done',recurring:'Recurring',team:'Team Agenda'};
   const label=LABELS[S.view]||(S.view.startsWith('cat:')?S.view.slice(4):S.view);
   const hdr=document.createElement('div'); hdr.className='content-header';
   hdr.innerHTML=`<h2>${esc(label)}</h2><div class="hdr-right">${S.view!=='done'?'<button class="new-task-btn" id="hdr-new-btn"><i class="ti ti-plus"></i>New task</button>':''}</div>`;
@@ -2617,118 +2743,23 @@ function renderList(c) {
   });
   c.appendChild(searchWrap);
 
-  // ── Done-view completion-date filter ─────────────────────────────────────
-  // One control group, one leading "Completed on" label: the preset chips and
-  // the from→to pair are alternative ways to set the same completion-date
-  // window, so the label has to lead the whole bar rather than sit between them
-  // (which reads as scoping it to the date inputs alone).
+  // ── Date-window filter (Done: "Completed on", Recently Added: "Added on") ──
   if (S.view === 'done') {
-    const todayStr = today();
-    const DONE_RANGES = [
-      {k:'today',     l:'Today'},
-      {k:'yesterday', l:'Yesterday'},
-      {k:'week',      l:'This Week'},
-      {k:'month',     l:'This Month'},
-      {k:'all',       l:'All time'},
-    ];
-    const rangeBar = document.createElement('div');
-    rangeBar.style.cssText = 'display:flex;gap:0;border:1px solid var(--border);width:fit-content';
-    for (const {k, l} of DONE_RANGES) {
-      const btn = document.createElement('button');
-      const active = S.doneFilter === k;
-      btn.style.cssText = `padding:4px 12px;border:none;border-right:1px solid var(--border);background:${active?'var(--surface)':'transparent'};color:${active?'var(--accent)':'var(--text-dim)'};cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;transition:color .1s`;
-      btn.textContent = l;
-      // Picking a preset drops the custom range, so the two can't disagree
-      btn.onclick = () => { S.doneFilter = k; S.doneFrom = ''; S.doneTo = ''; renderContent(); };
-      rangeBar.appendChild(btn);
-    }
-    rangeBar.lastChild.style.borderRight = 'none';
-
-    // ── Completed-on range — exact dates, for when the presets are too coarse.
-    // Setting either bound switches doneFilter to 'custom' (no preset chip active);
-    // leave the other blank for open-ended. Same date in both = that single day.
-    const onWrap = document.createElement('div');
-    onWrap.style.cssText = 'display:flex;align-items:center;gap:6px';
-
-    const mkBound = (prop, title) => {
-      const inp = document.createElement('input');
-      inp.type = 'date'; inp.title = title; inp.value = S[prop] || ''; inp.max = todayStr;
-      inp.style.cssText = 'font-size:11px;padding:3px 6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit';
-      inp.onchange = () => {
-        S[prop] = inp.value;
-        S.doneFilter = (S.doneFrom || S.doneTo) ? 'custom' : 'today';
-        renderContent();
-      };
-      return inp;
-    };
-    onWrap.appendChild(mkBound('doneFrom', 'Completed on or after'));
-    const sep = document.createElement('span');
-    sep.style.cssText = 'color:var(--text-subtle);font-size:11px';
-    sep.textContent = '→';
-    onWrap.appendChild(sep);
-    onWrap.appendChild(mkBound('doneTo', 'Completed on or before'));
-
-    if (S.doneFilter === 'custom') {
-      const clr = document.createElement('button');
-      clr.style.cssText = 'padding:3px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase';
-      clr.textContent = 'Clear';
-      clr.onclick = () => { S.doneFrom = ''; S.doneTo = ''; S.doneFilter = 'today'; renderContent(); };
-      onWrap.appendChild(clr);
-    }
-
-    const doneBar = document.createElement('div');
-    doneBar.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px';
-    const onLbl = document.createElement('span');
-    onLbl.style.cssText = 'font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-subtle)';
-    onLbl.textContent = 'Completed on';
-    doneBar.appendChild(onLbl);
-    doneBar.appendChild(rangeBar);
-    doneBar.appendChild(onWrap);
-    c.appendChild(doneBar);
+    c.appendChild(mkDateRangeBar({label:'Completed on', filterKey:'doneFilter', fromKey:'doneFrom', toKey:'doneTo', fallback:'today'}));
+  } else if (S.view === 'recent') {
+    c.appendChild(mkDateRangeBar({label:'Added on', filterKey:'addedFilter', fromKey:'addedFrom', toKey:'addedTo', fallback:'week'}));
   }
 
   c.appendChild(mkFilterBar());
 
   let base = viewTasks();
 
-  // Apply done-view date filter using completion timestamps from changelog
-  if (S.view === 'done' && S.doneFilter !== 'all') {
-    // Build map: taskId → most-recent completion date string. task.completedAt is
-    // authoritative; the changelog is the fallback for rows the backfill couldn't fill.
-    const completedOn = new Map();
-    for (const e of S.changelog) {
-      if (e.action === 'complete' && !e.description.includes('Subtask')) {
-        const d = localDate(new Date(e.ts));
-        const prev = completedOn.get(e.entityId);
-        if (!prev || d > prev) completedOn.set(e.entityId, d);
-      }
-    }
-    for (const t of base) {
-      if (t.completedAt) completedOn.set(t.id, localDate(new Date(t.completedAt)));
-    }
-    if (S.doneFilter === 'custom') {
-      // Bounds inclusive; either may be blank for open-ended. Swap if the user
-      // picked them out of order rather than silently returning nothing.
-      let from = S.doneFrom, to = S.doneTo;
-      if (from && to && from > to) { const tmp = from; from = to; to = tmp; }
-      base = base.filter(t => {
-        const d = completedOn.get(t.id);
-        if (!d) return false;
-        return (!from || d >= from) && (!to || d <= to);
-      });
-    } else {
-      const todayStr = today();
-      // Calendar-anchored, not rolling: "This Week" starts Monday, "This Month" the 1st
-      const fromDate = S.doneFilter === 'yesterday' ? addDays(todayStr, -1)
-                     : S.doneFilter === 'week'      ? startOfWeek(todayStr)
-                     : S.doneFilter === 'month'     ? startOfMonth(todayStr)
-                     : todayStr;
-      base = base.filter(t => {
-        const d = completedOn.get(t.id);
-        if (!d) return false;
-        return S.doneFilter === 'yesterday' ? d === fromDate : d >= fromDate;
-      });
-    }
+  // Date-window filter, over completion day (Done) or creation day (Recently Added)
+  if (S.view === 'done') {
+    const completedOn = completionDayMap(base);
+    base = filterByDayRange(base, t => completedOn.get(t.id), 'doneFilter', 'doneFrom', 'doneTo');
+  } else if (S.view === 'recent') {
+    base = filterByDayRange(base, t => t.created ? localDate(new Date(t.created)) : '', 'addedFilter', 'addedFrom', 'addedTo');
   }
 
   if (S.taskSearch.trim()) {
@@ -2737,7 +2768,10 @@ function renderList(c) {
   }
   const filtered=sortedTasks(applyFilters(base));
   if (!filtered.length) {
-    c.appendChild(mkEmpty('ti-list', S.taskSearch.trim() ? 'No tasks match "'+S.taskSearch+'"' : 'No tasks here'));
+    const emptyMsg = S.taskSearch.trim() ? 'No tasks match "'+S.taskSearch+'"'
+                   : S.view==='recent' ? 'No tasks added in this range'
+                   : 'No tasks here';
+    c.appendChild(mkEmpty(S.view==='recent'?'ti-history':'ti-list', emptyMsg));
     return;
   }
   filtered.forEach(t=>c.appendChild(mkCard(t,false)));
@@ -4242,7 +4276,7 @@ function mkFilterBar() {
   ['default','due','priority'].forEach(s=>{
     const b=document.createElement('button');
     b.className='sort-btn'+(S.sort===s?' active':'');
-    b.textContent=s==='default'?'Smart':s==='due'?'Due date':'Priority';
+    b.textContent=s==='default'?(S.view==='recent'?'Newest':'Smart'):s==='due'?'Due date':'Priority';
     b.onclick=()=>{ S.sort=s; renderContent(); };
     sortWrap.appendChild(b);
   });
@@ -4300,9 +4334,13 @@ function mkCard(task, showReason) {
   if (totSubs) meta.innerHTML+=`<span class="subtask-count">${doneSubs}/${totSubs}</span>`;
   const pd=document.createElement('span'); pd.className='priority-dot'; pd.style.background=pColor(task.priority); pd.title='P'+task.priority;
   meta.appendChild(pd);
+  if (S.view === 'recent' && task.created) {
+    const stamp = fmtStamp(task.created);
+    if (stamp) meta.innerHTML+=`<span class="added-badge" title="Added ${esc(stamp)}"><i class="ti ti-plus" style="font-size:9px;opacity:.6"></i> ${esc(stamp)}</span>`;
+  }
   if (task.done && task.completedAt) {
     const late=daysLate(task.due, task.completedAt);
-    const stamp=fmtCompleted(task.completedAt);
+    const stamp=fmtStamp(task.completedAt);
     meta.innerHTML+=`<span class="done-badge${late?' late':''}" title="Completed ${esc(stamp)}">${late?`${late}d late`:esc(stamp)}</span>`;
   } else if (dueStr) meta.innerHTML+=`<span class="due-badge due-${dueSt||'future'}">${dueStr}</span>`;
   if (task.category) meta.innerHTML+=`<span class="cat-pill" style="background:${cc}">${esc(task.category)}</span>`;
