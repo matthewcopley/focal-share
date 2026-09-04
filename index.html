@@ -5349,8 +5349,14 @@ async function init() {
   // 1. Launcher path — try GET /db (works when served via focal_launcher.py)
   //    This is the preferred path: no permission prompts, always in sync with project folder.
   try {
-    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 2000);
+    // The timeout covers only the wait for response headers — i.e. is the launcher
+    // reachable. Once they arrive it is, so clear it and let the body download run
+    // unbounded: over a remote/LAN link a 400KB+ focal.db routinely takes >2s, and
+    // aborting mid-body fell through to the stale FSAA handle below and then saved over it.
+    const ctrl = new AbortController();
+    const headerTimer = setTimeout(()=>ctrl.abort(), 8000);
     const res = await fetch('/db', {signal: ctrl.signal});
+    clearTimeout(headerTimer);
     if (res.ok) {
       await _bootFromBytes(await res.arrayBuffer());
       S.usingLauncher = true;
@@ -5362,7 +5368,7 @@ async function init() {
       window.addEventListener('focus', drainPendingTasks);
       return;
     }
-  } catch(e) {}
+  } catch(e) { console.warn('[focal] launcher /db failed — falling back to local file:', e); }
 
   // 2. FSAA stored handle from a previous session (non-launcher usage)
   if (HAS_FSA) {
