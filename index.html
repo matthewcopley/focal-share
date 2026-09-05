@@ -425,6 +425,7 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .dash-scale-needle{position:absolute;top:-4px;width:2px;height:12px;background:var(--accent);transform:translateX(-50%)}
 .dash-scale-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--text-subtle);margin-top:4px}
 .dash-score-delta{font-size:12px;color:var(--text-muted)}
+.dash-score-window{font-size:10px;color:var(--text-subtle);margin-top:5px}
 /* KPI grid */
 .dash-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .dash-kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:13px 15px}
@@ -449,7 +450,12 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .dash-bar-track{flex:1;height:4px;background:var(--bg);overflow:hidden}
 .dash-bar-fill{height:100%}
 .dash-bar-count{width:24px;text-align:right;color:var(--text-muted);flex-shrink:0;font-size:11px}
-@media(max-width:700px){.dash-row1{grid-template-columns:1fr}.dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-breakdown{grid-template-columns:1fr}}
+.dash-ft-parts{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.dash-ft-part-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px}
+.dash-ft-part-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.dash-ft-part-val{font-size:15px;font-weight:700;color:var(--text)}
+.dash-ft-part-sub{font-size:10px;color:var(--text-muted);margin-top:5px}
+@media(max-width:700px){.dash-row1{grid-template-columns:1fr}.dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-breakdown{grid-template-columns:1fr}.dash-ft-parts{grid-template-columns:1fr;gap:12px}}
 /* ── Gamification ── */
 /* Task completion flash */
 @keyframes task-complete-flash{0%{background:rgba(77,200,138,.12);border-color:#4DC88A}100%{background:var(--surface);border-color:var(--border)}}
@@ -2133,6 +2139,91 @@ function renderRecurring(c) {
 // ─────────────────────────────────────────────────────────────────────────
 // DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────
+// ── Follow-Through Score ────────────────────────────────────────────────────
+// A 0-100 read on how well work is actually being finished: on time, without
+// piling up, and at least as fast as it arrives.
+//
+//   On-time delivery (45 pts) — of the dated tasks completed in the window,
+//                               the share finished on or before their due date
+//   Backlog control  (35 pts) — overdue share of the open list on that day;
+//                               0% overdue = full marks, 50%+ = none
+//   Clearance        (20 pts) — completed vs. created in the window; 1.0× means
+//                               keeping pace with everything coming in
+//
+// Every term is reconstructable for any past date from `created`, `due` and the
+// completion day, so the same function that produces today's headline number
+// also produces every point on the trend line. That is the whole point of it:
+// the Momentum Score it replaced could only ever describe the present, and its
+// on-time term counted a task due in the window as on time whenever it was
+// eventually finished — including months late.
+//
+// The window is fixed at FT_WINDOW days so the number means the same thing at
+// every zoom level; the dashboard's range buttons choose how much history the
+// chart draws, not how the score is computed.
+const FT_WINDOW = 28;
+
+// Flatten the task list once — followThrough() gets called for every day on the
+// chart, and re-deriving completion days per call is what makes that slow.
+function ftContext() {
+  const dayMap = completionDayMap(S.tasks);
+  const rows = S.tasks.map(t => ({
+    due:     t.due || null,
+    created: t.created ? localDate(new Date(t.created)) : null,
+    comp:    t.done ? (dayMap.get(t.id) || null) : null,
+  }));
+  const days = rows.map(r => r.created).filter(Boolean).sort();
+  return { rows, firstDay: days[0] || today() };
+}
+
+function followThrough(ctx, toDay, windowDays) {
+  const from = addDays(toDay, -((windowDays || FT_WINDOW) - 1));
+  let completed = 0, dated = 0, onTime = 0, created = 0, open = 0, overdue = 0;
+  let late = 0, lateDays = 0;
+
+  for (const t of ctx.rows) {
+    if (t.comp && t.comp >= from && t.comp <= toDay) {
+      completed++;
+      // Undated tasks can't be on time or late, so they leave the rate alone
+      if (t.due) {
+        dated++;
+        if (t.comp <= t.due) onTime++;
+        else { late++; lateDays += Math.round((new Date(t.comp+'T12:00:00') - new Date(t.due+'T12:00:00')) / 86400000); }
+      }
+    }
+    if (t.created && t.created >= from && t.created <= toDay) created++;
+    // Open as of toDay: it existed by then and wasn't finished until after
+    if (t.created && t.created <= toDay && (!t.comp || t.comp > toDay)) {
+      open++;
+      if (t.due && t.due < toDay) overdue++;
+    }
+  }
+
+  const onTimeRate  = dated ? onTime / dated : null;
+  const overdueRate = open ? overdue / open : 0;
+  const clearance   = created ? completed / created : (completed ? 1 : null);
+
+  // No evidence scores neutral rather than zero — a quiet week isn't a failed
+  // one, and zeroing 45 points would crater the line every time work pauses.
+  const aPts = (onTimeRate === null ? 0.6 : onTimeRate) * 45;
+  const bPts = Math.max(0, 1 - overdueRate / 0.5) * 35;
+  const cPts = (clearance === null ? 0.6 : Math.min(1, clearance)) * 20;
+
+  return {
+    score: Math.round(aPts + bPts + cPts),
+    onTimeRate, onTime, dated, late, avgLate: late ? lateDays / late : null,
+    overdueRate, overdue, open,
+    clearance, completed, created,
+    aPts, bPts, cPts,
+  };
+}
+
+function ftTier(score) {
+  return score >= 80 ? {label:'Strong',        bg:'#0D2E1A', text:'#4DC88A', line:'#4DC88A'}
+       : score >= 65 ? {label:'On Track',      bg:'#0d0f1c', text:'#7090c8', line:'#7090c8'}
+       : score >= 50 ? {label:'Getting There', bg:'#1a1408', text:'#c8a537', line:'#c8a537'}
+       : score >= 35 ? {label:'Struggling',    bg:'#1c0e0e', text:'#d47070', line:'#d47070'}
+       :               {label:'Needs Focus',   bg:'#200808', text:'#F98080', line:'#F98080'};
+}
 function renderDashboard(c) {
   c.innerHTML = '';
   const days = S.dashboardDays;
@@ -2141,44 +2232,35 @@ function renderDashboard(c) {
   const fromStr  = localDate(new Date(now - days * 86400000));
   const svgNS    = 'http://www.w3.org/2000/svg';
 
-  // ── score calculation ────────────────────────────────────────────────────
-  function calcScore(windowDays, refDate) {
-    const wTo   = localDate(refDate);
-    const wFrom = localDate(new Date(refDate - windowDays * 86400000));
-    // a) On-time rate of tasks due in window (35 pts)
-    const wDue  = S.tasks.filter(t => t.due >= wFrom && t.due <= wTo);
-    const compRate = wDue.length > 0 ? wDue.filter(t => t.done).length / wDue.length : 0.5;
-    // b) Overdue penalty (25 pts)
-    const pending = Math.max(S.tasks.filter(t => !t.done).length, 1);
-    const overdue = S.tasks.filter(t => !t.done && t.due && t.due < wTo).length;
-    const overdueScore = Math.max(0, 25 - (overdue / pending) * 50);
-    // c) Completion velocity (25 pts) — 1/day = full marks
-    const compls = S.changelog.filter(e =>
-      e.action === 'complete' && !e.description.includes('Subtask') &&
-      localDate(new Date(e.ts)) >= wFrom && localDate(new Date(e.ts)) <= wTo
-    ).length;
-    const velocityScore = Math.min(25, (compls / windowDays) * 25);
-    // d) Win momentum (15 pts)
-    const wins = (S.successes||[]).filter(w => w.startDate >= wFrom || w.endDate >= wFrom).length;
-    return Math.round(compRate * 35 + overdueScore + velocityScore + Math.min(15, wins * 5));
+  // ── follow-through score ─────────────────────────────────────────────────
+  // The score always covers a fixed FT_WINDOW-day window; `days` only decides
+  // how far back the trend line reaches. The headline delta is measured against
+  // the first point of that same line, so the card and the chart can't disagree.
+  const ftCtx = ftContext();
+  const ft    = followThrough(ftCtx, todayStr, FT_WINDOW);
+  const score = ft.score;
+  const tier  = ftTier(score);
+
+  // One point per day: the score exactly as it stood that day, from the same
+  // function behind the headline number. Don't open the line before there's
+  // enough history to fill a window, or it starts on noise.
+  const seriesStart = (() => {
+    const wanted = addDays(todayStr, -(days - 1));
+    const safe   = addDays(ftCtx.firstDay, 13);
+    return wanted > safe ? wanted : safe;
+  })();
+  const series = [];
+  for (let d = seriesStart; d <= todayStr; d = addDays(d, 1)) {
+    const f = followThrough(ftCtx, d, FT_WINDOW);
+    series.push({ day: d, score: f.score, ft: f });
   }
-
-  const score     = calcScore(days, now);
-  const prevScore = calcScore(days, new Date(now - days * 86400000));
-  const delta     = score - prevScore;
-
-  // score tier
-  const tier = score >= 80 ? {label:'Strong',       bg:'#0D2E1A', text:'#4DC88A', line:'#4DC88A'}
-             : score >= 65 ? {label:'On Track',      bg:'#0d0f1c', text:'#7090c8', line:'#7090c8'}
-             : score >= 50 ? {label:'Getting There', bg:'#1a1408', text:'#c8a537', line:'#c8a537'}
-             : score >= 35 ? {label:'Struggling',    bg:'#1c0e0e', text:'#d47070', line:'#d47070'}
-             :               {label:'Needs Focus',   bg:'#200808', text:'#F98080', line:'#F98080'};
+  if (!series.length) series.push({ day: todayStr, score, ft });
+  const span  = series.length;
+  const delta = score - series[0].score;
 
   // ── core stats ───────────────────────────────────────────────────────────
   const clInWindow      = S.changelog.filter(e => e.action === 'complete' && localDate(new Date(e.ts)) >= fromStr);
   const taskCompletions = clInWindow.filter(e => !e.description.includes('Subtask'));
-  const tasksDueInWin   = S.tasks.filter(t => t.due >= fromStr && t.due <= todayStr);
-  const dueDone         = tasksDueInWin.filter(t => t.done).length;
   const overdueNow      = S.tasks.filter(t => !t.done && t.due && t.due < todayStr).length;
   const totalPending    = S.tasks.filter(t => !t.done).length;
   const activeProjs     = S.projects.filter(p => ['in-progress','active'].includes(p.status));
@@ -2190,7 +2272,7 @@ function renderDashboard(c) {
   // ── header ───────────────────────────────────────────────────────────────
   const hdr = document.createElement('div');
   hdr.className = 'dash-header';
-  hdr.innerHTML = '<div class="dash-title">Momentum</div>';
+  hdr.innerHTML = '<div class="dash-title">Progress</div>';
   const rangeBtns = document.createElement('div');
   rangeBtns.className = 'dash-range-btns';
   [7,30,60,90].forEach(d => {
@@ -2211,14 +2293,15 @@ function renderDashboard(c) {
   const scoreCard = document.createElement('div');
   scoreCard.className = 'dash-score-card';
 
-  const deltaStr   = delta === 0 ? `— same as prior ${days}d`
-                   : delta > 0   ? `▲ ${delta} pts vs prior ${days}d`
-                   :               `▼ ${Math.abs(delta)} pts vs prior ${days}d`;
+  const deltaStr   = span < 2    ? 'not enough history yet'
+                   : delta === 0 ? `level across ${span}d`
+                   : delta > 0   ? `▲ ${delta} pts across ${span}d`
+                   :               `▼ ${Math.abs(delta)} pts across ${span}d`;
   const deltaColor = delta > 0 ? '#4DC88A' : delta < 0 ? '#F98080' : 'var(--text-muted)';
   const needlePct  = Math.max(1, Math.min(99, score));
 
   scoreCard.innerHTML = `
-    <div class="dash-score-section-label" style="margin-bottom:10px">Momentum Score</div>
+    <div class="dash-score-section-label" style="margin-bottom:10px">Follow-Through</div>
     <div class="dash-score-top">
       <div class="dash-score-big" style="color:${tier.text}">${score}</div>
       <div class="dash-score-status" style="background:${tier.bg};color:${tier.text};align-self:center">${tier.label}</div>
@@ -2229,20 +2312,22 @@ function renderDashboard(c) {
       </div>
       <div class="dash-scale-labels"><span>0</span><span>50</span><span>100</span></div>
     </div>
-    <div class="dash-score-delta" style="color:${deltaColor}">${deltaStr}</div>`;
+    <div class="dash-score-delta" style="color:${deltaColor}">${deltaStr}</div>
+    <div class="dash-score-window">rolling ${FT_WINDOW} days</div>`;
   row1.appendChild(scoreCard);
 
   // KPI grid (2 rows × 3 cols)
   const kpiGrid = document.createElement('div');
   kpiGrid.className = 'dash-kpis';
 
-  const compRate2 = tasksDueInWin.length > 0 ? Math.round(dueDone / tasksDueInWin.length * 100) : null;
-  const compTone  = compRate2 === null ? '' : compRate2 >= 75 ? 'good' : compRate2 >= 50 ? 'warn' : 'bad';
+  // Same window as the rest of the KPI row, so the "last Nd" labels all agree
+  const ftRange   = followThrough(ftCtx, todayStr, days);
+  const lateTone  = ftRange.late === 0 ? 'good' : ftRange.dated && ftRange.late / ftRange.dated <= 0.25 ? 'warn' : 'bad';
   const overdueTone = overdueNow === 0 ? 'good' : overdueNow <= 3 ? 'warn' : 'bad';
 
   const kpis = [
     { label:'Completed',      value: taskCompletions.length, sub: `tasks in last ${days}d`,        tone: taskCompletions.length > 0 ? 'good' : '' },
-    { label:'On-time rate',   value: compRate2 !== null ? compRate2+'%' : '—', sub: compRate2 !== null ? `${dueDone} of ${tasksDueInWin.length} due` : 'no due tasks', tone: compTone },
+    { label:'Finished late',  value: ftRange.late, sub: ftRange.avgLate !== null ? `avg ${Math.round(ftRange.avgLate)}d past due` : 'nothing late', tone: lateTone },
     { label:'Overdue now',    value: overdueNow, sub: `of ${totalPending} pending`,               tone: overdueTone },
     { label:'Active projects',value: activeProjs.length, sub: `avg ${avgProjProg}% progress`,     tone: '' },
     { label:'Wins logged',    value: winsInWindow, sub: `in last ${days}d`,                        tone: winsInWindow > 0 ? 'good' : '' },
@@ -2257,41 +2342,32 @@ function renderDashboard(c) {
   row1.appendChild(kpiGrid);
   c.appendChild(row1);
 
-  // ── trend chart (full width) ─────────────────────────────────────────────
+  // ── follow-through trend (full width) ────────────────────────────────────
   const trendCard = document.createElement('div');
   trendCard.className = 'dash-trend-card';
 
-  // Build buckets: daily for ≤30d, every 2d for 60d, every 3d for 90d
-  const bucketDays  = days <= 30 ? 1 : days <= 60 ? 2 : 3;
-  const bucketCount = Math.ceil(days / bucketDays);
-  const buckets = Array.from({length: bucketCount}, (_, i) => {
-    const bEndMs   = now.getTime() - (bucketCount - 1 - i) * bucketDays * 86400000;
-    const bStartMs = bEndMs - bucketDays * 86400000;
-    const bEndStr   = localDate(new Date(bEndMs));
-    const bStartStr = localDate(new Date(bStartMs));
-    const count = S.changelog.filter(e =>
-      e.action === 'complete' && !e.description.includes('Subtask') &&
-      localDate(new Date(e.ts)) > bStartStr && localDate(new Date(e.ts)) <= bEndStr
-    ).length;
-    return { date: bEndStr, count };
-  });
-  const maxCount = Math.max(...buckets.map(b => b.count), 1);
+  const lo = Math.min(...series.map(p => p.score));
+  const hi = Math.max(...series.map(p => p.score));
+  const rangeStr = span < 2 ? `${score} today` : `low ${lo} · high ${hi}`;
 
   const trendHdr = document.createElement('div');
   trendHdr.className = 'dash-trend-header';
-  trendHdr.innerHTML = `<div class="dash-trend-title">Completions over time</div><div class="dash-trend-peak" style="color:${tier.text}">peak: ${maxCount}/period</div>`;
+  trendHdr.innerHTML = `<div class="dash-trend-title">Follow-Through over time</div><div class="dash-trend-peak" style="color:${tier.text}">${esc(rangeStr)}</div>`;
   trendCard.appendChild(trendHdr);
 
-  // Fixed viewBox — do NOT use preserveAspectRatio:none
-  const VW = 600, VH = 120;
-  const pL = 8, pR = 8, pT = 10, pB = 28;
+  // The viewBox is sized to the width the card will actually give the chart, so
+  // it maps 1:1 and the line spans the card. A fixed viewBox with the default
+  // `meet` letterboxes it into a narrow strip on a wide screen; don't "fix" that
+  // with preserveAspectRatio:none, which stretches strokes and label text.
+  const VW = Math.max(480, Math.round((c.clientWidth || 960) - 70)), VH = 160;
+  const pL = 24, pR = 10, pT = 10, pB = 26;
   const cW = VW - pL - pR, cH = VH - pT - pB;
 
   const svgEl = document.createElementNS(svgNS, 'svg');
   svgEl.setAttribute('viewBox', `0 0 ${VW} ${VH}`);
   svgEl.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   svgEl.classList.add('dash-trend-svg');
-  svgEl.style.height = '130px';
+  svgEl.style.height = VH + 'px';
 
   // Gradient fill
   const defs = document.createElementNS(svgNS, 'defs');
@@ -2299,7 +2375,7 @@ function renderDashboard(c) {
   grad.setAttribute('id', 'dashAreaGrad');
   grad.setAttribute('x1','0'); grad.setAttribute('y1','0');
   grad.setAttribute('x2','0'); grad.setAttribute('y2','1');
-  [[0,'0.2'],[1,'0.01']].forEach(([off, op]) => {
+  [[0,'0.22'],[1,'0.01']].forEach(([off, op]) => {
     const s = document.createElementNS(svgNS, 'stop');
     s.setAttribute('offset', off*100+'%');
     s.setAttribute('stop-color', tier.line);
@@ -2309,17 +2385,56 @@ function renderDashboard(c) {
   defs.appendChild(grad);
   svgEl.appendChild(defs);
 
-  // X/Y helpers
-  const xOf = i => pL + (buckets.length <= 1 ? cW/2 : (i / (buckets.length-1)) * cW);
-  const yOf = v => pT + cH - (v / maxCount) * cH;
+  // Score is always drawn against a fixed 0-100 axis so the line's height is
+  // comparable between renders and between range settings.
+  const xOf = i => pL + (series.length <= 1 ? cW/2 : (i / (series.length-1)) * cW);
+  const yOf = v => pT + cH - (v / 100) * cH;
 
-  // Points
-  const pts = buckets.map((b, i) => ({ x: xOf(i), y: yOf(b.count), b }));
+  [0, 25, 50, 75, 100].forEach(v => {
+    const gl = document.createElementNS(svgNS, 'line');
+    gl.setAttribute('x1', pL); gl.setAttribute('x2', pL + cW);
+    gl.setAttribute('y1', yOf(v)); gl.setAttribute('y2', yOf(v));
+    gl.setAttribute('stroke', 'var(--border)');
+    gl.setAttribute('stroke-width', v === 0 ? '1' : '0.5');
+    if (v !== 0) gl.setAttribute('stroke-dasharray', '2 4');
+    svgEl.appendChild(gl);
+    if (v % 50 === 0) {
+      const yl = document.createElementNS(svgNS, 'text');
+      yl.setAttribute('x', pL - 5); yl.setAttribute('y', yOf(v) + 3);
+      yl.setAttribute('text-anchor', 'end');
+      yl.setAttribute('font-size', '9');
+      yl.setAttribute('fill', 'currentColor');
+      yl.setAttribute('opacity', '0.4');
+      yl.textContent = v;
+      svgEl.appendChild(yl);
+    }
+  });
 
-  // Area + line as polyline (no bezier weirdness)
+  // Daily completions ride behind the line as faint bars, so "how much am I
+  // getting done" stays visible next to "how well am I keeping up".
+  const dayCounts = {};
+  S.changelog.filter(e => e.action === 'complete' && !e.description.includes('Subtask'))
+    .forEach(e => { const d = localDate(new Date(e.ts)); dayCounts[d] = (dayCounts[d]||0) + 1; });
+  const maxBar = Math.max(1, ...series.map(p => dayCounts[p.day] || 0));
+  const barW   = Math.max(1.5, Math.min(9, cW / Math.max(series.length, 1) - 1.5));
+  series.forEach((p, i) => {
+    const n = dayCounts[p.day] || 0;
+    if (!n) return;
+    const h = (n / maxBar) * (cH * 0.55);
+    const r = document.createElementNS(svgNS, 'rect');
+    r.setAttribute('x', xOf(i) - barW/2);
+    r.setAttribute('y', pT + cH - h);
+    r.setAttribute('width', barW);
+    r.setAttribute('height', h);
+    r.setAttribute('fill', 'var(--border)');
+    svgEl.appendChild(r);
+  });
+
+  const pts = series.map((p, i) => ({ x: xOf(i), y: yOf(p.score), p }));
+
   if (pts.length > 1) {
-    const pointsStr = pts.map(p => `${p.x},${p.y}`).join(' ');
-    const areaPts   = `${pts[0].x},${pT+cH} ` + pointsStr + ` ${pts[pts.length-1].x},${pT+cH}`;
+    const pointsStr = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+    const areaPts   = `${pts[0].x.toFixed(1)},${pT+cH} ` + pointsStr + ` ${pts[pts.length-1].x.toFixed(1)},${pT+cH}`;
 
     const area = document.createElementNS(svgNS, 'polygon');
     area.setAttribute('points', areaPts);
@@ -2336,18 +2451,21 @@ function renderDashboard(c) {
     svgEl.appendChild(line);
   }
 
-  // Dots (skip individual dots for large ranges — too many)
-  const showDots = buckets.length <= 35;
+  // Hover detail on every point; a visible dot only where they won't collide
+  const showDots = pts.length <= 35;
   pts.forEach(pt => {
-    if (!showDots && pt.b.count === 0) return;
+    const f = pt.p.ft;
     const dot = document.createElementNS(svgNS, 'circle');
     dot.setAttribute('cx', pt.x); dot.setAttribute('cy', pt.y);
-    dot.setAttribute('r', showDots ? '3' : '4');
-    dot.setAttribute('fill', pt.b.count > 0 ? tier.line : 'var(--border)');
-    dot.setAttribute('stroke', 'var(--surface)');
-    dot.setAttribute('stroke-width', '1.5');
+    dot.setAttribute('r', showDots ? '3' : '5');
+    dot.setAttribute('fill', showDots ? tier.line : 'transparent');
+    if (showDots) { dot.setAttribute('stroke', 'var(--surface)'); dot.setAttribute('stroke-width', '1.5'); }
     const ttl = document.createElementNS(svgNS, 'title');
-    ttl.textContent = `${pt.b.date}: ${pt.b.count} completed`;
+    ttl.textContent = `${pt.p.day} — score ${pt.p.score}\n`
+      + `on time: ${f.onTimeRate === null ? 'n/a' : Math.round(f.onTimeRate*100)+'%'} (${f.onTime}/${f.dated})\n`
+      + `overdue: ${f.overdue} of ${f.open} open\n`
+      + `cleared: ${f.completed} done vs ${f.created} new\n`
+      + `that day: ${dayCounts[pt.p.day] || 0} completed`;
     dot.appendChild(ttl);
     svgEl.appendChild(dot);
   });
@@ -2362,11 +2480,39 @@ function renderDashboard(c) {
     lbl.setAttribute('font-size', '9');
     lbl.setAttribute('fill', 'currentColor');
     lbl.setAttribute('opacity', '0.45');
-    lbl.textContent = new Date(pts[i].b.date+'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
+    lbl.textContent = new Date(pts[i].p.day+'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
     svgEl.appendChild(lbl);
   });
 
   trendCard.appendChild(svgEl);
+
+  // What the number is actually made of, right under the line that plots it
+  const partsWrap = document.createElement('div');
+  partsWrap.className = 'dash-ft-parts';
+  const pct = v => Math.round(v * 100) + '%';
+  [
+    { label:'On time', color:'#4DC88A', pts:ft.aPts, max:45,
+      val: ft.onTimeRate === null ? '—' : pct(ft.onTimeRate),
+      sub: ft.dated ? `${ft.onTime} of ${ft.dated} dated tasks` : 'no dated completions' },
+    { label:'Backlog', color:'#c8a537', pts:ft.bPts, max:35,
+      val: ft.open ? pct(ft.overdueRate) : '—',
+      sub: `${ft.overdue} overdue of ${ft.open} open` },
+    { label:'Clearance', color:'#7090c8', pts:ft.cPts, max:20,
+      val: ft.clearance === null ? '—' : ft.clearance.toFixed(2) + '×',
+      sub: `${ft.completed} done vs ${ft.created} new` },
+  ].forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'dash-ft-part';
+    el.innerHTML = `
+      <div class="dash-ft-part-head">
+        <span class="dash-ft-part-label">${p.label}</span>
+        <span class="dash-ft-part-val">${esc(p.val)}</span>
+      </div>
+      <div class="dash-bar-track"><div class="dash-bar-fill" style="width:${(p.pts/p.max*100).toFixed(0)}%;background:${p.color}"></div></div>
+      <div class="dash-ft-part-sub">${esc(p.sub)} · ${Math.round(p.pts)}/${p.max} pts</div>`;
+    partsWrap.appendChild(el);
+  });
+  trendCard.appendChild(partsWrap);
   c.appendChild(trendCard);
 
   // ── breakdowns ────────────────────────────────────────────────────────────
