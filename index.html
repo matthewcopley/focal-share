@@ -2400,30 +2400,45 @@ function renderDashboard(c) {
   defs.appendChild(grad);
   svgEl.appendChild(defs);
 
-  // Score is always drawn against a fixed 0-100 axis so the line's height is
-  // comparable between renders and between range settings.
-  const xOf = i => pL + (series.length <= 1 ? cW/2 : (i / (series.length-1)) * cW);
-  const yOf = v => pT + cH - (v / 100) * cH;
+  // The score axis zooms to the plotted range rather than sitting on a fixed
+  // 0-100 wall: over 7 days the score rarely moves more than ~15 points, and
+  // against 0-100 that real swing reads as a flat line. The range is padded,
+  // snapped out to a round step and clamped to 0-100, so the axis labels stay
+  // readable numbers; AX_MIN_SPAN keeps a near-flat week from being magnified
+  // into fake drama. Because the axis now changes with the range buttons, the
+  // gridlines are always labelled - height alone no longer means a score.
+  const AX_MIN_SPAN = 20;
+  let axLo = lo, axHi = hi;
+  const axPad = Math.max(2, (hi - lo) * 0.2);
+  axLo -= axPad; axHi += axPad;
+  if (axHi - axLo < AX_MIN_SPAN) {
+    const mid = (axHi + axLo) / 2;
+    axLo = mid - AX_MIN_SPAN/2; axHi = mid + AX_MIN_SPAN/2;
+  }
+  const axStep = [1,2,5,10,20,25,50].find(st => st >= (axHi - axLo) / 4) || 100;
+  axLo = Math.max(0, Math.floor(axLo / axStep) * axStep);
+  axHi = Math.min(100, Math.max(Math.ceil(axHi / axStep) * axStep, axLo + axStep));
 
-  [0, 25, 50, 75, 100].forEach(v => {
+  const xOf = i => pL + (series.length <= 1 ? cW/2 : (i / (series.length-1)) * cW);
+  const yOf = v => pT + cH - ((v - axLo) / (axHi - axLo)) * cH;
+
+  for (let v = axLo; v <= axHi + 0.001; v += axStep) {
     const gl = document.createElementNS(svgNS, 'line');
     gl.setAttribute('x1', pL); gl.setAttribute('x2', pL + cW);
     gl.setAttribute('y1', yOf(v)); gl.setAttribute('y2', yOf(v));
     gl.setAttribute('stroke', 'var(--border)');
-    gl.setAttribute('stroke-width', v === 0 ? '1' : '0.5');
-    if (v !== 0) gl.setAttribute('stroke-dasharray', '2 4');
+    gl.setAttribute('stroke-width', v === axLo ? '1' : '0.5');
+    if (v !== axLo) gl.setAttribute('stroke-dasharray', '2 4');
     svgEl.appendChild(gl);
-    if (v % 50 === 0) {
-      const yl = document.createElementNS(svgNS, 'text');
-      yl.setAttribute('x', pL - 5); yl.setAttribute('y', yOf(v) + 3);
-      yl.setAttribute('text-anchor', 'end');
-      yl.setAttribute('font-size', '9');
-      yl.setAttribute('fill', 'currentColor');
-      yl.setAttribute('opacity', '0.4');
-      yl.textContent = v;
-      svgEl.appendChild(yl);
-    }
-  });
+    const yl = document.createElementNS(svgNS, 'text');
+    yl.setAttribute('x', pL - 5); yl.setAttribute('y', yOf(v) + 3);
+    yl.setAttribute('text-anchor', 'end');
+    yl.setAttribute('font-size', '9');
+    yl.setAttribute('fill', 'currentColor');
+    yl.setAttribute('opacity', '0.4');
+    yl.textContent = v;
+    svgEl.appendChild(yl);
+  }
 
   // Daily completions ride behind the line as faint bars, so "how much am I
   // getting done" stays visible next to "how well am I keeping up".
