@@ -207,6 +207,10 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent-dim)}
 .form-group textarea{resize:vertical;min-height:80px}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-check{display:flex;align-items:center;gap:8px}
+.form-check input[type=checkbox]{width:auto;margin:0;cursor:pointer;accent-color:#A78BFA}
+.form-check label{display:flex;align-items:center;gap:5px;margin-bottom:0;cursor:pointer;text-transform:none;letter-spacing:0;font-size:13px;font-weight:500;color:var(--text)}
+.form-check label i{font-size:14px;color:#A78BFA}
 #modal-subtasks-list{margin-bottom:6px}
 .modal-subtask-item{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)}
 .modal-subtask-item:last-child{border-bottom:none}
@@ -691,6 +695,10 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
     <div class="form-group" id="f-project-wrap">
       <label>Project</label>
       <select id="f-project"><option value="">— None —</option></select>
+    </div>
+    <div class="form-group form-check">
+      <input type="checkbox" id="f-team">
+      <label for="f-team"><i class="ti ti-users"></i>Add to team agenda</label>
     </div>
     <div class="form-group">
       <label>Subtasks</label>
@@ -1848,6 +1856,7 @@ const TASK_DIFF_FIELDS = [
   ['due',       'Due',         fmtDate],
   ['recur',     'Recur',       fmtBlank],
   ['projectId', 'Project',     fmtProject],
+  ['teamFlag',  'Team agenda', v => v ? 'yes' : 'no'],
   ['description','Description', v => v ? (v.length>60?v.slice(0,60)+'…':v) : '(blank)'],
 ];
 const PROJECT_DIFF_FIELDS = [
@@ -4866,7 +4875,7 @@ function openModal(task, presetProjectId, asCopy) {
   document.getElementById('modal-title').textContent=asCopy?'Duplicate Task':(task?'Edit Task':'New Task');
   document.getElementById('f-title').value=task?task.title:'';
   document.getElementById('f-priority').value=task?task.priority:3;
-  document.getElementById('f-due').value=task?task.due:'';
+  document.getElementById('f-due').value=task?task.due:today();
   const rv=(task&&task.recur)||'';
   if (rv.startsWith('every:')) {
     document.getElementById('f-recur').value='every';
@@ -4891,6 +4900,8 @@ function openModal(task, presetProjectId, asCopy) {
   S.projects.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=p.title; projSel.appendChild(o); });
   const selectedProj=presetProjectId!=null?presetProjectId:(task?task.projectId:null);
   projSel.value=selectedProj||'';
+  // Team agenda
+  document.getElementById('f-team').checked = task ? !!task.teamFlag : !!S.copyFrom?.teamFlag;
   // Wiki reference field
   const wikiWrap = document.getElementById('wiki-task-field-wrap');
   const wikiSel = document.getElementById('modal-wiki-page');
@@ -4948,7 +4959,8 @@ function saveModal() {
   if (recur==='every') { const d=Math.max(1, parseInt(document.getElementById('f-recur-days').value)||7); recur='every:'+d; }
   const projVal=document.getElementById('f-project').value;
   const wikiPage = S.wikiOnline ? document.getElementById('modal-wiki-page').value : (S.editingTask?.wikiPage || S.copyFrom?.wikiPage || '');
-  const data={title,priority:+document.getElementById('f-priority').value,category:cat,due:document.getElementById('f-due').value,recur,description:document.getElementById('f-desc').value.trim(),subtasks:S.modalSubs,projectId:projVal?parseInt(projVal):null,wikiPage};
+  const teamFlag=document.getElementById('f-team').checked;
+  const data={title,priority:+document.getElementById('f-priority').value,category:cat,due:document.getElementById('f-due').value,recur,description:document.getElementById('f-desc').value.trim(),subtasks:S.modalSubs,projectId:projVal?parseInt(projVal):null,wikiPage,teamFlag};
   if (S.editingTask) {
     const snap = {...S.editingTask};
     const diff = diffLog(snap, data, TASK_DIFF_FIELDS);
@@ -4956,7 +4968,7 @@ function saveModal() {
     logChange('task', S.editingTask.id, 'update', `"${S.editingTask.title}"${diff ? ' — ' + diff : ''}`);
   } else {
     const cf=S.copyFrom;
-    const task={id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',created:new Date().toISOString(),notes:cf?.notes||'',teamFlag:cf?.teamFlag||false,...data};
+    const task={id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',created:new Date().toISOString(),notes:cf?.notes||'',...data};
     S.tasks.push(task);
     logChange('task', task.id, 'create', (cf?'Duplicated task: "':'Created task: "') + task.title + '"');
     announceNewTask(task);
@@ -5725,7 +5737,7 @@ function setupEvents() {
       S.ideas.push(idea); e.target.value=''; markUnsaved(); render();
       setTimeout(()=>openIdeaModal(S.ideas.find(i=>i.id===idea.id)),50);
     } else {
-      const task={id:nextId(),title,priority:3,category:S.lastCat||(S.categories[0]?.name||''),due:'',recur:'',description:'',done:false,completedAt:'',subtasks:[],aiRank:null,aiReason:'',created:new Date().toISOString(),notes:'',teamFlag:false,wikiPage:''};
+      const task={id:nextId(),title,priority:3,category:S.lastCat||(S.categories[0]?.name||''),due:today(),recur:'',description:'',done:false,completedAt:'',subtasks:[],aiRank:null,aiReason:'',created:new Date().toISOString(),notes:'',teamFlag:false,wikiPage:''};
       S.tasks.push(task); markJustAdded(task.id); e.target.value=''; markUnsaved(); render();
       setTimeout(()=>openModal(S.tasks.find(t=>t.id===task.id)),50);
     }
