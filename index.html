@@ -4822,6 +4822,25 @@ function aiHeaders(json=true) {
 function toggleDone(id) {
   const t=S.tasks.find(x=>x.id===id); if(!t) return;
   if (!t.done) {
+    // Completing a task with subtasks still open is usually a slip — confirm, and on
+    // OK close them out too so the card doesn't sit in Done reading "2/5"
+    const openSubs=(t.subtasks||[]).filter(s=>!s.done);
+    let autoSubs=null;
+    if (openSubs.length) {
+      const n=openSubs.length;
+      const msg='"'+(t.title||'')+'" has '+n+' unfinished subtask'+(n===1?'':'s')+'.\n\n'
+        +'OK — complete the task and mark '+(n===1?'it':'them all')+' done.\n'
+        +'Cancel — leave the task open.';
+      if (!confirm(msg)) return;
+      autoSubs=openSubs.map(s=>s.id);
+      // Log each one in toggleSub's exact format: the stats filters and
+      // backfillCompletions both key off that "Subtask" wording
+      openSubs.forEach(s=>{
+        s.done=true;
+        s.doneAt=localDate();
+        logChange('task', id, 'complete', `✓ Subtask completed: "${s.title}" (in "${t.title}")`);
+      });
+    }
     _justCompleted.add(id);
     setTimeout(() => _justCompleted.delete(id), 800);
     // Mark done and start grace period — task stays visible for 4s
@@ -4844,7 +4863,7 @@ function toggleDone(id) {
       S.pendingDone.delete(id);
       render();
     }, 4000);
-    S.pendingDone.set(id, {timer, spawnId});
+    S.pendingDone.set(id, {timer, spawnId, autoSubs});
     markUnsaved(); render();
   } else {
     const pending=S.pendingDone.get(id);
@@ -4856,6 +4875,13 @@ function toggleDone(id) {
         const spawnedIdx=S.tasks.findIndex(x=>x.id===pending.spawnId&&!x.done);
         if (spawnedIdx!==-1) S.tasks.splice(spawnedIdx,1);
       }
+      // ...and reopen the subtasks that completing the task closed on the user's behalf,
+      // so an undo inside the grace window puts the card back exactly as it was
+      if (pending.autoSubs) pending.autoSubs.forEach(sid=>{
+        const s=(t.subtasks||[]).find(x=>x.id===sid); if(!s||!s.done) return;
+        s.done=false; delete s.doneAt;
+        logChange('task', id, 'uncomplete', `↩ Subtask reopened: "${s.title}" (in "${t.title}")`);
+      });
     } else if (t.recur) {
       // Grace already expired and the spawn id is gone — match the spawned
       // occurrence by shape and remove it, otherwise reopening leaves a duplicate
