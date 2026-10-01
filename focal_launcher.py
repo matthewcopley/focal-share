@@ -21,6 +21,8 @@ import os
 import signal
 import sys
 import json
+import re
+import secrets
 
 FOCAL_DIR = Path(__file__).parent
 WIKI_SCRIPT = FOCAL_DIR / 'wiki_server.py'
@@ -166,6 +168,63 @@ def post_db():
         os.replace(tmp, DB_PATH)
     print(f'[launcher] focal.db saved ({len(data):,} bytes)')
     return jsonify(ok=True, size=len(data))
+
+
+# ---------------------------------------------------------------------------
+# Pasted images
+#
+# Screenshots live as files in focal_images/, never in focal.db: a save is a full
+# export of the whole database over POST /db every couple of seconds, so a few MB of
+# base64 in a task's notes would be rewritten on every keystroke-debounce. The notes
+# text holds only an [img:NAME] token; the browser resolves it to GET /images/NAME.
+#
+# Nothing here trusts the client's filename — the name is generated on this side, and
+# reads are constrained to a single flat directory by IMG_NAME_RE.
+# ---------------------------------------------------------------------------
+IMG_DIR = FOCAL_DIR / 'focal_images'
+IMG_MAX_BYTES = 12 * 1024 * 1024
+IMG_NAME_RE = re.compile(r'^[0-9]{8}-[0-9]{6}-[0-9a-f]{6}\.(png|jpg|gif|webp)$')
+
+# Content-Type → (extension, magic bytes). The extension decides what mimetype the file
+# is later served as, so an image that lies about its type is still served as an image.
+IMG_TYPES = {
+    'image/png':  ('.png', b'\x89PNG'),
+    'image/jpeg': ('.jpg', b'\xff\xd8\xff'),
+    'image/gif':  ('.gif', b'GIF8'),
+    'image/webp': ('.webp', b'RIFF'),
+}
+
+
+@app.route('/images', methods=['POST', 'OPTIONS'])
+def post_image():
+    if request.method == 'OPTIONS':
+        return Response('', status=200)
+    ctype = (request.content_type or '').split(';')[0].strip().lower()
+    if ctype not in IMG_TYPES:
+        return jsonify(ok=False, msg=f'unsupported image type: {ctype}'), 400
+    ext, magic = IMG_TYPES[ctype]
+    data = request.get_data()
+    if not data:
+        return jsonify(ok=False, msg='empty body'), 400
+    if len(data) > IMG_MAX_BYTES:
+        return jsonify(ok=False, msg='image too large'), 413
+    if not data.startswith(magic):
+        return jsonify(ok=False, msg='body does not look like ' + ctype), 400
+    IMG_DIR.mkdir(exist_ok=True)
+    name = f"{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}{ext}"
+    tmp = IMG_DIR / (name + '.tmp')
+    tmp.write_bytes(data)
+    os.replace(tmp, IMG_DIR / name)
+    print(f'[launcher] image saved: {name} ({len(data):,} bytes)')
+    return jsonify(ok=True, name=name, size=len(data))
+
+
+@app.route('/images/<name>')
+def get_image(name):
+    if not IMG_NAME_RE.match(name) or not (IMG_DIR / name).is_file():
+        return Response('Not found', status=404)
+    # Names are unique per upload and files are never rewritten, so they cache forever.
+    return send_from_directory(IMG_DIR, name, max_age=31536000)
 
 
 # ---------------------------------------------------------------------------

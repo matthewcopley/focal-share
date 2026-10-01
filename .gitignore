@@ -5,6 +5,9 @@ focal.db.*
 *.db.tmp
 *.db.backup
 
+# Pasted screenshots — personal data, stored as files beside focal.db
+focal_images/
+
 # Task handoff inbox
 .focal_inbox/
 

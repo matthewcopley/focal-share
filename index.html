@@ -264,6 +264,24 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .task-notes{width:100%;margin-top:10px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-btn);font-size:13px;color:var(--text);background:var(--bg);font-family:inherit;resize:vertical;min-height:62px;outline:none;transition:border-color .15s;line-height:1.5}
 .task-notes:focus{border-color:var(--text-muted);background:var(--surface)}
 .task-notes::placeholder{color:var(--text-subtle)}
+/* ── Pasted images — collapsed chip → inline preview → lightbox ── */
+.img-strip{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:8px}
+.img-strip:empty{display:none}
+.img-item{max-width:100%}
+.img-chip{display:inline-flex;align-items:center;gap:8px;padding:3px 10px 3px 3px;border:1px solid var(--border);border-radius:var(--r-btn);background:var(--bg);color:var(--text-muted);font-size:12px;font-family:inherit;cursor:pointer;transition:border-color .15s,color .15s}
+.img-chip:hover{border-color:var(--text-muted);color:var(--text)}
+.img-chip img{width:34px;height:24px;object-fit:cover;border-radius:3px;background:var(--surface);flex-shrink:0}
+.img-chip i{font-size:13px}
+.img-item.open>.img-chip{border-color:var(--text-muted);color:var(--text)}
+.img-full{display:none;margin-top:6px;padding:6px;border:1px solid var(--border);border-radius:var(--r-btn);background:var(--bg)}
+.img-item.open>.img-full{display:block}
+.img-full img{display:block;max-width:100%;max-height:420px;margin:0 auto;border-radius:3px;cursor:zoom-in}
+.img-full-bar{display:flex;justify-content:flex-end;gap:12px;margin-top:6px}
+.img-full-bar button{padding:0;border:none;background:none;color:var(--text-subtle);font-size:11px;font-family:inherit;cursor:pointer}
+.img-full-bar button:hover{color:var(--text)}
+#img-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:250;display:none;align-items:center;justify-content:center;cursor:zoom-out}
+#img-lightbox.open{display:flex}
+#img-lightbox img{max-width:95vw;max-height:95vh;object-fit:contain}
 /* ── Every X days row in modal ── */
 #recur-days-wrap{display:none;align-items:center;gap:6px;margin-top:7px;font-size:13px;color:var(--text-muted)}
 #recur-days-wrap.show{display:flex}
@@ -691,6 +709,7 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
     <div class="form-group">
       <label>Description</label>
       <textarea id="f-desc" placeholder="Optional notes..."></textarea>
+      <div class="img-strip" id="f-desc-imgs"></div>
     </div>
     <div class="form-group" id="f-project-wrap">
       <label>Project</label>
@@ -970,6 +989,9 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 
 
 <input type="file" id="open-db-hidden" accept=".db" style="display:none">
+
+<!-- Full-size image viewer -->
+<div id="img-lightbox"><img alt=""></div>
 
 <!-- Toasts -->
 <div id="toast-container"></div>
@@ -4556,7 +4578,10 @@ function mkCard(task, showReason) {
   exp.className='task-expand'+(isOpen?' open':'');
   const inner=document.createElement('div'); inner.className='task-expand-inner';
   if (task.aiReason && !showReason) inner.innerHTML+=`<div class="task-expand-ai">${esc(task.aiReason)}</div>`;
-  if (task.description) inner.innerHTML+=`<div class="task-description">${esc(task.description)}</div>`;
+  const descText = stripImgTokens(task.description);
+  if (descText) inner.innerHTML+=`<div class="task-description">${esc(descText)}</div>`;
+  // Anything appended below must use appendChild — a later innerHTML+= would wipe it.
+  if (imgTokens(task.description).length) inner.appendChild(mkImageStrip(task.description));
   if (totSubs) {
     const sl=document.createElement('div'); sl.className='subtasks-list';
     (task.subtasks||[]).forEach(sub=>{
@@ -4606,8 +4631,10 @@ function mkCard(task, showReason) {
   notesArea.placeholder='Add notes...';
   notesArea.value=task.notes||'';
   notesArea.onclick=e=>e.stopPropagation();
-  notesArea.oninput=()=>{ task.notes=notesArea.value; markUnsaved(); };
   inner.appendChild(notesArea);
+  const notesImgs=mkImageStrip(task.notes);
+  inner.appendChild(notesImgs);
+  bindImageField(notesArea, notesImgs, v=>{ task.notes=v; markUnsaved(); });
 
   // Linked entities panel
   inner.appendChild(mkLinkedEntitiesPanel('task', task.id, true));
@@ -4917,6 +4944,7 @@ function openModal(task, presetProjectId, asCopy) {
     document.getElementById('recur-days-wrap').classList.remove('show');
   }
   document.getElementById('f-desc').value=task?task.description:'';
+  _syncDescImgs?.();
   // Category select
   const sel=document.getElementById('f-category');
   sel.innerHTML='<option value="">No category</option>';
@@ -4951,6 +4979,7 @@ function closeModal() {
   // on save or cancel alike — once the list is visible again.
   const fresh = S.editingTask && _justAdded.has(S.editingTask.id) ? S.editingTask : null;
   document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('f-desc-imgs').innerHTML='';
   S.editingTask=null; S.modalSubs=[]; S.copyFrom=null;
   if (fresh) announceNewTask(fresh);
 }
@@ -5005,6 +5034,179 @@ function saveModal() {
     announceNewTask(task);
   }
   closeModal(); markUnsaved(); render();
+}
+
+// ─────────────────────────────────────────────
+// PASTED IMAGES
+// Screenshots are files, not rows: the launcher stores the bytes in focal_images/ and
+// the text keeps only an [img:NAME] token. Inlining base64 in a description would ride
+// along in every full-DB export, and saveDB() rewrites the whole database every 2s.
+// Editable textareas show the raw token (deleting it removes the image); read-only
+// renders strip it and draw the picture instead.
+// ─────────────────────────────────────────────
+const IMG_TOKEN_SRC = '\\[img:([0-9]{8}-[0-9]{6}-[0-9a-f]{6}\\.(?:png|jpg|gif|webp))\\]';
+const IMG_MAX_EDGE  = 1800;     // px on the long edge — a Retina screenshot is ~2-3x this
+const IMG_SIZE_CAP  = 1000000;  // over this, downscale; a PNG still over it becomes JPEG
+
+function imgTokens(text){
+  return [...String(text||'').matchAll(new RegExp(IMG_TOKEN_SRC,'g'))].map(m=>m[1]);
+}
+function stripImgTokens(text){
+  return String(text||'').replace(new RegExp(IMG_TOKEN_SRC,'g'),'').replace(/\n{3,}/g,'\n\n').trim();
+}
+function imgUrl(name){ return '/images/' + name; }
+
+// Shrink oversized pastes before upload. Returns a Blob, or null if unreadable.
+async function prepImage(file){
+  const KNOWN = ['image/png','image/jpeg','image/gif','image/webp'];
+  let bmp = null;
+  try { bmp = await createImageBitmap(file); } catch(e){ /* not decodable here */ }
+  if (!bmp) return (KNOWN.includes(file.type) && file.size <= IMG_SIZE_CAP) ? file : null;
+  const longEdge = Math.max(bmp.width, bmp.height);
+  if (KNOWN.includes(file.type) && file.size <= IMG_SIZE_CAP && longEdge <= IMG_MAX_EDGE) {
+    bmp.close?.(); return file;
+  }
+  const scale = Math.min(1, IMG_MAX_EDGE / longEdge);
+  const cv = document.createElement('canvas');
+  cv.width  = Math.max(1, Math.round(bmp.width  * scale));
+  cv.height = Math.max(1, Math.round(bmp.height * scale));
+  const ctx = cv.getContext('2d');
+  ctx.drawImage(bmp, 0, 0, cv.width, cv.height);
+  bmp.close?.();
+  let blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+  if (blob && blob.size > IMG_SIZE_CAP) {
+    // JPEG has no alpha channel — paint the transparent areas white, not black.
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.globalCompositeOperation = 'source-over';
+    const jpg = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.85));
+    if (jpg && jpg.size < blob.size) blob = jpg;
+  }
+  return blob;
+}
+
+async function uploadImage(file){
+  if (!S.usingLauncher) { showToast('Pasting images needs the launcher (python3 focal_launcher.py)'); return null; }
+  const blob = await prepImage(file);
+  if (!blob) { showToast('That image could not be read'); return null; }
+  try {
+    const r = await fetch('/images', { method:'POST', headers:{'Content-Type': blob.type}, body: blob });
+    const j = await r.json().catch(()=>({}));
+    if (!r.ok || !j.ok) { showToast('Image upload failed: ' + (j.msg || r.status)); return null; }
+    return j.name;
+  } catch(e){ showToast('Image upload failed: ' + e.message); return null; }
+}
+
+function insertImgToken(ta, name){
+  const tok = '[img:' + name + ']';
+  const v = ta.value;
+  const from = ta.selectionStart ?? v.length, to = ta.selectionEnd ?? from;
+  const before = v.slice(0, from), after = v.slice(to);
+  const lead  = (!before || before.endsWith('\n')) ? '' : '\n';
+  const trail = (!after  || after.startsWith('\n')) ? '' : '\n';
+  ta.value = before + lead + tok + trail + after;
+  const caret = (before + lead + tok).length;
+  ta.selectionStart = ta.selectionEnd = caret;
+}
+
+// Paste an image into any textarea → upload, drop an [img:…] token at the caret, refresh
+// the strip. A text paste falls through untouched. readOnly (not disabled) holds the
+// caret while the upload is in flight.
+function attachImagePaste(ta, onChange){
+  ta.addEventListener('paste', async e => {
+    const dt = e.clipboardData;
+    // Read every file out synchronously — getAsFile() on a DataTransferItem returns null
+    // once the event has been handed back to the browser, i.e. after the first await.
+    let files = [...(dt?.files || [])].filter(f => f.type.startsWith('image/'));
+    if (!files.length && dt?.items) {
+      files = [...dt.items]
+        .filter(i => i.kind === 'file' && i.type.startsWith('image/'))
+        .map(i => i.getAsFile()).filter(Boolean);
+    }
+    if (!files.length) return;   // a text paste — leave it to the browser
+    e.preventDefault();
+    ta.readOnly = true;
+    for (const f of files) {
+      const name = await uploadImage(f);
+      if (name) insertImgToken(ta, name);
+    }
+    ta.readOnly = false; ta.focus();
+    onChange(ta.value);
+  });
+}
+
+// Collapsed chip → expands the picture in place → clicking it opens the lightbox.
+function mkImageItem(name, n){
+  const item = document.createElement('div'); item.className = 'img-item';
+
+  const chip = document.createElement('button');
+  chip.type = 'button'; chip.className = 'img-chip'; chip.title = name;
+  const thumb = document.createElement('img');
+  thumb.src = imgUrl(name); thumb.alt = ''; thumb.loading = 'lazy';
+  const label = document.createElement('span'); label.textContent = 'Image ' + n;
+  const chev = document.createElement('i'); chev.className = 'ti ti-chevron-down';
+  chip.append(thumb, label, chev);
+
+  const full = document.createElement('div'); full.className = 'img-full';
+  const big = document.createElement('img'); big.alt = ''; big.title = 'Click for full size';
+  const bar = document.createElement('div'); bar.className = 'img-full-bar';
+  const zoomBtn = document.createElement('button'); zoomBtn.textContent = 'Full size';
+  const hideBtn = document.createElement('button'); hideBtn.textContent = 'Collapse';
+  bar.append(zoomBtn, hideBtn);
+  full.append(big, bar);
+
+  const setOpen = open => {
+    item.classList.toggle('open', open);
+    chev.className = 'ti ti-chevron-' + (open ? 'up' : 'down');
+    if (open && !big.src) big.src = imgUrl(name);   // served from cache — the chip loaded it
+  };
+  chip.onclick    = e => { e.preventDefault(); e.stopPropagation(); setOpen(!item.classList.contains('open')); };
+  hideBtn.onclick = e => { e.preventDefault(); e.stopPropagation(); setOpen(false); };
+  const zoom = e => { e.preventDefault(); e.stopPropagation(); openImageLightbox(name); };
+  big.onclick = zoom; zoomBtn.onclick = zoom;
+
+  item.append(chip, full);
+  item.onclick = e => e.stopPropagation();   // don't collapse the card underneath
+  return item;
+}
+
+// A strip of chips for every [img:…] token in `text`. Empty strips collapse to nothing.
+function mkImageStrip(text){
+  const strip = document.createElement('div'); strip.className = 'img-strip';
+  fillImageStrip(strip, text);
+  return strip;
+}
+function fillImageStrip(strip, text){
+  strip.innerHTML = '';
+  imgTokens(text).forEach((name, i) => strip.appendChild(mkImageItem(name, i + 1)));
+}
+
+// Wire a textarea to its strip: pastes upload, and the strip is rebuilt only when the
+// set of tokens actually changes — doing it per keystroke would restart every image
+// load and collapse anything the user had expanded.
+function bindImageField(ta, strip, onText){
+  const sync = () => {
+    const want = imgTokens(ta.value).join('|');
+    const have = [...strip.querySelectorAll('.img-chip')].map(c => c.title).join('|');
+    if (want !== have) fillImageStrip(strip, ta.value);
+  };
+  ta.addEventListener('input', () => { onText?.(ta.value); sync(); });
+  attachImagePaste(ta, () => { onText?.(ta.value); sync(); });
+  return sync;   // callers invoke it after loading new text into the field
+}
+
+// Set once in setupEvents; openModal calls it after loading a task's description.
+let _syncDescImgs = null;
+
+function openImageLightbox(name){
+  const lb = document.getElementById('img-lightbox');
+  lb.querySelector('img').src = imgUrl(name);
+  lb.classList.add('open');
+}
+function closeImageLightbox(){
+  const lb = document.getElementById('img-lightbox');
+  lb.classList.remove('open');
+  lb.querySelector('img').removeAttribute('src');
 }
 
 // ─────────────────────────────────────────────
@@ -5473,7 +5675,8 @@ async function prioritize() {
 
     const makeRow = t => {
       const subtaskTitles = (t.subtasks||[]).filter(s=>!s.done).map(s=>s.title).join('; ');
-      const blurb = [t.description, t.notes, subtaskTitles].filter(Boolean).map(s=>s.slice(0,120)).join(' | ');
+      // stripImgTokens: an [img:…] marker is noise in the ranking prompt
+      const blurb = [stripImgTokens(t.description), stripImgTokens(t.notes), subtaskTitles].filter(Boolean).map(s=>s.slice(0,120)).join(' | ');
       return {
         id: t.id,
         title: t.title,
@@ -5808,11 +6011,17 @@ function setupEvents() {
   // Link picker
   document.getElementById('link-picker-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('link-picker-overlay')) closeLinkPicker(); });
   document.getElementById('link-search').addEventListener('input', e=>renderLinkResults(e.target.value));
+  // Pasted images — modal description field and the full-size viewer
+  _syncDescImgs = bindImageField(document.getElementById('f-desc'), document.getElementById('f-desc-imgs'));
+  document.getElementById('img-lightbox').addEventListener('click', closeImageLightbox);
   // Keyboard shortcuts
   document.addEventListener('keydown',e=>{
     if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
     if ((e.key==='n'||e.key==='N') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openModal(null); }
     if ((e.key==='i'||e.key==='I') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openIdeaModal(null); }
+    if (e.key==='Escape' && document.getElementById('img-lightbox').classList.contains('open')) {
+      closeImageLightbox(); return;   // it sits above whatever opened it — don't close that too
+    }
     if (e.key==='Escape') {
       closeModal(); closeProjectModal(); closeIdeaModal(); closeSuccessModal();
       closeDigestModal(); closeAIOutput(); closeWikiModal();
