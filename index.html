@@ -674,6 +674,26 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .backup-row:last-child{border-bottom:none}
 /* Nav bottom */
 #sidebar-bottom{margin-top:auto;padding-top:6px;border-top:1px solid var(--border)}
+.nav-info-btn{background:none;border:none;padding:0 2px;margin:-2px 0;cursor:pointer;color:var(--text-subtle);display:flex;align-items:center;line-height:1}
+.nav-info-btn i{font-size:14px}
+.nav-info-btn:hover{color:var(--accent)}
+/* "How it works" — the Launch / rings / streak explainer */
+#help-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:210;display:none;align-items:center;justify-content:center;padding:16px}
+#help-overlay.open{display:flex}
+#help-modal{background:var(--surface);border:1px solid var(--border-mid);border-radius:var(--r-card);width:640px;max-width:100%;max-height:88vh;display:flex;flex-direction:column}
+#help-modal header{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 12px;border-bottom:1px solid var(--border)}
+#help-modal h3{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:var(--accent)}
+#help-body{overflow-y:auto;padding:6px 22px 18px;font-size:13px;line-height:1.6;color:var(--text)}
+.help-sec{padding:14px 0;border-bottom:1px solid var(--border)}
+.help-sec:last-child{border-bottom:none}
+.help-sec h4{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--text);margin-bottom:6px}
+.help-sec h4 i{font-size:16px;color:var(--accent)}
+.help-sec p{color:var(--text-dim);margin:4px 0}
+.help-sec ul{margin:4px 0 0 18px;color:var(--text-dim)}
+.help-sec li{margin:2px 0}
+.help-sec b{color:var(--text);font-weight:500}
+.help-why{font-size:12px;color:var(--text-muted);border-left:2px solid var(--border-mid);padding-left:10px;margin-top:8px}
+.help-ring{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
 /* ── Digest + AI output modals ── */
 /* ── Team flag ── */
 .team-flag-btn{display:flex;align-items:center;gap:3px;padding:3px 7px;border-radius:var(--r-pill);border:1px solid transparent;cursor:pointer;font-size:11px;font-weight:500;flex-shrink:0;background:transparent;color:var(--text-subtle);opacity:0;transition:opacity .15s,background .15s,color .15s;font-family:inherit;line-height:1}
@@ -770,7 +790,7 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
     </div>
     </div><!-- end cats-nav-group -->
     <div id="sidebar-bottom">
-      <div class="nav-item" data-view="settings"><i class="ti ti-settings"></i><span class="nav-label">Settings</span></div>
+      <div class="nav-item" data-view="settings"><i class="ti ti-settings"></i><span class="nav-label">Settings</span><button class="nav-info-btn" id="help-btn" title="How Launch, rings and streaks work"><i class="ti ti-info-circle"></i></button></div>
     </div>
   </div>
 
@@ -1124,6 +1144,14 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 
 <!-- Full-size image viewer -->
 <div id="img-lightbox"><img alt=""></div>
+
+<!-- "How it works" explainer — content drawn by openHelp() -->
+<div id="help-overlay">
+  <div id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <header><h3 id="help-title">How Focal keeps you moving</h3><button class="launch-small-btn" id="help-close">Close</button></header>
+    <div id="help-body"></div>
+  </div>
+</div>
 
 <!-- Launch — single-task start mode. Content is drawn by renderLaunch(). -->
 <div id="launch-overlay"><div id="launch-panel" role="dialog" aria-modal="true" aria-label="Launch"></div></div>
@@ -5807,6 +5835,62 @@ function celebrateCompletion(t, origin) {
   else if (lucky) showToast(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
 }
 
+// ── How it works ─────────────────────────────────────────────────────────────
+// Explainer for the Launch / rings / streak features, opened from the ⓘ next to
+// Settings. Drawn on open so the numbers (daily goal, thresholds) are the live ones.
+function openHelp() {
+  const target = getDailyTarget();
+  const sec = (icon, title, body) => `<div class="help-sec"><h4><i class="ti ${icon}"></i>${title}</h4>${body}</div>`;
+  document.getElementById('help-body').innerHTML = [
+    sec('ti-player-play', 'Launch — just start', `
+      <p>The hard part is starting, so Focal rewards starting. Press <b>▶</b> on any task (it shows on hover), <b>Start</b> in an expanded task, or the button on the Focus panel.</p>
+      <ul>
+        <li><b>First tiny step</b> — the very first physical action. Small enough to feel almost silly. It's prefilled from where you last left off, or the first open subtask, and can be saved as a subtask.</li>
+        <li><b>If I get stuck, I'll…</b> — optional backup plan, shown while you work.</li>
+        <li><b>Timebox</b> — 5, 15, 25 or 45 minutes (default 5). A bar drains and the countdown shows in the browser tab.</li>
+        <li><b>Step done</b> ticks the step off and asks for the next one. <b>+5 / +15</b> extends the box.</li>
+        <li>When time's up it chimes softly and keeps counting — it's a cue, not a stop. Keep going, park it, or mark it done.</li>
+        <li><b>Park it</b> — note where you got to and the next step. That's written to the task's notes, the next step shows on the card (→ …), and the next Launch opens on it.</li>
+        <li><b>Esc</b> hides a running session; the pill in the bottom-left corner brings it back. A reload doesn't lose the clock.</li>
+      </ul>
+      <p>A session counts once it runs a minute (or ends in Done).</p>`),
+    sec('ti-circle-dashed', 'The three rings', `
+      <ul>
+        <li><span class="help-ring" style="background:${RING_COLORS.launch}"></span><b>Launch</b> — start one Launch session today, or finish a sticky task.</li>
+        <li><span class="help-ring" style="background:${RING_COLORS.ontime}"></span><b>On time</b> — everything due today, done today. Shows "nothing due" when there's nothing to hit.</li>
+        <li><span class="help-ring" style="background:${RING_COLORS.clear}"></span><b>Clear</b> — your daily goal: ${target} completions (change it in Settings). The warm-up.</li>
+      </ul>
+      <p>Each ring gets a quick cheer the moment it closes; all three is a full day.</p>
+      <div class="help-why">A plain completion count is always met by the quick tasks. Launch and On time aim the reward at the hard ones.</div>`),
+    sec('ti-anchor', 'Sticky tasks', `
+      <p>A task turns sticky (anchor badge) when it's been <b>pushed back ${STICKY_PUSHES}+ times</b>, is <b>${STICKY_OVERDUE}+ days overdue</b>, or has been <b>open ${STICKY_AGE}+ days with no due date</b>.</p>
+      <p>A push-back is any snooze, or editing the due date later (or clearing it). Moving it earlier doesn't count.</p>
+      <p>Focus shows the stickiest one with <b>Start 5 min</b> — five minutes is enough to break it loose. <b>Not today</b> skips it until tomorrow. Finishing a sticky task gets the big celebration.</p>`),
+    sec('ti-flame', 'Streak and freezes', `
+      <p>A day counts if you <b>complete a task or run a Launch session</b>. Weekends never break it, and paused days (Settings) count.</p>
+      <p>Every <b>${STREAK_FREEZE_EVERY} days</b> in a row banks a <b>freeze</b> ❄ (up to ${STREAK_FREEZE_MAX}). Miss a workday and a freeze covers it automatically instead of resetting you to zero. Covered days are dash-outlined on the dashboard heatmap.</p>
+      <p><b>Last 10 workdays</b> on the dashboard is the forgiving view: one missed day costs one, not the whole run.</p>
+      <div class="help-why">Losing a long streak is when people quit ("well, that's ruined"). A bad day shouldn't cost a good month.</div>`),
+    sec('ti-sunrise', 'Fresh starts', `
+      <p>On the first workday of a month, every Monday, and the day after a streak lapses, Focus and the dashboard open with a clean-slate banner: how the last period went, and five minutes on your stickiest task. × hides it for the day.</p>`),
+    sec('ti-arrow-forward-up', 'Follow-ups', `
+      <p>Finish a task that hands something to someone — titles with <b>send, submit, email, request, ask, propose, quote, invoice, call…</b> — and a toast offers a follow-up in <b>3 days</b> or <b>1 week</b>. It creates a linked "Follow up: …" task that says what to do if it isn't settled by then.</p>
+      <p>Add categories under Settings → <b>Always offer follow-ups for</b> to get the prompt for every task in them. Any task can get one by hand: expand it → <b>Follow up</b> → pick a date.</p>`),
+    sec('ti-confetti', 'Celebrations', `
+      <p>Every completion bursts from the checkbox. Sticky tasks get a bigger one, and now and then an ordinary task does too, with a word of encouragement.</p>
+      <div class="help-why">Rewards work best immediately, and a little unpredictability keeps them from going stale.</div>`),
+    sec('ti-chart-bar', 'Dashboard', `
+      <p>The <b>Launch</b> row shows sessions, time spent in Launch, sticky tasks cleared, and <b>planned → actual</b> minutes — a check on whether your timeboxes match how you actually work.</p>`),
+    sec('ti-adjustments', 'Settings', `
+      <p>Celebrations, the Launch timer chime and follow-up prompts can each be switched off under Settings → General. Off means off — nothing nags.</p>`),
+  ].join('');
+  document.getElementById('help-overlay').classList.add('open');
+  document.getElementById('help-body').scrollTop = 0;
+}
+function closeHelp() {
+  document.getElementById('help-overlay').classList.remove('open');
+}
+
 function getLMTimeout() {
   return parseInt(localStorage.getItem('focal_lm_timeout') || '90', 10) * 1000;
 }
@@ -7135,6 +7219,10 @@ function setupEvents() {
   // Pasted images — modal description field and the full-size viewer
   _syncDescImgs = bindImageField(document.getElementById('f-desc'), document.getElementById('f-desc-imgs'));
   document.getElementById('img-lightbox').addEventListener('click', closeImageLightbox);
+  // How-it-works explainer — the ⓘ sits inside the Settings nav row, so stop it navigating too
+  document.getElementById('help-btn').addEventListener('click', e=>{ e.stopPropagation(); openHelp(); });
+  document.getElementById('help-close').addEventListener('click', closeHelp);
+  document.getElementById('help-overlay').addEventListener('click', e=>{ if (e.target.id==='help-overlay') closeHelp(); });
   // Launch — the pill brings a hidden session back
   const pill=document.getElementById('launch-pill');
   pill.addEventListener('click', ()=>{ S.launchView='run'; showLaunch(); });
@@ -7160,7 +7248,7 @@ function setupEvents() {
       closeConfirm(); return;   // same — cancelling the prompt must not close the modal behind it
     }
     if (e.key==='Escape') {
-      closeModal(); closeProjectModal(); closeIdeaModal(); closeSuccessModal();
+      closeModal(); closeProjectModal(); closeIdeaModal(); closeSuccessModal(); closeHelp();
       closeDigestModal(); closeAIOutput(); closeWikiModal();
       document.getElementById('link-picker-overlay').classList.remove('open');
       document.getElementById('import-proj-overlay').classList.remove('open');
