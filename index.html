@@ -448,7 +448,6 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .dash-range-btn:last-child{border-right:none}
 .dash-range-btn.active{background:var(--surface);color:var(--accent)}
 /* Row 1: score + kpis */
-.dash-row1{display:grid;grid-template-columns:260px 1fr;gap:14px;margin-bottom:14px;align-items:stretch}
 .dash-score-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:20px 22px}
 .dash-score-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
 .dash-score-section-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
@@ -470,13 +469,12 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .dash-kpi-warn .dash-kpi-value{color:#E8A87C}
 .dash-kpi-bad  .dash-kpi-value{color:#F98080}
 /* Trend chart */
-.dash-trend-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px 18px;margin-bottom:14px}
+.dash-trend-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px 18px}
 .dash-trend-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .dash-trend-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
 .dash-trend-peak{font-size:11px;color:var(--text-muted)}
 .dash-trend-svg{width:100%;display:block}
 /* Breakdowns */
-.dash-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0}
 .dash-breakdown-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:14px 16px}
 .dash-breakdown-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px}
 .dash-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:12px}
@@ -489,7 +487,75 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .dash-ft-part-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
 .dash-ft-part-val{font-size:15px;font-weight:700;color:var(--text)}
 .dash-ft-part-sub{font-size:10px;color:var(--text-muted);margin-top:5px}
-@media(max-width:700px){.dash-row1{grid-template-columns:1fr}.dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-breakdown{grid-template-columns:1fr}.dash-ft-parts{grid-template-columns:1fr;gap:12px}.dash-streak-row{grid-template-columns:repeat(2,1fr)}}
+/* Customizable module grid. Each module is a size container, so its insides
+   reflow to the width it was given, not to the window. */
+.dash-header-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dash-customize.active{border-color:var(--accent);color:var(--accent)}
+.dash-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;align-items:stretch;--col:calc((100% - 154px) / 12)}
+.dash-mod{position:relative;min-width:0;display:flex;flex-direction:column;container-type:inline-size}
+.dash-mod-body{flex:1;display:flex;flex-direction:column;min-width:0}
+.dash-mod-body>:last-child{flex:1}
+.dash-mod .rings-bar,.dash-mod .frog-panel{margin:0}
+.dash-muted{font-size:12px;color:var(--text-muted);margin:0}
+.dash-list-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer;min-width:0}
+.dash-list-row:last-of-type{border-bottom:none}
+.dash-list-row:hover .dash-list-title{color:var(--accent)}
+.dash-list-when{width:64px;flex-shrink:0;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.dash-list-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .1s}
+.dash-list-meta{flex-shrink:0;font-size:10px;color:var(--text-muted);max-width:30%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-list-more{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);cursor:pointer;margin-top:8px}
+.dash-list-more:hover{color:var(--accent)}
+@container (min-width:900px){.dash-mod .dash-kpis{grid-template-columns:repeat(6,1fr)}}
+@container (max-width:440px){.dash-mod .dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-mod .dash-score-big{font-size:44px}}
+@container (max-width:560px){.dash-mod .dash-streak-row{grid-template-columns:repeat(2,1fr)}.dash-mod .dash-ft-parts{grid-template-columns:1fr;gap:12px}}
+@container (max-width:230px){.dash-mod .dash-kpis,.dash-mod .dash-streak-row{grid-template-columns:1fr}}
+/* Edit mode */
+.dash-editing .dash-mod{outline:1px dashed var(--border-mid);outline-offset:4px;transition:outline-color .1s}
+.dash-editing .dash-mod:hover{outline-color:var(--accent-dim)}
+.dash-editing .dash-mod-body{pointer-events:none;user-select:none}
+.dash-mod-bar{display:flex;align-items:center;gap:8px;height:24px;margin-bottom:6px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)}
+.dash-mod-grip,.dash-mod-x{background:none;border:none;color:var(--text-muted);display:flex;align-items:center;padding:2px;font-size:15px;font-family:inherit}
+.dash-mod-grip{cursor:grab;touch-action:none}
+.dash-mod-grip:hover,.dash-mod-grip:focus-visible{color:var(--accent)}
+.dash-mod-x{cursor:pointer}
+.dash-mod-x:hover,.dash-mod-x:focus-visible{color:var(--p1)}
+.dash-mod-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-mod-size{color:var(--accent);font-variant-numeric:tabular-nums}
+.dash-mod-resize{position:absolute;top:0;bottom:0;right:-12px;width:10px;cursor:ew-resize;touch-action:none;display:flex;align-items:center;justify-content:center;z-index:2;outline:none}
+.dash-mod-resize::after{content:'';width:3px;height:36px;max-height:60%;background:var(--border-mid);border-radius:2px;transition:background .12s,height .12s}
+.dash-mod:hover>.dash-mod-resize::after{background:var(--text-subtle)}
+.dash-mod>.dash-mod-resize:hover::after,.dash-mod-resize:focus-visible::after,.dash-mod-resizing>.dash-mod-resize::after{background:var(--accent);height:64px}
+.dash-grid.dash-resizing{background-image:repeating-linear-gradient(90deg,rgba(200,165,55,.06) 0 var(--col),transparent var(--col) calc(var(--col) + 14px))}
+.dash-mod-resizing{outline-color:var(--accent)!important}
+.dash-dragging{opacity:.3}
+.dash-drop-l::before,.dash-drop-r::before,.dash-drop-t::before,.dash-drop-b::before{content:'';position:absolute;background:var(--accent);border-radius:2px;z-index:3;pointer-events:none}
+.dash-drop-l::before{top:0;bottom:0;left:-9px;width:3px}
+.dash-drop-r::before{top:0;bottom:0;right:-9px;width:3px}
+.dash-drop-t::before{left:0;right:0;top:-9px;height:3px}
+.dash-drop-b::before{left:0;right:0;bottom:-9px;height:3px}
+.dash-drag-tag{position:fixed;left:0;top:0;z-index:1000;pointer-events:none;background:var(--surface);border:1px solid var(--accent);color:var(--accent);padding:5px 10px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;gap:6px;box-shadow:0 8px 24px rgba(0,0,0,.55)}
+body.dash-grabbing,body.dash-grabbing *{cursor:grabbing!important;user-select:none}
+body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
+.dash-mod-new{animation:dashNew 1.8s ease-out}
+@keyframes dashNew{0%,30%{box-shadow:0 0 0 2px var(--accent)}100%{box-shadow:0 0 0 2px transparent}}
+@media (prefers-reduced-motion:reduce){.dash-mod-new{animation:none}}
+.dash-manager{background:var(--surface);border:1px solid var(--border-mid);border-left:3px solid var(--accent);padding:12px 14px;margin-bottom:18px}
+.dash-manager-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.dash-manager-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.dash-manager-hint{flex:1;min-width:200px;font-size:11px;color:var(--text-muted)}
+.dash-manager-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.dash-manager-item{display:flex;align-items:center;gap:10px;text-align:left;background:var(--bg);border:1px solid var(--border);padding:8px 10px;cursor:pointer;font-family:inherit;color:var(--text-dim);transition:border-color .1s,color .1s}
+.dash-manager-item:hover{border-color:var(--border-mid);color:var(--text)}
+.dash-manager-item.on{border-color:var(--accent-dim);color:var(--text)}
+.dash-manager-item>i:first-child{font-size:17px;color:var(--text-subtle)}
+.dash-manager-item.on>i:first-child{color:var(--accent)}
+.dmi-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.dmi-name{font-size:12px;font-weight:500}
+.dmi-desc{font-size:10px;color:var(--text-muted);line-height:1.35}
+.dmi-state{font-size:14px;color:var(--text-subtle)}
+.dash-manager-item.on .dmi-state{color:var(--accent)}
+.dash-manager-item:hover .dmi-state{color:var(--text)}
+@media(max-width:700px){.dash-grid{grid-template-columns:1fr}.dash-mod{grid-column:1/-1!important}.dash-mod-resize{display:none}}
 /* ── Gamification ── */
 /* Task completion flash */
 @keyframes task-complete-flash{0%{background:rgba(77,200,138,.12);border-color:#4DC88A}100%{background:var(--surface);border-color:var(--border)}}
@@ -602,15 +668,15 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .cl-action-launch{color:var(--accent);font-weight:600}
 @media (max-width:640px){.rings-streak{margin-left:0}.frog-panel,.fresh-banner{flex-wrap:wrap}.launch-remaining{font-size:28px}}
 /* Streak display in dashboard */
-.dash-streak-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px;margin-bottom:14px}
-.dash-section-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:4px 0 -6px}
+.dash-streak-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.dash-section-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:0 0 8px}
 .dash-streak-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:14px 16px}
 .dash-streak-card.highlight{border-color:currentColor}
 .dash-streak-label{font-size:11px;color:var(--text-muted);font-weight:500;margin-bottom:4px}
 .dash-streak-value{font-size:28px;font-weight:800;color:var(--text);line-height:1}
 .dash-streak-sub{font-size:11px;color:var(--text-muted);margin-top:3px}
 /* Heatmap */
-.dash-heatmap-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px 18px;margin-top:14px;overflow-x:auto}
+.dash-heatmap-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px 18px;overflow-x:auto}
 .dash-heatmap-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:14px}
 .dash-heatmap-svg{display:block;min-width:fit-content}
 /* ── Wiki ── */
@@ -1267,6 +1333,7 @@ const S = {
   wikiOnline: false,
   usingLauncher: false,
   dashboardDays: 7,
+  dashEdit: false,       // dashboard Customize mode
   wikiPages: [],
   changelog: [],
   sessions: [],          // Launch sessions — permanent, unlike the capped changelog
@@ -2307,6 +2374,7 @@ function isTaskGroupView(v) { return TASK_GROUP_VIEWS.has(v) || v.startsWith('ca
 
 function setView(v) {
   S.view=v; S.showAllFocus=false; S.filters={p:new Set(),cats:new Set()};
+  if (v!=='dashboard') S.dashEdit=false;
   // Every task list opens sorted by due date — what's next is the question these
   // screens answer. Focus is the exception: it's the AI ranking, so it keeps the
   // 'default' (Smart) order. The sort bar still offers Smart/Newest and Priority.
@@ -2544,84 +2612,346 @@ function ftTier(score) {
        : score >= 35 ? {label:'Struggling',    bg:'#1c0e0e', text:'#d47070', line:'#d47070'}
        :               {label:'Needs Focus',   bg:'#200808', text:'#F98080', line:'#F98080'};
 }
-function renderDashboard(c) {
-  c.innerHTML = '';
-  const days = S.dashboardDays;
-  const now  = new Date();
-  const todayStr = localDate(now);
-  const fromStr  = localDate(new Date(now - days * 86400000));
-  const svgNS    = 'http://www.w3.org/2000/svg';
+// ── Dashboard modules ───────────────────────────────────────────────────────
+// The dashboard is a 12-column grid of modules. Which ones show, in what order
+// and how wide is a per-browser pref (DASH_KEY: {mods:[{id, span}], seen:[ids]}).
+// Customize switches to edit mode: drag a module by its grip to move it, drag
+// its right edge to resize (snaps to columns), × removes it, and the manager
+// panel adds it back. Each module renders into its body only *after* it's in
+// the DOM, so charts can size themselves to the width the module actually got.
+const DASH_KEY  = 'focal_dash_layout';
+const DASH_COLS = 12;
+const DASH_GAP  = 14;   // must match .dash-grid gap
 
-  // ── follow-through score ─────────────────────────────────────────────────
-  // The score always covers a fixed FT_WINDOW-day window; `days` only decides
-  // how far back the trend line reaches. The headline delta is measured against
-  // the first point of that same line, so the card and the chart can't disagree.
-  const ftCtx = ftContext();
-  const ft    = followThrough(ftCtx, todayStr, FT_WINDOW);
-  const score = ft.score;
-  const tier  = ftTier(score);
+const DASH_MODULES = [
+  { id:'score',    title:'Follow-Through score', icon:'ti-gauge',          span:3,  min:2, show:true,  desc:'The headline number, its tier and the change across the range', render:dashScore },
+  { id:'kpis',     title:'Key numbers',          icon:'ti-layout-grid',    span:9,  min:2, show:true,  desc:'Completed, finished late, overdue, projects, wins, ideas', render:dashKpis },
+  { id:'trend',    title:'Score over time',      icon:'ti-chart-line',     span:12, min:4, show:true,  desc:'The score per day, daily completions, and what it’s made of', render:dashTrend },
+  { id:'cats',     title:'By category',          icon:'ti-category',       span:6,  min:2, show:true,  desc:'Completions in the range, per category', render:dashCats },
+  { id:'pri',      title:'By priority',          icon:'ti-flag',           span:6,  min:2, show:true,  desc:'Pending tasks, per priority', render:dashPri },
+  { id:'streaks',  title:'Streaks',              icon:'ti-flame',          span:12, min:2, show:true,  desc:'Current and best streak, last 10 workdays, all-time', render:dashStreaks },
+  { id:'launch',   title:'Launch',               icon:'ti-player-play',    span:12, min:2, show:true,  desc:'Sessions, focus time, sticky tasks cleared, plan vs reality', render:dashLaunch },
+  { id:'heatmap',  title:'Activity heatmap',     icon:'ti-grid-dots',      span:12, min:3, show:true,  desc:'Completions per day — the wider it is, the further back it goes', render:dashHeatmap },
+  { id:'rings',    title:'Today’s rings',        icon:'ti-circle-dot',     span:12, min:4, show:false, desc:'Launch, On time and Clear, as on Focus', render:b => b.appendChild(mkDailyGoalBar()) },
+  { id:'frog',     title:'Sticky task',          icon:'ti-anchor',         span:12, min:4, show:false, desc:'The running Launch, or your stickiest task with a 5-min start', render:dashFrog },
+  { id:'duesoon',  title:'Due soon',             icon:'ti-calendar-due',   span:6,  min:3, show:false, desc:'Overdue and the next 7 days, soonest first', render:dashDueSoon },
+  { id:'projects', title:'Active projects',      icon:'ti-briefcase',      span:6,  min:3, show:false, desc:'In-progress projects and how far along they are', render:dashProjects },
+];
+const DASH_BY_ID = new Map(DASH_MODULES.map(m => [m.id, m]));
 
+function dashLayout() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(DASH_KEY) || 'null'); } catch(e) {}
+  if (!saved || !Array.isArray(saved.mods)) return DASH_MODULES.filter(m => m.show).map(m => ({ id: m.id, span: m.span }));
+  const seen = new Set(saved.seen || []);
+  const ids = new Set();
+  const mods = saved.mods.filter(x => x && DASH_BY_ID.has(x.id) && !ids.has(x.id) && ids.add(x.id))
+    .map(x => { const d = DASH_BY_ID.get(x.id); return { id: x.id, span: Math.max(d.min, Math.min(DASH_COLS, parseInt(x.span, 10) || d.span)) }; });
+  // A module added to Focal after this layout was saved shows up once, at the
+  // end; one the user removed stays removed.
+  DASH_MODULES.forEach(m => { if (m.show && !seen.has(m.id) && !mods.some(x => x.id === m.id)) mods.push({ id: m.id, span: m.span }); });
+  return mods;
+}
+function saveDashLayout(mods) {
+  localStorage.setItem(DASH_KEY, JSON.stringify({ mods, seen: DASH_MODULES.map(m => m.id) }));
+}
+const dashSpanLabel = s => s === DASH_COLS ? 'full' : ({ 3:'¼', 4:'⅓', 6:'½', 8:'⅔', 9:'¾' })[s] || `${s}/12`;
+
+// Shared numbers, computed at most once per render and only if a module asks
+function dashCtx(days) {
+  const now = new Date(), todayStr = localDate(now);
+  const x = { days, now, todayStr, fromStr: localDate(new Date(now - days * 86400000)) };
+  const lazy = (k, fn) => { let v, done = false; Object.defineProperty(x, k, { get() { if (!done) { v = fn(); done = true; } return v; } }); };
+  lazy('ftCtx', ftContext);
+  lazy('ft',    () => followThrough(x.ftCtx, todayStr, FT_WINDOW));
+  lazy('tier',  () => ftTier(x.ft.score));
   // One point per day: the score exactly as it stood that day, from the same
   // function behind the headline number. Don't open the line before there's
   // enough history to fill a window, or it starts on noise.
-  const seriesStart = (() => {
-    const wanted = addDays(todayStr, -(days - 1));
-    const safe   = addDays(ftCtx.firstDay, 13);
-    return wanted > safe ? wanted : safe;
-  })();
-  const series = [];
-  for (let d = seriesStart; d <= todayStr; d = addDays(d, 1)) {
-    const f = followThrough(ftCtx, d, FT_WINDOW);
-    series.push({ day: d, score: f.score, ft: f });
-  }
-  if (!series.length) series.push({ day: todayStr, score, ft });
-  const span  = series.length;
-  const delta = score - series[0].score;
+  lazy('series', () => {
+    const wanted = addDays(todayStr, -(days - 1)), safe = addDays(x.ftCtx.firstDay, 13);
+    const out = [];
+    for (let d = wanted > safe ? wanted : safe; d <= todayStr; d = addDays(d, 1)) {
+      const f = followThrough(x.ftCtx, d, FT_WINDOW);
+      out.push({ day: d, score: f.score, ft: f });
+    }
+    if (!out.length) out.push({ day: todayStr, score: x.ft.score, ft: x.ft });
+    return out;
+  });
+  lazy('completions', () => S.changelog.filter(e => e.action === 'complete' && !e.description.includes('Subtask') && localDate(new Date(e.ts)) >= x.fromStr));
+  lazy('dayCounts', () => {
+    const m = {};
+    S.changelog.filter(e => e.action === 'complete' && !e.description.includes('Subtask'))
+      .forEach(e => { const d = localDate(new Date(e.ts)); m[d] = (m[d] || 0) + 1; });
+    return m;
+  });
+  lazy('streak', calcStreak);
+  return x;
+}
 
-  // ── core stats ───────────────────────────────────────────────────────────
-  const clInWindow      = S.changelog.filter(e => e.action === 'complete' && localDate(new Date(e.ts)) >= fromStr);
-  const taskCompletions = clInWindow.filter(e => !e.description.includes('Subtask'));
-  const overdueNow      = S.tasks.filter(t => !t.done && t.due && t.due < todayStr).length;
-  const totalPending    = S.tasks.filter(t => !t.done).length;
-  const activeProjs     = S.projects.filter(p => ['in-progress','active'].includes(p.status));
-  const avgProjProg     = activeProjs.length
-    ? Math.round(activeProjs.reduce((s,p) => s + (p.progressManual ? p.progress : effectiveProgress(p)), 0) / activeProjs.length) : 0;
-  const winsInWindow    = (S.successes||[]).filter(w => w.startDate >= fromStr || w.endDate >= fromStr).length;
-  const ideasInWindow   = S.ideas.filter(i => i.created && i.created.slice(0,10) >= fromStr).length;
+function renderDashboard(c) {
+  const keep = c.scrollTop;   // range buttons and layout edits re-render; don't jump to the top
+  c.innerHTML = '';
+  const days = S.dashboardDays, editing = !!S.dashEdit;
+  const layout = dashLayout();
+  const x = dashCtx(days);
 
   // ── header ───────────────────────────────────────────────────────────────
   const hdr = document.createElement('div');
   hdr.className = 'dash-header';
   hdr.innerHTML = '<div class="dash-title">Progress</div>';
+  const right = document.createElement('div');
+  right.className = 'dash-header-right';
   const rangeBtns = document.createElement('div');
   rangeBtns.className = 'dash-range-btns';
   [7,30,60,90].forEach(d => {
     const b = document.createElement('button');
     b.className = 'dash-range-btn' + (d === days ? ' active' : '');
     b.textContent = d + 'd';
-    b.onclick = () => { S.dashboardDays = d; renderDashboard(c); };
+    b.onclick = () => { S.dashboardDays = d; rerenderDash(c); };
     rangeBtns.appendChild(b);
   });
-  hdr.appendChild(rangeBtns);
+  right.appendChild(rangeBtns);
+  const custom = document.createElement('button');
+  custom.className = 'icon-btn dash-customize' + (editing ? ' active' : '');
+  custom.innerHTML = editing ? '<i class="ti ti-check"></i>Done' : '<i class="ti ti-layout-grid-add"></i>Customize';
+  custom.title = editing ? 'Finish editing the layout' : 'Add, remove, move and resize modules';
+  custom.onclick = () => { S.dashEdit = !editing; rerenderDash(c); };
+  right.appendChild(custom);
+  hdr.appendChild(right);
   c.appendChild(hdr);
-  const fresh = mkFreshStartBanner(); if (fresh) c.appendChild(fresh);
+  if (editing) c.appendChild(mkDashManager(c, layout));
+  if (!editing) { const fresh = mkFreshStartBanner(); if (fresh) c.appendChild(fresh); }
 
-  // ── row 1: score card + kpi grid ─────────────────────────────────────────
-  const row1 = document.createElement('div');
-  row1.className = 'dash-row1';
+  // ── modules ──────────────────────────────────────────────────────────────
+  const grid = document.createElement('div');
+  grid.className = 'dash-grid' + (editing ? ' dash-editing' : '');
+  c.appendChild(grid);
+  if (!layout.length) {
+    const empty = mkEmpty('ti-layout-grid-add', 'No modules on the dashboard');
+    if (!editing) {
+      const b = document.createElement('button'); b.className = 'icon-btn'; b.style.margin = '12px auto 0';
+      b.innerHTML = '<i class="ti ti-layout-grid-add"></i>Add some';
+      b.onclick = () => { S.dashEdit = true; rerenderDash(c); };
+      empty.appendChild(b);
+    }
+    grid.appendChild(empty);
+    grid.style.display = 'block';
+  }
+  layout.forEach(m => {
+    const def = DASH_BY_ID.get(m.id);
+    const el = document.createElement('div');
+    el.className = 'dash-mod';
+    el.dataset.id = m.id;
+    el.style.gridColumn = `span ${m.span}`;
+    if (editing) {
+      const bar = document.createElement('div');
+      bar.className = 'dash-mod-bar';
+      bar.innerHTML = `<button class="dash-mod-grip" title="Drag to move (or focus and use the arrow keys)"><i class="ti ti-grip-vertical"></i></button>`
+        + `<span class="dash-mod-name">${esc(def.title)}</span><span class="dash-mod-size">${dashSpanLabel(m.span)}</span>`
+        + `<button class="dash-mod-x" title="Remove from the dashboard"><i class="ti ti-x"></i></button>`;
+      const grip = bar.querySelector('.dash-mod-grip');
+      grip.onpointerdown = e => startDashDrag(e, el, def, c, layout);
+      grip.onkeydown = e => {
+        const step = { ArrowLeft:-1, ArrowUp:-1, ArrowRight:1, ArrowDown:1 }[e.key]; if (!step) return;
+        e.preventDefault();
+        const i = layout.indexOf(m), j = i + step;
+        if (j < 0 || j >= layout.length) return;
+        [layout[i], layout[j]] = [layout[j], layout[i]];
+        saveDashLayout(layout); rerenderDash(c);
+        c.querySelector(`.dash-mod[data-id="${m.id}"] .dash-mod-grip`)?.focus();
+      };
+      bar.querySelector('.dash-mod-x').onclick = () => {
+        layout.splice(layout.indexOf(m), 1);
+        saveDashLayout(layout); rerenderDash(c);
+      };
+      el.appendChild(bar);
+    }
+    const body = document.createElement('div');
+    body.className = 'dash-mod-body';
+    el.appendChild(body);
+    if (editing) {
+      const h = document.createElement('div');
+      h.className = 'dash-mod-resize'; h.tabIndex = 0;
+      h.title = 'Drag to resize (or focus and use ← →)';
+      h.onpointerdown = e => startDashResize(e, el, def, m, c, layout);
+      h.onkeydown = e => {
+        const step = { ArrowLeft:-1, ArrowRight:1 }[e.key]; if (!step) return;
+        e.preventDefault();
+        const s = Math.max(def.min, Math.min(DASH_COLS, m.span + step)); if (s === m.span) return;
+        m.span = s; saveDashLayout(layout); rerenderDash(c);
+        c.querySelector(`.dash-mod[data-id="${m.id}"] .dash-mod-resize`)?.focus();
+      };
+      el.appendChild(h);
+    }
+    grid.appendChild(el);
+    // One broken module shouldn't blank the whole dashboard
+    try { def.render(body, x); }
+    catch(err) { console.error('dashboard module', m.id, err); body.innerHTML = `<div class="dash-breakdown-card"><div class="dash-breakdown-title">${esc(def.title)}</div><p class="dash-muted">Couldn’t draw this module.</p></div>`; }
+  });
+  c.scrollTop = keep;
+  watchDashWidth(c, grid);
+}
 
-  // Score card
-  const scoreCard = document.createElement('div');
-  scoreCard.className = 'dash-score-card';
+// Charts and the heatmap are drawn for the width they had at render time, so
+// redraw when that width really changes — the window, the sidebar, or the first
+// load measuring before layout has settled. Not mid-resize: release redraws.
+let _dashRO = null, _dashROTimer = null;
+function watchDashWidth(c, grid) {
+  if (_dashRO) _dashRO.disconnect();
+  if (typeof ResizeObserver === 'undefined') return;
+  const w0 = grid.clientWidth;
+  _dashRO = new ResizeObserver(() => {
+    if (!grid.isConnected) { _dashRO.disconnect(); return; }
+    if (Math.abs(grid.clientWidth - w0) < 8 || document.body.classList.contains('dash-sizing')) return;
+    clearTimeout(_dashROTimer);
+    _dashROTimer = setTimeout(() => { if (grid.isConnected && S.view === 'dashboard') renderDashboard(c); }, 120);
+  });
+  _dashRO.observe(grid);
+}
 
+// Re-render, then slide every module from where it was to where it is now
+function rerenderDash(c, flashId) {
+  const before = new Map([...c.querySelectorAll('.dash-mod')].map(el => [el.dataset.id, el.getBoundingClientRect()]));
+  renderDashboard(c);
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  c.querySelectorAll('.dash-mod').forEach(el => {
+    if (el.dataset.id === flashId) {
+      el.classList.add('dash-mod-new');
+      el.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'nearest' });
+    }
+    const r0 = before.get(el.dataset.id); if (!r0 || still) return;
+    const r1 = el.getBoundingClientRect(), dx = r0.left - r1.left, dy = r0.top - r1.top;
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    el.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' });
+  });
+}
+
+function mkDashManager(c, layout) {
+  const on = new Set(layout.map(m => m.id));
+  const p = document.createElement('div');
+  p.className = 'dash-manager';
+  p.innerHTML = `<div class="dash-manager-head"><span class="dash-manager-title">Modules</span>`
+    + `<span class="dash-manager-hint">Click to add or remove · drag <i class="ti ti-grip-vertical"></i> to move · drag a module’s right edge to resize</span>`
+    + `<button class="launch-small-btn" title="Back to the default modules, order and sizes">Reset layout</button></div><div class="dash-manager-list"></div>`;
+  const list = p.querySelector('.dash-manager-list');
+  DASH_MODULES.forEach(def => {
+    const isOn = on.has(def.id);
+    const b = document.createElement('button');
+    b.className = 'dash-manager-item' + (isOn ? ' on' : '');
+    b.title = isOn ? 'On the dashboard — click to remove' : 'Click to add to the end of the dashboard';
+    b.innerHTML = `<i class="ti ${def.icon}"></i><span class="dmi-text"><span class="dmi-name">${esc(def.title)}</span><span class="dmi-desc">${esc(def.desc)}</span></span><i class="ti ${isOn ? 'ti-check' : 'ti-plus'} dmi-state"></i>`;
+    b.onclick = () => {
+      if (isOn) layout.splice(layout.findIndex(m => m.id === def.id), 1);
+      else layout.push({ id: def.id, span: def.span });
+      saveDashLayout(layout); rerenderDash(c, isOn ? null : def.id);
+    };
+    list.appendChild(b);
+  });
+  p.querySelector('.launch-small-btn').onclick = () => {
+    const prev = localStorage.getItem(DASH_KEY);
+    if (prev === null) return;
+    localStorage.removeItem(DASH_KEY); rerenderDash(c);
+    showToast('Layout reset to the default.', { label: 'Undo', action: () => { localStorage.setItem(DASH_KEY, prev); rerenderDash(c); } });
+  };
+  return p;
+}
+
+// Drag by the grip: the module dims, a name tag follows the pointer, and the
+// module under it shows a bar on the side it'll land. Side-by-side modules
+// split left/right; one spanning (nearly) the row splits top/bottom.
+function startDashDrag(e, el, def, c, layout) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const grid = el.parentElement, sides = ['dash-drop-l', 'dash-drop-r', 'dash-drop-t', 'dash-drop-b'];
+  const tag = document.createElement('div');
+  tag.className = 'dash-drag-tag';
+  tag.innerHTML = `<i class="ti ti-grip-vertical"></i>${esc(def.title)}`;
+  document.body.appendChild(tag);
+  el.classList.add('dash-dragging');
+  document.body.classList.add('dash-grabbing');
+  let drop = null, lastY = e.clientY;
+  const clear = () => grid.querySelectorAll('.dash-mod').forEach(n => n.classList.remove(...sides));
+  const place = (cx, cy) => {
+    tag.style.transform = `translate(${cx + 14}px,${cy + 10}px)`;
+    clear(); drop = null;
+    const under = document.elementFromPoint(cx, cy)?.closest('.dash-mod');
+    if (!under || under === el || !grid.contains(under)) return;
+    const r = under.getBoundingClientRect(), stacked = r.width > grid.clientWidth * 0.75;
+    const after = stacked ? cy > r.top + r.height / 2 : cx > r.left + r.width / 2;
+    under.classList.add(stacked ? (after ? 'dash-drop-b' : 'dash-drop-t') : (after ? 'dash-drop-r' : 'dash-drop-l'));
+    drop = { id: under.dataset.id, after };
+  };
+  place(e.clientX, e.clientY);
+  // Hold near the top or bottom edge to scroll
+  const scroller = setInterval(() => {
+    const r = c.getBoundingClientRect();
+    if (lastY < r.top + 50) c.scrollTop -= 14; else if (lastY > r.bottom - 50) c.scrollTop += 14;
+  }, 16);
+  const move = ev => { lastY = ev.clientY; place(ev.clientX, ev.clientY); };
+  const end = ev => {
+    clearInterval(scroller);
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', end);
+    window.removeEventListener('pointercancel', end);
+    tag.remove(); clear();
+    el.classList.remove('dash-dragging');
+    document.body.classList.remove('dash-grabbing');
+    if (!drop || ev.type === 'pointercancel') return;
+    const [mv] = layout.splice(layout.findIndex(m => m.id === def.id), 1);
+    layout.splice(layout.findIndex(m => m.id === drop.id) + (drop.after ? 1 : 0), 0, mv);
+    saveDashLayout(layout); rerenderDash(c);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+}
+
+// Drag the right edge: the width snaps to whole columns as you go, with the
+// column guides showing behind the grid. Charts redraw at the new width on release.
+function startDashResize(e, el, def, m, c, layout) {
+  if (e.button !== 0) return;
+  e.preventDefault(); e.stopPropagation();
+  const grid = el.parentElement, size = el.querySelector('.dash-mod-size');
+  const colW = (grid.clientWidth - DASH_GAP * (DASH_COLS - 1)) / DASH_COLS;
+  const start = m.span; let span = start;
+  grid.classList.add('dash-resizing'); el.classList.add('dash-mod-resizing');
+  document.body.classList.add('dash-sizing');
+  const move = ev => {
+    const left = el.getBoundingClientRect().left;
+    const s = Math.max(def.min, Math.min(DASH_COLS, Math.round((ev.clientX - left + DASH_GAP) / (colW + DASH_GAP))));
+    if (s === span) return;
+    span = s; el.style.gridColumn = `span ${s}`;
+    if (size) size.textContent = dashSpanLabel(s);
+  };
+  const end = ev => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', end);
+    window.removeEventListener('pointercancel', end);
+    grid.classList.remove('dash-resizing'); el.classList.remove('dash-mod-resizing');
+    document.body.classList.remove('dash-sizing');
+    if (ev.type === 'pointercancel') span = start;
+    if (span === start) { el.style.gridColumn = `span ${start}`; return; }
+    m.span = span; saveDashLayout(layout); rerenderDash(c);
+  };
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+}
+
+// ── module renderers: (body, ctx) ───────────────────────────────────────────
+function dashScore(b, x) {
+  const score = x.ft.score, tier = x.tier, span = x.series.length;
+  const delta = score - x.series[0].score;
   const deltaStr   = span < 2    ? 'not enough history yet'
                    : delta === 0 ? `level across ${span}d`
                    : delta > 0   ? `▲ ${delta} pts across ${span}d`
                    :               `▼ ${Math.abs(delta)} pts across ${span}d`;
   const deltaColor = delta > 0 ? '#4DC88A' : delta < 0 ? '#F98080' : 'var(--text-muted)';
   const needlePct  = Math.max(1, Math.min(99, score));
-
-  scoreCard.innerHTML = `
+  const card = document.createElement('div');
+  card.className = 'dash-score-card';
+  card.innerHTML = `
     <div class="dash-score-section-label" style="margin-bottom:10px">Follow-Through</div>
     <div class="dash-score-top">
       <div class="dash-score-big" style="color:${tier.text}">${score}</div>
@@ -2635,52 +2965,63 @@ function renderDashboard(c) {
     </div>
     <div class="dash-score-delta" style="color:${deltaColor}">${deltaStr}</div>
     <div class="dash-score-window">rolling ${FT_WINDOW} days</div>`;
-  row1.appendChild(scoreCard);
+  b.appendChild(card);
+}
 
-  // KPI grid (2 rows × 3 cols)
-  const kpiGrid = document.createElement('div');
-  kpiGrid.className = 'dash-kpis';
-
+function dashKpis(b, x) {
+  const { days, todayStr, fromStr } = x;
+  const done          = x.completions.length;
+  const overdueNow    = S.tasks.filter(t => !t.done && t.due && t.due < todayStr).length;
+  const totalPending  = S.tasks.filter(t => !t.done).length;
+  const activeProjs   = S.projects.filter(p => ['in-progress','active'].includes(p.status));
+  const avgProjProg   = activeProjs.length
+    ? Math.round(activeProjs.reduce((s,p) => s + (p.progressManual ? p.progress : effectiveProgress(p)), 0) / activeProjs.length) : 0;
+  const winsInWindow  = (S.successes||[]).filter(w => w.startDate >= fromStr || w.endDate >= fromStr).length;
+  const ideasInWindow = S.ideas.filter(i => i.created && i.created.slice(0,10) >= fromStr).length;
   // Same window as the rest of the KPI row, so the "last Nd" labels all agree
-  const ftRange   = followThrough(ftCtx, todayStr, days);
-  const lateTone  = ftRange.late === 0 ? 'good' : ftRange.dated && ftRange.late / ftRange.dated <= 0.25 ? 'warn' : 'bad';
+  const ftRange     = followThrough(x.ftCtx, todayStr, days);
+  const lateTone    = ftRange.late === 0 ? 'good' : ftRange.dated && ftRange.late / ftRange.dated <= 0.25 ? 'warn' : 'bad';
   const overdueTone = overdueNow === 0 ? 'good' : overdueNow <= 3 ? 'warn' : 'bad';
-
-  const kpis = [
-    { label:'Completed',      value: taskCompletions.length, sub: `tasks in last ${days}d`,        tone: taskCompletions.length > 0 ? 'good' : '' },
+  const grid = document.createElement('div');
+  grid.className = 'dash-kpis';
+  [
+    { label:'Completed',      value: done, sub: `tasks in last ${days}d`,                         tone: done > 0 ? 'good' : '' },
     { label:'Finished late',  value: ftRange.late, sub: ftRange.avgLate !== null ? `avg ${Math.round(ftRange.avgLate)}d past due` : 'nothing late', tone: lateTone },
     { label:'Overdue now',    value: overdueNow, sub: `of ${totalPending} pending`,               tone: overdueTone },
     { label:'Active projects',value: activeProjs.length, sub: `avg ${avgProjProg}% progress`,     tone: '' },
     { label:'Wins logged',    value: winsInWindow, sub: `in last ${days}d`,                        tone: winsInWindow > 0 ? 'good' : '' },
     { label:'Ideas captured', value: ideasInWindow, sub: `in last ${days}d`,                       tone: ideasInWindow > 0 ? 'good' : '' },
-  ];
-  kpis.forEach(k => {
+  ].forEach(k => {
     const el = document.createElement('div');
     el.className = 'dash-kpi' + (k.tone ? ' dash-kpi-'+k.tone : '');
     el.innerHTML = `<div class="dash-kpi-label">${k.label}</div><div class="dash-kpi-value">${k.value}</div><div class="dash-kpi-sub">${k.sub}</div>`;
-    kpiGrid.appendChild(el);
+    grid.appendChild(el);
   });
-  row1.appendChild(kpiGrid);
-  c.appendChild(row1);
+  b.appendChild(grid);
+}
 
-  // ── follow-through trend (full width) ────────────────────────────────────
+function dashTrend(b, x) {
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const { series, ft, tier, dayCounts } = x;
+  const span = series.length;
   const trendCard = document.createElement('div');
   trendCard.className = 'dash-trend-card';
+  b.appendChild(trendCard);
 
   const lo = Math.min(...series.map(p => p.score));
   const hi = Math.max(...series.map(p => p.score));
-  const rangeStr = span < 2 ? `${score} today` : `low ${lo} · high ${hi}`;
+  const rangeStr = span < 2 ? `${ft.score} today` : `low ${lo} · high ${hi}`;
 
   const trendHdr = document.createElement('div');
   trendHdr.className = 'dash-trend-header';
   trendHdr.innerHTML = `<div class="dash-trend-title">Follow-Through over time</div><div class="dash-trend-peak" style="color:${tier.text}">${esc(rangeStr)}</div>`;
   trendCard.appendChild(trendHdr);
 
-  // The viewBox is sized to the width the card will actually give the chart, so
-  // it maps 1:1 and the line spans the card. A fixed viewBox with the default
-  // `meet` letterboxes it into a narrow strip on a wide screen; don't "fix" that
-  // with preserveAspectRatio:none, which stretches strokes and label text.
-  const VW = Math.max(480, Math.round((c.clientWidth || 960) - 70)), VH = 160;
+  // The viewBox is sized to the width the card actually has (it's in the DOM
+  // already), so it maps 1:1 and the line spans the card. A fixed viewBox with
+  // the default `meet` letterboxes it into a narrow strip on a wide screen; don't
+  // "fix" that with preserveAspectRatio:none, which stretches strokes and labels.
+  const VW = Math.max(240, Math.round((trendCard.clientWidth || 960) - 36)), VH = 160;
   const pL = 24, pR = 10, pT = 10, pB = 26;
   const cW = VW - pL - pR, cH = VH - pT - pB;
 
@@ -2748,9 +3089,6 @@ function renderDashboard(c) {
 
   // Daily completions ride behind the line as faint bars, so "how much am I
   // getting done" stays visible next to "how well am I keeping up".
-  const dayCounts = {};
-  S.changelog.filter(e => e.action === 'complete' && !e.description.includes('Subtask'))
-    .forEach(e => { const d = localDate(new Date(e.ts)); dayCounts[d] = (dayCounts[d]||0) + 1; });
   const maxBar = Math.max(1, ...series.map(p => dayCounts[p.day] || 0));
   const barW   = Math.max(1.5, Math.min(9, cW / Math.max(series.length, 1) - 1.5));
   series.forEach((p, i) => {
@@ -2788,7 +3126,7 @@ function renderDashboard(c) {
   }
 
   // Hover detail on every point; a visible dot only where they won't collide
-  const showDots = pts.length <= 35;
+  const showDots = pts.length <= Math.max(12, cW / 20);
   pts.forEach(pt => {
     const f = pt.p.ft;
     const dot = document.createElementNS(svgNS, 'circle');
@@ -2806,8 +3144,11 @@ function renderDashboard(c) {
     svgEl.appendChild(dot);
   });
 
-  // X-axis date labels: start, quarter, mid, three-quarter, end
-  const labelIdxs = [...new Set([0, Math.floor(pts.length/4), Math.floor(pts.length/2), Math.floor(pts.length*3/4), pts.length-1])].filter(i => i < pts.length);
+  // X-axis date labels: start, quarter, mid, three-quarter, end (just the ends when narrow)
+  const labelIdxs = (cW < 360
+    ? [0, Math.floor(pts.length/2), pts.length-1]
+    : [...new Set([0, Math.floor(pts.length/4), Math.floor(pts.length/2), Math.floor(pts.length*3/4), pts.length-1])]
+  ).filter((i, k, a) => i < pts.length && a.indexOf(i) === k);
   labelIdxs.forEach((i, li) => {
     const lbl = document.createElementNS(svgNS, 'text');
     lbl.setAttribute('x', pts[i].x);
@@ -2849,63 +3190,64 @@ function renderDashboard(c) {
     partsWrap.appendChild(el);
   });
   trendCard.appendChild(partsWrap);
-  c.appendChild(trendCard);
+}
 
-  // ── breakdowns ────────────────────────────────────────────────────────────
-  const breakdown = document.createElement('div');
-  breakdown.className = 'dash-breakdown';
+function mkDashCard(b, title) {
+  const card = document.createElement('div');
+  card.className = 'dash-breakdown-card';
+  card.innerHTML = `<div class="dash-breakdown-title">${esc(title)}</div>`;
+  b.appendChild(card);
+  return card;
+}
+const dashMuted = (card, msg) => { card.insertAdjacentHTML('beforeend', `<p class="dash-muted">${esc(msg)}</p>`); };
 
-  // By category
-  const catCard = document.createElement('div');
-  catCard.className = 'dash-breakdown-card';
-  catCard.innerHTML = '<div class="dash-breakdown-title">Completions by category</div>';
+function dashCats(b, x) {
+  const catCard = mkDashCard(b, 'Completions by category');
   const catCounts = {};
-  taskCompletions.forEach(e => {
+  x.completions.forEach(e => {
     const task = S.tasks.find(t => t.id === e.entityId);
     const cat = task?.category || 'Uncategorized';
     catCounts[cat] = (catCounts[cat] || 0) + 1;
   });
   const catEntries = Object.entries(catCounts).sort((a,b)=>b[1]-a[1]).slice(0,7);
   const maxCat = catEntries[0]?.[1] || 1;
-  if (!catEntries.length) {
-    catCard.innerHTML += '<p style="font-size:12px;color:var(--text-muted);margin:0">No completions in this period</p>';
-  } else {
-    catEntries.forEach(([cat, n]) => {
-      const catObj = S.categories.find(cc => cc.name === cat);
-      const color  = catObj?.color || tier.line;
-      const row = document.createElement('div');
-      row.className = 'dash-bar-row';
-      row.innerHTML = `<div class="dash-bar-label" title="${esc(cat)}">${esc(cat)}</div><div class="dash-bar-track"><div class="dash-bar-fill" style="width:${(n/maxCat*100).toFixed(0)}%;background:${color}"></div></div><div class="dash-bar-count">${n}</div>`;
-      catCard.appendChild(row);
-    });
-  }
-  breakdown.appendChild(catCard);
+  if (!catEntries.length) return dashMuted(catCard, 'No completions in this period');
+  catEntries.forEach(([cat, n]) => {
+    const catObj = S.categories.find(cc => cc.name === cat);
+    const color  = catObj?.color || x.tier.line;
+    const row = document.createElement('div');
+    row.className = 'dash-bar-row';
+    row.innerHTML = `<div class="dash-bar-label" title="${esc(cat)}">${esc(cat)}</div><div class="dash-bar-track"><div class="dash-bar-fill" style="width:${(n/maxCat*100).toFixed(0)}%;background:${color}"></div></div><div class="dash-bar-count">${n}</div>`;
+    catCard.appendChild(row);
+  });
+}
 
-  // By priority (pending)
-  const priCard = document.createElement('div');
-  priCard.className = 'dash-breakdown-card';
-  priCard.innerHTML = '<div class="dash-breakdown-title">Pending by priority</div>';
+function dashPri(b) {
+  const priCard = mkDashCard(b, 'Pending by priority');
   const priLabels = {1:'Critical',2:'High',3:'Medium',4:'Low',5:'Someday'};
   const priColors = {1:'#d47070',2:'#c8a537',3:'#7090c8',4:'#4a7a5a',5:'#404048'};
   const priCounts = {};
   S.tasks.filter(t=>!t.done).forEach(t => { const p=t.priority||3; priCounts[p]=(priCounts[p]||0)+1; });
   const maxPri = Math.max(...Object.values(priCounts), 1);
   const priOrder = [1,2,3,4,5].filter(p=>priCounts[p]);
-  if (!priOrder.length) {
-    priCard.innerHTML += '<p style="font-size:12px;color:var(--text-muted);margin:0">No pending tasks</p>';
-  } else {
-    priOrder.forEach(p => {
-      const row = document.createElement('div');
-      row.className = 'dash-bar-row';
-      row.innerHTML = `<div class="dash-bar-label">${priLabels[p]}</div><div class="dash-bar-track"><div class="dash-bar-fill" style="width:${(priCounts[p]/maxPri*100).toFixed(0)}%;background:${priColors[p]}"></div></div><div class="dash-bar-count">${priCounts[p]}</div>`;
-      priCard.appendChild(row);
-    });
-  }
-  breakdown.appendChild(priCard);
-  c.appendChild(breakdown);
+  if (!priOrder.length) return dashMuted(priCard, 'No pending tasks');
+  priOrder.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'dash-bar-row';
+    row.innerHTML = `<div class="dash-bar-label">${priLabels[p]}</div><div class="dash-bar-track"><div class="dash-bar-fill" style="width:${(priCounts[p]/maxPri*100).toFixed(0)}%;background:${priColors[p]}"></div></div><div class="dash-bar-count">${priCounts[p]}</div>`;
+    priCard.appendChild(row);
+  });
+}
 
-  // ── streak + personal bests ───────────────────────────────────────────────
-  const sData = calcStreak();
+function mkStreakCard(label, value, sub, color) {
+  const el = document.createElement('div');
+  el.className = 'dash-streak-card';
+  el.innerHTML = `<div class="dash-streak-label">${label}</div><div class="dash-streak-value" style="color:${color||'var(--text)'}">${value}</div><div class="dash-streak-sub">${sub}</div>`;
+  return el;
+}
+
+function dashStreaks(b, x) {
+  const sData = x.streak;
   const streakRow = document.createElement('div');
   streakRow.className = 'dash-streak-row';
 
@@ -2914,13 +3256,6 @@ function renderDashboard(c) {
                    : sData.current >= 3  ? {color:'#c8a537', label:'building'}
                    : sData.current >= 1  ? {color:'var(--text-muted)', label:'started'}
                    :                       {color:'var(--text-subtle)', label:'—'};
-
-  function mkStreakCard(label, value, sub, color) {
-    const el = document.createElement('div');
-    el.className = 'dash-streak-card';
-    el.innerHTML = `<div class="dash-streak-label">${label}</div><div class="dash-streak-value" style="color:${color||'var(--text)'}">${value}</div><div class="dash-streak-sub">${sub}</div>`;
-    return el;
-  }
 
   const streakPause = getStreakPause();
   const streakPauseActive = streakPause && today() >= streakPause.start && (!streakPause.end || today() <= streakPause.end);
@@ -2939,16 +3274,19 @@ function renderDashboard(c) {
   streakRow.appendChild(recentCard);
   streakRow.appendChild(mkStreakCard('Best streak', sData.best > 0 ? `${sData.best}d` : '—', 'longest run', 'var(--text)'));
   streakRow.appendChild(mkStreakCard('All-time completed', sData.allTime, `best day: ${sData.bestDay}`, 'var(--text)'));
-  c.appendChild(streakRow);
+  b.appendChild(streakRow);
+}
 
-  // ── launch: starts, focus time, sticky tasks cleared, plan vs reality ─────
-  const sesInRange  = S.sessions.filter(x => localDate(new Date(x.started)) >= fromStr);
-  const focusSecs   = sesInRange.reduce((a, x) => a + sessionSecs(x), 0);
-  const stickyStart = sesInRange.filter(x => x.sticky).length;
+// Launch: starts, focus time, sticky tasks cleared, plan vs reality
+function dashLaunch(b, x) {
+  const { days, fromStr } = x;
+  const sesInRange  = S.sessions.filter(s => localDate(new Date(s.started)) >= fromStr);
+  const focusSecs   = sesInRange.reduce((a, s) => a + sessionSecs(s), 0);
+  const stickyStart = sesInRange.filter(s => s.sticky).length;
   const stickyDone  = S.tasks.filter(t => t.done && t.completedAt && localDate(new Date(t.completedAt)) >= fromStr && stickyInfo(t)).length;
-  const median = a => { if (!a.length) return null; const v = [...a].sort((x, y) => x - y), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m-1] + v[m]) / 2; };
-  const medPlan = median(sesInRange.map(x => x.plannedMin));
-  const medReal = median(sesInRange.map(x => sessionSecs(x) / 60));
+  const median = a => { if (!a.length) return null; const v = [...a].sort((p, q) => p - q), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m-1] + v[m]) / 2; };
+  const medPlan = median(sesInRange.map(s => s.plannedMin));
+  const medReal = median(sesInRange.map(s => sessionSecs(s) / 60));
   const calibSub = medPlan == null ? 'no sessions yet'
     : medReal >= medPlan * 1.5 ? 'once started, you keep going'
     : medReal < medPlan * 0.6 ? 'stopping early — try a 5 min box'
@@ -2956,31 +3294,34 @@ function renderDashboard(c) {
   const launchLbl = document.createElement('div');
   launchLbl.className = 'dash-section-label';
   launchLbl.textContent = `Launch — last ${days}d`;
-  c.appendChild(launchLbl);
+  b.appendChild(launchLbl);
   const launchRow = document.createElement('div');
   launchRow.className = 'dash-streak-row';
   launchRow.appendChild(mkStreakCard('Launches', sesInRange.length, sesInRange.length ? `${stickyStart} on sticky tasks` : 'press ▶ on any task', sesInRange.length ? 'var(--accent)' : 'var(--text-subtle)'));
   launchRow.appendChild(mkStreakCard('Focus time', sesInRange.length ? fmtMins(focusSecs) : '—', sesInRange.length ? `avg ${fmtMins(focusSecs / sesInRange.length)} per session` : 'time inside Launch', 'var(--text)'));
   launchRow.appendChild(mkStreakCard('Sticky cleared', stickyDone, 'pushed-back or long-stuck tasks finished', stickyDone ? '#4DC88A' : 'var(--text)'));
   launchRow.appendChild(mkStreakCard('Planned → actual', medPlan == null ? '—' : `${Math.round(medPlan)}→${Math.round(medReal)}m`, calibSub, 'var(--text)'));
-  c.appendChild(launchRow);
+  b.appendChild(launchRow);
+}
 
-  // ── activity heatmap (26 weeks) ───────────────────────────────────────────
+// GitHub-style grid. It shows as many weeks as fit the module's width (8 to
+// 53), so widening the module reaches further back.
+function dashHeatmap(b, x) {
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const { now, tier, dayCounts } = x, sData = x.streak;
   const hmCard = document.createElement('div');
   hmCard.className = 'dash-heatmap-card';
-  hmCard.innerHTML = '<div class="dash-heatmap-title">Activity — last 6 months</div>';
+  b.appendChild(hmCard);
 
-  const WEEKS = 26;
   const CELL  = 13, GAP = 3, STRIDE = CELL + GAP;
   const DAY_LABEL_W = 24, MONTH_LABEL_H = 16;
+  const WEEKS = Math.max(8, Math.min(53, Math.floor(((hmCard.clientWidth || 480) - 36 - DAY_LABEL_W + GAP) / STRIDE)));
   const svgW  = DAY_LABEL_W + WEEKS * STRIDE;
   const svgH  = MONTH_LABEL_H + 7 * STRIDE;
+  const months = Math.round(WEEKS / 4.35);
+  hmCard.innerHTML = `<div class="dash-heatmap-title">Activity — last ${WEEKS >= 52 ? 'year' : WEEKS < 13 ? WEEKS + ' weeks' : months + ' months'}</div>`;
 
-  // Build day-count map
-  const dayCounts2 = {};
-  S.changelog.filter(e => e.action === 'complete' && !e.description.includes('Subtask'))
-    .forEach(e => { const d = localDate(new Date(e.ts)); dayCounts2[d] = (dayCounts2[d]||0) + 1; });
-  const maxDay2 = Math.max(1, ...Object.values(dayCounts2));
+  const maxDay2 = Math.max(1, ...Object.values(dayCounts));
 
   // Find start: go back to the Monday WEEKS weeks ago
   const hmStart = new Date(now);
@@ -3011,12 +3352,12 @@ function renderDashboard(c) {
       date.setDate(hmStart.getDate() + w * 7 + d);
       if (date > now) continue;
       const dateStr = localDate(date);
-      const count   = dayCounts2[dateStr] || 0;
-      const x = DAY_LABEL_W + w * STRIDE;
-      const y = MONTH_LABEL_H + d * STRIDE;
+      const count   = dayCounts[dateStr] || 0;
+      const cx = DAY_LABEL_W + w * STRIDE;
+      const cy = MONTH_LABEL_H + d * STRIDE;
 
       const rect = document.createElementNS(svgNS, 'rect');
-      rect.setAttribute('x', x); rect.setAttribute('y', y);
+      rect.setAttribute('x', cx); rect.setAttribute('y', cy);
       rect.setAttribute('width', CELL); rect.setAttribute('height', CELL);
       rect.setAttribute('rx', 2); rect.setAttribute('ry', 2);
       const frozenDay = sData.frozen.has(dateStr);
@@ -3032,7 +3373,7 @@ function renderDashboard(c) {
       if (d === 0 && date.getMonth() !== prevMonth) {
         prevMonth = date.getMonth();
         const lbl = document.createElementNS(svgNS, 'text');
-        lbl.setAttribute('x', x); lbl.setAttribute('y', MONTH_LABEL_H - 4);
+        lbl.setAttribute('x', cx); lbl.setAttribute('y', MONTH_LABEL_H - 4);
         lbl.setAttribute('font-size', '9'); lbl.setAttribute('fill', 'currentColor');
         lbl.setAttribute('opacity', '0.45');
         lbl.textContent = date.toLocaleDateString('en-US', {month:'short'});
@@ -3054,7 +3395,63 @@ function renderDashboard(c) {
   });
 
   hmCard.appendChild(hmSvg);
-  c.appendChild(hmCard);
+}
+
+function dashFrog(b) {
+  const frog = mkFrogPanel();
+  if (frog) return b.appendChild(frog);
+  dashMuted(mkDashCard(b, 'Sticky task'), 'Nothing sticky right now — no task has been pushed back twice or left to drift.');
+}
+
+function dashDueSoon(b, x) {
+  const card = mkDashCard(b, 'Due soon');
+  const horizon = addDays(x.todayStr, 7);
+  const list = S.tasks.filter(t => !t.done && t.due && t.due <= horizon)
+    .sort((p, q) => p.due.localeCompare(q.due) || (p.priority || 3) - (q.priority || 3));
+  if (!list.length) return dashMuted(card, 'Nothing due in the next 7 days');
+  list.slice(0, 8).forEach(t => {
+    const n = dayDiff(x.todayStr, t.due);
+    const when = n < 0 ? `${-n}d late` : n === 0 ? 'Today' : n === 1 ? 'Tomorrow'
+      : new Date(t.due + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+    const row = document.createElement('div');
+    row.className = 'dash-list-row';
+    row.innerHTML = `<span class="dash-list-when" style="color:${n < 0 ? 'var(--overdue-text)' : n === 0 ? 'var(--today-text)' : 'var(--text-muted)'}">${when}</span>`
+      + `<span class="dash-list-title">${esc(t.title)}</span>${t.category ? `<span class="dash-list-meta">${esc(t.category)}</span>` : ''}`;
+    row.onclick = () => openModal(t);
+    card.appendChild(row);
+  });
+  if (list.length > 8) {
+    const more = document.createElement('div');
+    more.className = 'dash-list-more';
+    more.textContent = `+ ${list.length - 8} more →`;
+    more.onclick = () => setView('upcoming');
+    card.appendChild(more);
+  }
+}
+
+function dashProjects(b) {
+  const card = mkDashCard(b, 'Active projects');
+  const projs = S.projects.filter(p => ['in-progress','active'].includes(p.status))
+    .sort((p, q) => (p.dueDate || '9999').localeCompare(q.dueDate || '9999'));
+  if (!projs.length) return dashMuted(card, 'No projects in progress');
+  projs.slice(0, 8).forEach(p => {
+    const prog = Math.round(p.progressManual ? p.progress : effectiveProgress(p)) || 0;
+    const row = document.createElement('div');
+    row.className = 'dash-list-row';
+    row.innerHTML = `<span class="dash-list-title">${esc(p.title)}</span>`
+      + `<div class="dash-bar-track" style="flex:0 0 30%"><div class="dash-bar-fill" style="width:${prog}%;background:var(--accent)"></div></div>`
+      + `<span class="dash-list-meta" style="width:32px;text-align:right">${prog}%</span>`;
+    row.title = p.dueDate ? `due ${p.dueDate}` : '';
+    row.onclick = () => setView('project:' + p.id);
+    card.appendChild(row);
+  });
+  if (projs.length > 8) {
+    const more = document.createElement('div');
+    more.className = 'dash-list-more';
+    more.textContent = `+ ${projs.length - 8} more →`;
+    more.onclick = () => setView('projects');
+    card.appendChild(more);
+  }
 }
 
 function renderFocus(c) {
