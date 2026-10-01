@@ -1058,7 +1058,7 @@ const S = {
   copyFrom: null,
   saveTimer: null,
   lastCat: null,
-  sort: 'default',
+  sort: 'due',   // task lists open sorted by due date — see setView()
   pendingDone: new Map(), // id -> {timer, spawnId} — tasks checked but not yet removed
   projFilters: { statusSingle: '', type: '', sort: 'default', search: '' },
   tasksNavOpen: true,
@@ -2042,7 +2042,11 @@ function isTaskView(v) { return TASK_VIEWS.has(v) || v.startsWith('cat:'); }
 function isTaskGroupView(v) { return TASK_GROUP_VIEWS.has(v) || v.startsWith('cat:'); }
 
 function setView(v) {
-  S.view=v; S.showAllFocus=false; S.filters={p:new Set(),cats:new Set()}; S.sort='default';
+  S.view=v; S.showAllFocus=false; S.filters={p:new Set(),cats:new Set()};
+  // Every task list opens sorted by due date — what's next is the question these
+  // screens answer. Focus is the exception: it's the AI ranking, so it keeps the
+  // 'default' (Smart) order. The sort bar still offers Smart/Newest and Priority.
+  S.sort = v==='focus' ? 'default' : 'due';
   if (v==='done') { S.doneFilter='today'; S.doneFrom=''; S.doneTo=''; }
   if (v==='recent') { S.addedFilter='week'; S.addedFrom=''; S.addedTo=''; }
   if (!isTaskView(v)) S.taskSearch='';
