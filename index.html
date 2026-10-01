@@ -496,6 +496,7 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .dash-mod-body{flex:1;display:flex;flex-direction:column;min-width:0}
 .dash-mod-body>:last-child{flex:1}
 .dash-mod .rings-bar,.dash-mod .frog-panel{margin:0}
+@container (max-width:480px){.dash-mod .frog-panel{flex-wrap:wrap;align-content:center}.dash-mod .frog-actions{width:100%;padding-left:36px}}
 .dash-muted{font-size:12px;color:var(--text-muted);margin:0}
 .dash-list-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;cursor:pointer;min-width:0}
 .dash-list-row:last-of-type{border-bottom:none}
@@ -697,9 +698,9 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .dash-streak-value{font-size:28px;font-weight:800;color:var(--text);line-height:1}
 .dash-streak-sub{font-size:11px;color:var(--text-muted);margin-top:3px}
 /* Heatmap */
-.dash-heatmap-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px 18px;overflow-x:auto}
+.dash-heatmap-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px 18px;overflow:hidden}
 .dash-heatmap-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:14px}
-.dash-heatmap-svg{display:block;min-width:fit-content}
+.dash-heatmap-svg{display:block;width:100%;height:auto}
 /* ── Wiki ── */
 #wiki-dot{width:8px;height:8px;border-radius:50%;background:var(--border-mid);flex-shrink:0;cursor:pointer;transition:transform .15s}
 #wiki-dot:hover{transform:scale(1.4)}
@@ -2679,7 +2680,7 @@ const DASH_MODULES = [
   { id:'launch',   title:'Launch',               icon:'ti-player-play',    span:12, min:2, show:true,  desc:'Sessions, focus time, sticky tasks cleared, plan vs reality', render:dashLaunch },
   { id:'heatmap',  title:'Activity heatmap',     icon:'ti-grid-dots',      span:12, min:3, show:true,  desc:'Completions per day — the wider it is, the further back it goes', render:dashHeatmap },
   { id:'rings',    title:'Today’s rings',        icon:'ti-circle-dot',     span:6,  min:3, show:false, desc:'Launch, On time and Clear, nested, with what closes each', render:b => b.appendChild(mkRingsCard()) },
-  { id:'frog',     title:'Sticky task',          icon:'ti-anchor',         span:12, min:4, show:false, desc:'The running Launch, or your stickiest task with a 5-min start', render:dashFrog },
+  { id:'frog',     title:'Sticky task',          icon:'ti-anchor',         span:12, min:3, show:false, desc:'The running Launch, or your stickiest task with a 5-min start', render:dashFrog },
   { id:'duesoon',  title:'Due soon',             icon:'ti-calendar-due',   span:6,  min:3, show:false, desc:'Overdue and the next 7 days, soonest first', render:dashDueSoon },
   { id:'projects', title:'Active projects',      icon:'ti-briefcase',      span:6,  min:3, show:false, desc:'In-progress projects and how far along they are', render:dashProjects },
 ];
@@ -3360,7 +3361,8 @@ function dashLaunch(b, x) {
 }
 
 // GitHub-style grid. It shows as many weeks as fit the module's width (8 to
-// 53), so widening the module reaches further back.
+// 53), so widening the module reaches further back, then scales (viewBox,
+// width 100%) to fill the card exactly: no scrollbar, no ragged right edge.
 function dashHeatmap(b, x) {
   const svgNS = 'http://www.w3.org/2000/svg';
   const { now, tier, dayCounts } = x, sData = x.streak;
@@ -3371,7 +3373,7 @@ function dashHeatmap(b, x) {
   const CELL  = 13, GAP = 3, STRIDE = CELL + GAP;
   const DAY_LABEL_W = 24, MONTH_LABEL_H = 16;
   const WEEKS = Math.max(8, Math.min(53, Math.floor(((hmCard.clientWidth || 480) - 36 - DAY_LABEL_W + GAP) / STRIDE)));
-  const svgW  = DAY_LABEL_W + WEEKS * STRIDE;
+  const svgW  = DAY_LABEL_W + WEEKS * STRIDE - GAP;   // no trailing gap after the last week
   const svgH  = MONTH_LABEL_H + 7 * STRIDE;
   const months = Math.round(WEEKS / 4.35);
   hmCard.innerHTML = `<div class="dash-heatmap-title">Activity — last ${WEEKS >= 52 ? 'year' : WEEKS < 13 ? WEEKS + ' weeks' : months + ' months'}</div>`;
@@ -3386,8 +3388,7 @@ function dashHeatmap(b, x) {
   hmStart.setDate(hmStart.getDate() - dow);
 
   const hmSvg = document.createElementNS(svgNS, 'svg');
-  hmSvg.setAttribute('width', svgW);
-  hmSvg.setAttribute('height', svgH);
+  hmSvg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
   hmSvg.classList.add('dash-heatmap-svg');
 
   // Color scale: 0 = border, 1 = light, max = tier color
