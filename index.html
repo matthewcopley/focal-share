@@ -1111,7 +1111,7 @@ const S = {
   addedFilter: 'week',   // Recently Added view — same keys as doneFilter, over tasks.created
   addedFrom: '',         // custom added-on range (inclusive), YYYY-MM-DD
   addedTo: '',
-  upcomingFilter: 'all', // Upcoming view — 'all' (next 14 days) | 'tomorrow'
+  upcomingFilter: 'all', // Upcoming view — 'all' (next 14 days) | 'week' (through Sunday) | 'tomorrow'
   editingTask: null,
   editingProject: null,
   modalSubs: [],
@@ -2995,11 +2995,11 @@ function mkDateRangeBar({label, filterKey, fromKey, toKey, fallback}) {
   return bar;
 }
 
-// Upcoming view's due window: the full 14 days, or just tomorrow
+// Upcoming view's due window: just tomorrow, the rest of this week, or the full 14 days
 function mkUpcomingBar() {
   const rangeBar = document.createElement('div');
   rangeBar.style.cssText = 'display:flex;gap:0;border:1px solid var(--border);width:fit-content';
-  for (const {k, l} of [{k:'all', l:'Next 14 days'}, {k:'tomorrow', l:'Tomorrow'}]) {
+  for (const {k, l} of [{k:'tomorrow', l:'Tomorrow'}, {k:'week', l:'This Week'}, {k:'all', l:'Next 14 days'}]) {
     const btn = document.createElement('button');
     const active = S.upcomingFilter === k;
     btn.style.cssText = `padding:4px 12px;border:none;border-right:1px solid var(--border);background:${active?'var(--surface)':'transparent'};color:${active?'var(--accent)':'var(--text-dim)'};cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;transition:color .1s`;
@@ -3108,9 +3108,11 @@ function renderList(c) {
     base = filterByDayRange(base, t => completedOn.get(t.id), 'doneFilter', 'doneFrom', 'doneTo');
   } else if (S.view === 'recent') {
     base = filterByDayRange(base, t => t.created ? localDate(new Date(t.created)) : '', 'addedFilter', 'addedFrom', 'addedTo');
-  } else if (S.view === 'upcoming' && S.upcomingFilter === 'tomorrow') {
-    const tmr = addDays(today(), 1);
-    base = base.filter(t => t.due === tmr);
+  } else if (S.view === 'upcoming' && S.upcomingFilter !== 'all') {
+    // Upcoming already starts after today, so only the end bound is needed.
+    // "This Week" is calendar-anchored like the other range bars: through Sunday.
+    const end = S.upcomingFilter === 'tomorrow' ? addDays(today(), 1) : addDays(startOfWeek(today()), 6);
+    base = base.filter(t => t.due <= end);
   }
 
   if (S.taskSearch.trim()) {
@@ -3122,6 +3124,7 @@ function renderList(c) {
     const emptyMsg = S.taskSearch.trim() ? 'No tasks match "'+S.taskSearch+'"'
                    : S.view==='recent' ? 'No tasks added in this range'
                    : S.view==='upcoming' && S.upcomingFilter==='tomorrow' ? 'Nothing due tomorrow'
+                   : S.view==='upcoming' && S.upcomingFilter==='week' ? 'Nothing else due this week'
                    : 'No tasks here';
     c.appendChild(mkEmpty(S.view==='recent'?'ti-history':'ti-list', emptyMsg));
     return;
