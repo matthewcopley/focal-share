@@ -2902,20 +2902,22 @@ function renderFocus(c) {
 }
 
 function sortedTasks(tasks) {
+  // Hierarchy: the selected sort, then category A→Z, then title A→Z.
+  const alpha=(x,y)=>String(x||'').localeCompare(String(y||''),undefined,{sensitivity:'base'});
+  const tie=(a,b)=>alpha(a.category,b.category)||alpha(a.title,b.title);
   const t=[...tasks];
   if (S.sort==='due') {
     t.sort((a,b)=>{
-      if (!a.due&&!b.due) return 0;
-      if (!a.due) return 1; if (!b.due) return -1;
-      return a.due.localeCompare(b.due)||a.priority-b.priority;
+      if (!a.due!==!b.due) return a.due?-1:1;
+      return (a.due||'').localeCompare(b.due||'')||tie(a,b);
     });
   } else if (S.sort==='priority') {
-    t.sort((a,b)=>a.priority-b.priority||(!a.due?1:!b.due?-1:a.due.localeCompare(b.due)));
+    t.sort((a,b)=>a.priority-b.priority||tie(a,b));
   } else if (S.view==='recent') {
-    // Newest first — the whole point of the view. Ties break on id, also creation order.
-    t.sort((a,b)=>String(b.created||'').localeCompare(String(a.created||''))||b.id-a.id);
+    // Newest first — the whole point of the view. Ties fall to category, then title.
+    t.sort((a,b)=>String(b.created||'').localeCompare(String(a.created||''))||tie(a,b));
   } else {
-    t.sort((a,b)=>(a.aiRank??999)-(b.aiRank??999));
+    t.sort((a,b)=>(a.aiRank??999)-(b.aiRank??999)||tie(a,b));
   }
   return t;
 }
