@@ -2093,6 +2093,8 @@ function renderPriority(c) {
   c.appendChild(hdr);
   hdr.querySelector('#hdr-prioritize-btn').addEventListener('click', prioritize);
 
+  c.appendChild(mkDailyGoalBar());
+
   let tasks=[...S.tasks.filter(t=>!t.done||S.pendingDone.has(t.id))];
   const hasRanks=tasks.some(t=>t.aiRank!=null);
   tasks.sort((a,b)=>(a.aiRank??999)-(b.aiRank??999));
@@ -2114,6 +2116,8 @@ function renderRecurring(c) {
   const hdr=document.createElement('div'); hdr.className='content-header';
   hdr.innerHTML='<h2>Recurring — Next 12 Months</h2>';
   c.appendChild(hdr);
+
+  c.appendChild(mkDailyGoalBar());
 
   const tasks=S.tasks.filter(t=>(!t.done||S.pendingDone.has(t.id))&&t.recur);
   if (!tasks.length) { c.appendChild(mkEmpty('ti-refresh','No recurring tasks')); return; }
@@ -2716,17 +2720,10 @@ function renderDashboard(c) {
   c.appendChild(hmCard);
 }
 
-function renderFocus(c) {
-  c.innerHTML='';
-  let tasks=[...S.tasks.filter(t=>!t.done||S.pendingDone.has(t.id))];
-  tasks.sort((a,b)=>(a.aiRank??999)-(b.aiRank??999));
-  const hdr=document.createElement('div'); hdr.className='content-header';
-  hdr.innerHTML=`<h2>Focus</h2><div style="display:flex;gap:8px"><button class="icon-btn" id="whats-next-btn"><i class="ti ti-sparkles"></i>What's next?</button><button class="new-task-btn" id="hdr-new-btn"><i class="ti ti-plus"></i>New task</button></div>`;
-  c.appendChild(hdr);
-  hdr.querySelector('#hdr-new-btn').onclick=()=>openModal(null);
-  hdr.querySelector('#whats-next-btn').onclick=askNextAction;
-
-  // Daily goal progress bar
+// Daily goal progress bar. Shared by Focus and every screen that lists tasks:
+// completing a task re-renders the view, so the count and streak stay live
+// wherever the checkbox actually is.
+function mkDailyGoalBar() {
   const streak = calcStreak();
   const target = getDailyTarget();
   const pct    = Math.min(100, Math.round(streak.todayCount / target * 100));
@@ -2740,7 +2737,20 @@ function renderFocus(c) {
     <span class="daily-goal-count">${streak.todayCount}<span style="font-weight:400;color:var(--text-muted)">/${target}</span></span>
     ${hit ? `<span class="daily-goal-hit">Goal met</span>` : ''}
     ${streak.current > 1 ? `<span class="daily-goal-label" style="padding-left:8px;border-left:1px solid var(--border)">${streak.current}d streak</span>` : ''}`;
-  c.appendChild(goalBar);
+  return goalBar;
+}
+
+function renderFocus(c) {
+  c.innerHTML='';
+  let tasks=[...S.tasks.filter(t=>!t.done||S.pendingDone.has(t.id))];
+  tasks.sort((a,b)=>(a.aiRank??999)-(b.aiRank??999));
+  const hdr=document.createElement('div'); hdr.className='content-header';
+  hdr.innerHTML=`<h2>Focus</h2><div style="display:flex;gap:8px"><button class="icon-btn" id="whats-next-btn"><i class="ti ti-sparkles"></i>What's next?</button><button class="new-task-btn" id="hdr-new-btn"><i class="ti ti-plus"></i>New task</button></div>`;
+  c.appendChild(hdr);
+  hdr.querySelector('#hdr-new-btn').onclick=()=>openModal(null);
+  hdr.querySelector('#whats-next-btn').onclick=askNextAction;
+
+  c.appendChild(mkDailyGoalBar());
 
   // AI next-action banner (persistent until dismissed)
   const banner=document.createElement('div'); banner.id='next-action-banner';
@@ -2902,6 +2912,8 @@ function renderList(c) {
   hdr.innerHTML=`<h2>${esc(label)}</h2><div class="hdr-right">${S.view!=='done'?'<button class="new-task-btn" id="hdr-new-btn"><i class="ti ti-plus"></i>New task</button>':''}</div>`;
   c.appendChild(hdr);
   if (S.view!=='done') hdr.querySelector('#hdr-new-btn').onclick=()=>openModal(null);
+
+  c.appendChild(mkDailyGoalBar());
 
   // Search bar
   const searchWrap=document.createElement('div'); searchWrap.style.cssText='position:relative;margin-bottom:10px';
