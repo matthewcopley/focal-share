@@ -182,10 +182,13 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .subtask-title.done-sub{text-decoration:line-through;color:var(--text-subtle)}
 .task-actions{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
 .snooze-wrapper{position:relative}
-.snooze-menu{position:absolute;bottom:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);border:1px solid var(--border-mid);z-index:50;min-width:130px;overflow:hidden;display:none}
-.snooze-menu.open{display:block}
-.snooze-option{padding:7px 12px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px}
-.snooze-option:hover{background:var(--bg)}
+.snooze-hidden{position:absolute;left:0;bottom:0;width:100%;height:1px;padding:0;border:0;opacity:0;pointer-events:none}
+.snooze-date{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--border-mid);border-radius:6px;background:var(--bg);color:var(--text)}
+.snoozed-icon{color:var(--text-subtle);font-size:13px;display:inline-flex}
+.snooze-row{flex-wrap:wrap}
+.snooze-row .recur-title{cursor:pointer;flex:1 1 180px}
+.snooze-row .recur-title:hover{text-decoration:underline}
+.snooze-until{display:flex;align-items:center;gap:5px;color:var(--text-subtle);flex-shrink:0}
 .action-btn{padding:5px 12px;border-radius:var(--r-btn);border:1px solid var(--border);background:transparent;cursor:pointer;font-size:11px;font-family:inherit;letter-spacing:0.05em;color:var(--text-dim);display:flex;align-items:center;gap:5px;transition:background .1s,color .1s}
 .action-btn:hover{background:rgba(255,255,255,.03);color:var(--text)}
 .action-btn.danger{color:var(--p1);border-color:var(--p1);opacity:0.6}
@@ -647,6 +650,7 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
       <div class="nav-item nav-child" data-view="recent"><i class="ti ti-history"></i><span class="nav-label">Recently Added</span><span class="nav-badge" id="badge-recent">0</span></div>
       <div class="nav-item nav-child" data-view="done"><i class="ti ti-check"></i><span class="nav-label">Done</span><span class="nav-badge" id="badge-done">0</span></div>
       <div class="nav-item nav-child" data-view="recurring"><i class="ti ti-refresh"></i><span class="nav-label">Recurring</span><span class="nav-badge" id="badge-recurring">0</span></div>
+      <div class="nav-item nav-child" data-view="snoozed"><i class="ti ti-zzz"></i><span class="nav-label">Snoozed</span><span class="nav-badge" id="badge-snoozed">0</span></div>
       <div class="nav-item nav-child" data-view="priority"><i class="ti ti-brain"></i><span class="nav-label">AI Priority</span><span class="nav-badge" id="badge-priority">0</span></div>
     </div>
     <div class="nav-item" data-view="projects"><i class="ti ti-folders"></i><span class="nav-label">Projects</span><span class="nav-badge" id="badge-projects">0</span></div>
@@ -1238,16 +1242,41 @@ function nextOccurrence(dateStr, recur) {
   return null;
 }
 
+// ── Snooze ──────────────────────────────────────────────────────────────────
+// Snoozing moves `due` to the chosen date (so the task resurfaces in Today on
+// that day) and records the original in `snoozedFrom`. The record only counts
+// while `due` still equals `snoozedUntil` — edit the due date by hand and the
+// snooze quietly lapses, so a stale snoozedFrom can never override it.
+function snoozeLive(t) { return !!t.snoozedUntil && t.due === t.snoozedUntil; }
+function isSnoozed(t)  { return !t.done && snoozeLive(t) && t.snoozedUntil > today(); }
+
+// Due date of the occurrence that follows `t`. A snoozed occurrence steps from its
+// *original* due date, so snoozing one instance never shifts the rest of the series;
+// occurrences the snooze jumped past are skipped rather than spawned overdue.
+function nextRecurDue(t) {
+  if (!t.recur) return null;
+  if (!snoozeLive(t) || !t.snoozedFrom) return nextOccurrence(t.due || today(), t.recur);
+  let nx = nextOccurrence(t.snoozedFrom, t.recur), guard = 0;
+  while (nx && nx <= t.due && guard++ < 5000) {
+    const n2 = nextOccurrence(nx, t.recur);
+    if (!n2 || n2 <= nx) break;
+    nx = n2;
+  }
+  return nx;
+}
+
 function recurOccurrences(task) {
   if (!task.recur || task.done) return [];
   const start = today();
   const end   = addDays(start, 365);
   const out   = [];
   let cur = task.due || start;
+  // The task's own due date may be a snoozed one — step off it on the original schedule
+  const step = d => d === task.due ? nextRecurDue(task) : nextOccurrence(d, task.recur);
   // advance past already-elapsed occurrences
   let guard = 0;
   while (cur < start && guard++ < 5000) {
-    const nx = nextOccurrence(cur, task.recur);
+    const nx = step(cur);
     if (!nx || nx <= cur) break;
     cur = nx;
   }
@@ -1255,7 +1284,7 @@ function recurOccurrences(task) {
   guard = 0;
   while (cur <= end && guard++ < 500) {
     out.push(cur);
-    const nx = nextOccurrence(cur, task.recur);
+    const nx = step(cur);
     if (!nx || nx <= cur) break;
     cur = nx;
   }
@@ -1404,7 +1433,8 @@ function dbLoadAll() {
       subtasks:subs, aiRank:o.aiRank!=null?o.aiRank:null, aiReason:o.aiReason||'',
       created:o.created||new Date().toISOString(), notes:o.notes||'',
       projectId:o.projectId!=null?o.projectId:null,
-      teamFlag:o.teamFlag===1, wikiPage:o.wikiPage||'', completedAt:o.completedAt||'' };
+      teamFlag:o.teamFlag===1, wikiPage:o.wikiPage||'', completedAt:o.completedAt||'',
+      snoozedUntil:o.snoozedUntil||'', snoozedFrom:o.snoozedFrom||'' };
   }) : [];
 
   const projRes = S.db.exec('SELECT * FROM projects ORDER BY id');
@@ -1470,7 +1500,7 @@ function dbSaveAll() {
   S.db.run('BEGIN TRANSACTION');
   try {
     S.db.run('DELETE FROM tasks');
-    const tSt = S.db.prepare('INSERT INTO tasks (id,title,priority,category,due,recur,description,done,subtasks,aiRank,aiReason,created,notes,projectId,teamFlag,wikiPage,completedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    const tSt = S.db.prepare('INSERT INTO tasks (id,title,priority,category,due,recur,description,done,subtasks,aiRank,aiReason,created,notes,projectId,teamFlag,wikiPage,completedAt,snoozedUntil,snoozedFrom) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const t of S.tasks) {
       tSt.run([
         toInt(t.id, 0),
@@ -1490,6 +1520,8 @@ function dbSaveAll() {
         t.teamFlag ? 1 : 0,
         String(t.wikiPage || ''),
         String(t.completedAt || ''),
+        String(t.snoozedUntil || ''),
+        String(t.snoozedFrom || ''),
       ]);
     }
     tSt.free();
@@ -1573,6 +1605,8 @@ function migrateDB() {
     "ALTER TABLE projects ADD COLUMN wikiPage TEXT DEFAULT ''",
     "ALTER TABLE tasks ADD COLUMN completedAt TEXT DEFAULT ''",
     "ALTER TABLE projects ADD COLUMN noteList TEXT DEFAULT '[]'",
+    "ALTER TABLE tasks ADD COLUMN snoozedUntil TEXT DEFAULT ''",
+    "ALTER TABLE tasks ADD COLUMN snoozedFrom TEXT DEFAULT ''",
     `CREATE TABLE IF NOT EXISTS changelog (id INTEGER PRIMARY KEY, ts TEXT DEFAULT '', entityType TEXT DEFAULT '', entityId INTEGER, action TEXT DEFAULT '', description TEXT DEFAULT '')`,
     // Billing module removed 2026-07 — drop leftover tables from older DBs
     "DROP TABLE IF EXISTS billing_jobs",
@@ -2047,6 +2081,7 @@ function renderSidebar() {
   const wkStart = startOfWeek(t);
   document.getElementById('badge-recent').textContent = S.tasks.filter(x=>x.created && localDate(new Date(x.created)) >= wkStart).length;
   document.getElementById('badge-recurring').textContent = S.tasks.filter(x=>!x.done&&x.recur).length;
+  document.getElementById('badge-snoozed').textContent = S.tasks.filter(isSnoozed).length;
   document.getElementById('badge-priority').textContent = pendingCount;
   const projBadge = document.getElementById('badge-projects');
   if (projBadge) projBadge.textContent = S.projects.filter(p=>p.status!=='complete').length;
@@ -2095,8 +2130,8 @@ function renderSidebar() {
   });
 }
 
-const TASK_VIEWS = new Set(['focus','today','upcoming','all','recent','done','recurring','priority','team']);
-const TASK_GROUP_VIEWS = new Set(['today','upcoming','all','recent','done','recurring','priority','team']); // excludes focus
+const TASK_VIEWS = new Set(['focus','today','upcoming','all','recent','done','recurring','snoozed','priority','team']);
+const TASK_GROUP_VIEWS = new Set(['today','upcoming','all','recent','done','recurring','snoozed','priority','team']); // excludes focus
 function isTaskView(v) { return TASK_VIEWS.has(v) || v.startsWith('cat:'); }
 function isTaskGroupView(v) { return TASK_GROUP_VIEWS.has(v) || v.startsWith('cat:'); }
 
@@ -2120,6 +2155,7 @@ function renderContent() {
   else if (S.view==='focus') renderFocus(c);
   else if (S.view==='team') renderList(c);
   else if (S.view==='recurring') renderRecurring(c);
+  else if (S.view==='snoozed') renderSnoozed(c);
   else if (S.view==='priority') renderPriority(c);
   else if (S.view==='ideas') renderIdeas(c);
   else if (S.view.startsWith('idea:')) renderIdeaDetail(+S.view.split(':')[1], c);
@@ -2214,6 +2250,37 @@ function renderRecurring(c) {
     const cc=catColor(task.category);
 
     row.innerHTML=`<span class="recur-date">${dateLabel}</span><span class="recur-title">${esc(task.title)}</span><span class="recur-meta">${task.category?`<span class="cat-pill" style="background:${cc}">${esc(task.category)}</span>`:''}<span class="recur-interval">${rl}</span></span>`;
+    c.appendChild(row);
+  });
+}
+
+function renderSnoozed(c) {
+  c.innerHTML='';
+  const hdr=document.createElement('div'); hdr.className='content-header';
+  hdr.innerHTML='<h2>Snoozed</h2>';
+  c.appendChild(hdr);
+
+  const tasks=S.tasks.filter(isSnoozed).sort((a,b)=>a.snoozedUntil.localeCompare(b.snoozedUntil)||a.title.localeCompare(b.title));
+  if (!tasks.length) { c.appendChild(mkEmpty('ti-zzz','No snoozed tasks')); return; }
+
+  tasks.forEach(task=>{
+    const row=document.createElement('div'); row.className='recur-row snooze-row';
+    const cc=catColor(task.category);
+    const orig=task.snoozedFrom?`was due ${esc(fmtSnoozeDate(task.snoozedFrom))}`:'no due date';
+    row.innerHTML=`<span class="recur-title" title="Edit task">${task.recur?'<i class="ti ti-repeat" style="font-size:12px;opacity:.6;margin-right:4px"></i>':''}${esc(task.title)}</span>`
+      + `<span class="recur-meta">${task.category?`<span class="cat-pill" style="background:${cc}">${esc(task.category)}</span>`:''}<span class="recur-interval">${orig}</span></span>`;
+    row.querySelector('.recur-title').onclick=()=>openModal(task);
+
+    const until=document.createElement('label'); until.className='snooze-until';
+    until.innerHTML='<i class="ti ti-zzz"></i>';
+    until.appendChild(mkSnoozeDateInput(task, v=>snooze(task.id, v)));
+    row.appendChild(until);
+
+    const wake=document.createElement('button'); wake.className='action-btn';
+    wake.innerHTML='<i class="ti ti-alarm"></i>Unsnooze';
+    wake.title=task.snoozedFrom?'Back to its original due date':'Clear the snooze';
+    wake.onclick=()=>unsnooze(task.id);
+    row.appendChild(wake);
     c.appendChild(row);
   });
 }
@@ -4614,6 +4681,17 @@ function mkFilterBar() {
   return bar;
 }
 
+// Date input for picking a snooze-until day — used by the card's Snooze popover and
+// the Snoozed view. Fires onPick once a complete date after today is chosen.
+function mkSnoozeDateInput(task, onPick) {
+  const inp=document.createElement('input'); inp.type='date'; inp.className='snooze-date';
+  inp.min=addDays(today(),1);
+  if (isSnoozed(task)) inp.value=task.snoozedUntil;
+  inp.onclick=e=>e.stopPropagation();
+  inp.onchange=()=>{ const v=inp.value; if (v && v>=inp.min && v!==(isSnoozed(task)?task.snoozedUntil:'')) onPick(v); };
+  return inp;
+}
+
 function mkCard(task, showReason) {
   const card=document.createElement('div');
   card.className='task-card'+(task.done?' done-card':'')+(_justCompleted.has(task.id)?' task-flash':'');
@@ -4645,6 +4723,7 @@ function mkCard(task, showReason) {
     meta.innerHTML+=`<span class="recur-icon" title="${rl}"><i class="ti ti-repeat"></i></span>`;
   }
   if (totSubs) meta.innerHTML+=`<span class="subtask-count">${doneSubs}/${totSubs}</span>`;
+  if (isSnoozed(task)) meta.innerHTML+=`<span class="snoozed-icon" title="Snoozed${task.snoozedFrom?' — originally due '+esc(fmtSnoozeDate(task.snoozedFrom)):''}"><i class="ti ti-zzz"></i></span>`;
   const pd=document.createElement('span'); pd.className='priority-dot'; pd.style.background=pColor(task.priority); pd.title='P'+task.priority;
   meta.appendChild(pd);
   if (S.view === 'recent' && task.created) {
@@ -4702,13 +4781,14 @@ function mkCard(task, showReason) {
   const snWrap=document.createElement('div'); snWrap.className='snooze-wrapper';
   const snBtn=document.createElement('button'); snBtn.className='action-btn';
   snBtn.innerHTML='<i class="ti ti-clock-pause"></i>Snooze';
-  const snMenu=document.createElement('div'); snMenu.className='snooze-menu';
-  snMenu.innerHTML=`<div class="snooze-option" data-d="1"><i class="ti ti-sun"></i>Tomorrow</div><div class="snooze-option" data-d="3"><i class="ti ti-calendar-plus"></i>In 3 days</div><div class="snooze-option" data-d="7"><i class="ti ti-calendar-week"></i>Next week</div>`;
-  snMenu.querySelectorAll('.snooze-option').forEach(o=>{
-    o.onclick=e=>{ e.stopPropagation(); snooze(task.id,+o.dataset.d); snMenu.classList.remove('open'); };
-  });
-  snBtn.onclick=e=>{ e.stopPropagation(); document.querySelectorAll('.snooze-menu.open').forEach(m=>{if(m!==snMenu)m.classList.remove('open');}); snMenu.classList.toggle('open'); };
-  snWrap.appendChild(snBtn); snWrap.appendChild(snMenu);
+  snBtn.title='Snooze until a date';
+  // Click Snooze → the browser's date picker opens → picking a day snoozes. The input
+  // itself stays invisible under the button; a popover would be clipped by the card's
+  // overflow:hidden.
+  const snDate=mkSnoozeDateInput(task, until=>snooze(task.id, until));
+  snDate.classList.add('snooze-hidden'); snDate.tabIndex=-1;
+  snBtn.onclick=e=>{ e.stopPropagation(); try { snDate.showPicker(); } catch(_) { snDate.focus(); snDate.click(); } };
+  snWrap.appendChild(snBtn); snWrap.appendChild(snDate);
 
   const delBtn=document.createElement('button'); delBtn.className='action-btn danger';
   delBtn.innerHTML='<i class="ti ti-trash"></i>Delete';
@@ -4966,9 +5046,9 @@ function completeTask(id, closeSubs) {
   // deferring it past the 2s auto-save means a tab close mid-grace kills the recurrence chain
   let spawnId=null;
   if (t.recur) {
-    const nextDue = nextOccurrence(t.due || today(), t.recur);
+    const nextDue = nextRecurDue(t);
     if (nextDue) {
-      const spawn={...t,id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',due:nextDue,created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
+      const spawn={...t,id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',due:nextDue,snoozedUntil:'',snoozedFrom:'',created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
       S.tasks.push(spawn);
       spawnId=spawn.id;
     }
@@ -5002,7 +5082,7 @@ function uncompleteTask(id) {
   } else if (t.recur) {
     // Grace already expired and the spawn id is gone — match the spawned
     // occurrence by shape and remove it, otherwise reopening leaves a duplicate
-    const nextDue = nextOccurrence(t.due || today(), t.recur);
+    const nextDue = nextRecurDue(t);
     const spawnedIdx = S.tasks.findIndex(x => x.id !== t.id && !x.done && x.recur === t.recur && x.title === t.title && x.due === nextDue);
     if (spawnedIdx !== -1) {
       logChange('task', S.tasks[spawnedIdx].id, 'delete', 'Removed next occurrence of "' + (t.title||'') + '" (task reopened)');
@@ -5052,16 +5132,36 @@ function deleteTask(id) {
   showToast('Task deleted',{label:'Undo',action:()=>{ S.tasks.push(t); markUnsaved(); render(); }});
 }
 
-function snooze(id, days) {
+function fmtSnoozeDate(d) {
+  return new Date(d+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+}
+
+// Snooze a task until `until` (YYYY-MM-DD, after today). Re-snoozing keeps the
+// original due date, so unsnoozing and recurrence both see the pre-snooze schedule.
+function snooze(id, until) {
   const t=S.tasks.find(x=>x.id===id); if(!t) return;
-  t.due=addDays(t.due||today(),days); t.aiRank=null;
-  markUnsaved(); render(); showToast('Snoozed until '+t.due);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until||'') || until<=today()) { showToast('Pick a date after today'); return; }
+  const prev={due:t.due, snoozedUntil:t.snoozedUntil||'', snoozedFrom:t.snoozedFrom||'', aiRank:t.aiRank};
+  if (!snoozeLive(t)) t.snoozedFrom=t.due||'';
+  t.snoozedUntil=until; t.due=until; t.aiRank=null;
+  logChange('task', id, 'update', `"${t.title}" — Snoozed until ${until}`);
+  markUnsaved(); render();
+  showToast('Snoozed until '+fmtSnoozeDate(until),{label:'Undo',action:()=>{ Object.assign(t,prev); markUnsaved(); render(); }});
+}
+
+// Cancel a snooze and put the task back on its original due date.
+function unsnooze(id) {
+  const t=S.tasks.find(x=>x.id===id); if(!t||!snoozeLive(t)) return;
+  t.due=t.snoozedFrom||''; t.snoozedUntil=''; t.snoozedFrom='';
+  logChange('task', id, 'update', `"${t.title}" — Unsnoozed${t.due?' (due '+t.due+')':''}`);
+  markUnsaved(); render();
+  showToast(t.due ? 'Back to due '+fmtSnoozeDate(t.due) : 'Snooze cleared');
 }
 
 function duplicateTask(task) {
   // Open the New Task modal pre-filled from `task`; saving creates a fresh task
   // (S.editingTask stays null) so the original is untouched.
-  const copy={...task, done:false, completedAt:'', subtasks:(task.subtasks||[]).map(s=>({...s, done:false}))};
+  const copy={...task, done:false, completedAt:'', snoozedUntil:'', snoozedFrom:'', subtasks:(task.subtasks||[]).map(s=>({...s, done:false}))};
   openModal(copy, undefined, true);
 }
 
@@ -6052,7 +6152,7 @@ function setupEvents() {
     S.tasksNavOpen = !S.tasksNavOpen; renderSidebar();
   });
   // Global click handler — close open dropdowns/menus
-  document.addEventListener('click',()=>{ document.getElementById('ai-menu').classList.remove('open'); document.querySelectorAll('.snooze-menu.open').forEach(m=>m.classList.remove('open')); });
+  document.addEventListener('click',()=>{ document.getElementById('ai-menu').classList.remove('open'); });
   // Hidden DB file input (for settings panel open)
   document.getElementById('open-db-hidden').addEventListener('change', async e => {
     const f = e.target.files[0]; if(!f) return;
