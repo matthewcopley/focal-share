@@ -507,8 +507,8 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .dash-list-more:hover{color:var(--accent)}
 @container (min-width:900px){.dash-mod .dash-kpis{grid-template-columns:repeat(6,1fr)}}
 @container (max-width:440px){.dash-mod .dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-mod .dash-score-big{font-size:44px}}
-@container (max-width:560px){.dash-mod .dash-streak-row{grid-template-columns:repeat(2,1fr)}.dash-mod .dash-ft-parts{grid-template-columns:1fr;gap:12px}}
-@container (max-width:230px){.dash-mod .dash-kpis,.dash-mod .dash-streak-row{grid-template-columns:1fr}}
+@container (max-width:560px){.dash-mod .dash-launch-stats .dash-streak-card:nth-child(odd){border-left:none;padding-left:0}.dash-mod .dash-streak-row{grid-template-columns:repeat(2,1fr)}.dash-mod .dash-ft-parts{grid-template-columns:1fr;gap:12px}}
+@container (max-width:230px){.dash-mod .dash-kpis,.dash-mod .dash-streak-row{grid-template-columns:1fr}.dash-mod .dash-launch-stats .dash-streak-card{border-left:none;padding-left:0}}
 /* Edit mode */
 .dash-editing .dash-mod{outline:1px dashed var(--border-mid);outline-offset:4px;transition:outline-color .1s}
 .dash-editing .dash-mod:hover{outline-color:var(--accent-dim)}
@@ -691,7 +691,9 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 @media (max-width:640px){.rings-streak{margin-left:0}.frog-panel,.fresh-banner{flex-wrap:wrap}.launch-remaining{font-size:28px}}
 /* Streak display in dashboard */
 .dash-streak-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.dash-section-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:0 0 8px}
+.dash-launch-stats{gap:14px 0}
+.dash-launch-stats .dash-streak-card{background:none;border:none;border-left:1px solid var(--border);padding:2px 16px}
+.dash-launch-stats .dash-streak-card:first-child{border-left:none;padding-left:0}
 .dash-streak-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:14px 16px}
 .dash-streak-card.highlight{border-color:currentColor}
 .dash-streak-label{font-size:11px;color:var(--text-muted);font-weight:500;margin-bottom:4px}
@@ -3349,17 +3351,15 @@ function dashLaunch(b, x) {
     : medReal >= medPlan * 1.5 ? 'once started, you keep going'
     : medReal < medPlan * 0.6 ? 'stopping early — try a 5 min box'
     : 'boxes are about right';
-  const launchLbl = document.createElement('div');
-  launchLbl.className = 'dash-section-label';
-  launchLbl.textContent = `Launch — last ${days}d`;
-  b.appendChild(launchLbl);
+  // One card with its title inside, like every other module; the stats sit flat in it
+  const card = mkDashCard(b, `Launch — last ${days}d`);
   const launchRow = document.createElement('div');
-  launchRow.className = 'dash-streak-row';
+  launchRow.className = 'dash-streak-row dash-launch-stats';
   launchRow.appendChild(mkStreakCard('Launches', sesInRange.length, sesInRange.length ? `${stickyStart} on sticky tasks` : 'press ▶ on any task', sesInRange.length ? 'var(--accent)' : 'var(--text-subtle)'));
   launchRow.appendChild(mkStreakCard('Focus time', sesInRange.length ? fmtMins(focusSecs) : '—', sesInRange.length ? `avg ${fmtMins(focusSecs / sesInRange.length)} per session` : 'time inside Launch', 'var(--text)'));
   launchRow.appendChild(mkStreakCard('Sticky cleared', stickyDone, 'pushed-back or long-stuck tasks finished', stickyDone ? '#4DC88A' : 'var(--text)'));
   launchRow.appendChild(mkStreakCard('Planned → actual', medPlan == null ? '—' : `${Math.round(medPlan)}→${Math.round(medReal)}m`, calibSub, 'var(--text)'));
-  b.appendChild(launchRow);
+  card.appendChild(launchRow);
 }
 
 // GitHub-style grid. It shows as many weeks as fit the module's width (8 to
