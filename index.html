@@ -577,7 +577,7 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .rings-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .ring{display:flex;align-items:center;gap:8px;cursor:default}
 .ring svg{flex-shrink:0;transform:rotate(-90deg)}
-.ring-track{stroke:var(--border-mid)}
+.ring-track:not([stroke]){stroke:var(--border-mid)}
 .ring-fill{transition:stroke-dashoffset .5s cubic-bezier(.4,0,.2,1)}
 .ring-text{display:flex;flex-direction:column;line-height:1.25}
 .ring-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
@@ -589,6 +589,28 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .rings-streak{margin-left:auto;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:10px;white-space:nowrap}
 .rings-streak i{font-size:14px}
 .rings-overdue{color:var(--overdue-text)}
+.rings-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:18px 22px;display:flex;align-items:center;gap:26px}
+.rings-card-svg{width:clamp(120px,30cqi,184px);height:auto;flex-shrink:0;overflow:visible}
+.rings-card-fill{animation:ringDraw 1s cubic-bezier(.3,.7,.2,1) backwards}
+.rings-card-fill.closed{filter:drop-shadow(0 0 3px var(--glow))}
+.rings-card-fill.pop{animation:ringDraw 1s cubic-bezier(.3,.7,.2,1) backwards,ringGlow 1.2s ease-out .9s}
+@keyframes ringDraw{from{stroke-dashoffset:var(--c)}}
+@keyframes ringGlow{40%{filter:drop-shadow(0 0 9px var(--glow))}}
+.rings-card-mid{font-size:15px;font-weight:700;fill:var(--text-muted);font-family:var(--font-mono)}
+.rings-card-mid.all{fill:var(--accent)}
+.rings-card-legend{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.rings-card-row{border-left:3px solid var(--ring);padding-left:10px}
+.rcr-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.rcr-label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.rings-card-row.closed .rcr-label{color:var(--ring)}
+.rcr-count{font-size:20px;font-weight:700;color:var(--text);line-height:1;display:flex;align-items:baseline;gap:5px;white-space:nowrap}
+.rcr-count small{font-size:12px;font-weight:400;color:var(--text-muted)}
+.rcr-count i{font-size:15px;color:var(--ring);align-self:center}
+.rcr-tip{font-size:10px;color:var(--text-muted);line-height:1.4;margin-top:3px}
+.rings-card-foot{display:flex;gap:14px;font-size:12px;color:var(--text-muted);padding-top:10px;border-top:1px solid var(--border);flex-wrap:wrap}
+.rings-card-foot i{font-size:14px}
+@container (max-width:400px){.rings-card{flex-direction:column;align-items:stretch;gap:18px}.rings-card-svg{width:150px;align-self:center}}
+@media (prefers-reduced-motion:reduce){.rings-card-fill,.rings-card-fill.pop{animation:none}}
 /* ── Fresh-start banner + sticky-task panel (Focus) ── */
 .fresh-banner,.frog-panel{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r-card);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:14px}
 .fresh-banner>i,.frog-panel>i{font-size:22px;color:var(--accent);flex-shrink:0}
@@ -2657,7 +2679,7 @@ const DASH_MODULES = [
   { id:'streaks',  title:'Streaks',              icon:'ti-flame',          span:12, min:2, show:true,  desc:'Current and best streak, last 10 workdays, all-time', render:dashStreaks },
   { id:'launch',   title:'Launch',               icon:'ti-player-play',    span:12, min:2, show:true,  desc:'Sessions, focus time, sticky tasks cleared, plan vs reality', render:dashLaunch },
   { id:'heatmap',  title:'Activity heatmap',     icon:'ti-grid-dots',      span:12, min:3, show:true,  desc:'Completions per day — the wider it is, the further back it goes', render:dashHeatmap },
-  { id:'rings',    title:'Today’s rings',        icon:'ti-circle-dot',     span:12, min:4, show:false, desc:'Launch, On time and Clear, as on Focus', render:b => b.appendChild(mkDailyGoalBar()) },
+  { id:'rings',    title:'Today’s rings',        icon:'ti-circle-dot',     span:6,  min:3, show:false, desc:'Launch, On time and Clear, nested, with what closes each', render:b => b.appendChild(mkRingsCard()) },
   { id:'frog',     title:'Sticky task',          icon:'ti-anchor',         span:12, min:4, show:false, desc:'The running Launch, or your stickiest task with a 5-min start', render:dashFrog },
   { id:'duesoon',  title:'Due soon',             icon:'ti-calendar-due',   span:6,  min:3, show:false, desc:'Overdue and the next 7 days, soonest first', render:dashDueSoon },
   { id:'projects', title:'Active projects',      icon:'ti-briefcase',      span:6,  min:3, show:false, desc:'In-progress projects and how far along they are', render:dashProjects },
@@ -5787,7 +5809,7 @@ function mkDailyGoalBar() {
     const el = document.createElement('div');
     el.className = 'ring' + (ringClosed(r) ? ' closed' : '') + (_ringPop.has(r.key) ? ' pop' : '');
     el.title = r.tip;
-    el.innerHTML = `<svg width="30" height="30" viewBox="0 0 30 30"><circle class="ring-track" cx="15" cy="15" r="${R}" fill="none" stroke-width="4"/>`
+    el.innerHTML = `<svg width="30" height="30" viewBox="0 0 30 30"><circle class="ring-track" cx="15" cy="15" r="${R}" fill="none" stroke-width="4"${none ? '' : ` stroke="${RING_COLORS[r.key]}" stroke-opacity=".16"`}/>`
       + `<circle class="ring-fill" cx="15" cy="15" r="${R}" fill="none" stroke="${none ? 'var(--border-mid)' : RING_COLORS[r.key]}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C * (1 - pct)).toFixed(2)}"${pct === 0 ? ' opacity="0"' : ''}/></svg>`
       + `<div class="ring-text"><span class="ring-label">${r.label}</span><span class="ring-count">${none ? '<span>nothing due</span>' : `${r.n}<span>/${r.of}</span>`}</span></div>`;
     bar.appendChild(el);
@@ -5803,6 +5825,66 @@ function mkDailyGoalBar() {
   const side = document.createElement('div'); side.className = 'rings-streak'; side.innerHTML = bits.join('');
   bar.appendChild(side);
   return bar;
+}
+
+// Dashboard version: the three rings nested (Launch outside, Clear inside),
+// each drawn in from empty, with a legend that says what closes it.
+function mkRingsCard() {
+  const st = ringState(), svgNS = 'http://www.w3.org/2000/svg';
+  const card = document.createElement('div'); card.className = 'rings-card';
+  const SW = 11, C0 = 60, radii = [52, 38, 24];   // ring spacing = stroke + 3
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 120 120'); svg.classList.add('rings-card-svg');
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  st.rings.forEach((r, i) => {
+    const R = radii[i], C = 2 * Math.PI * R, color = RING_COLORS[r.key], none = r.of === 0;
+    const pct = none ? 0 : Math.min(1, r.n / r.of);
+    const track = document.createElementNS(svgNS, 'circle');
+    Object.entries({ cx: C0, cy: C0, r: R, fill: 'none', stroke: color, 'stroke-width': SW, 'stroke-opacity': none ? '.07' : '.16' })
+      .forEach(([k, v]) => track.setAttribute(k, v));
+    if (none) track.setAttribute('stroke-dasharray', '2 5');
+    svg.appendChild(track);
+    if (!pct) return;
+    const fill = document.createElementNS(svgNS, 'circle');
+    Object.entries({ cx: C0, cy: C0, r: R, fill: 'none', stroke: color, 'stroke-width': SW, 'stroke-linecap': 'round',
+      'stroke-dasharray': C.toFixed(2), 'stroke-dashoffset': (C * (1 - pct)).toFixed(2), transform: `rotate(-90 ${C0} ${C0})` })
+      .forEach(([k, v]) => fill.setAttribute(k, v));
+    fill.classList.add('rings-card-fill');
+    if (ringClosed(r)) fill.classList.add('closed');
+    if (_ringPop.has(r.key)) fill.classList.add('pop');
+    fill.style.setProperty('--c', C.toFixed(2));
+    fill.style.setProperty('--glow', color);
+    fill.style.animationDelay = still ? '0s' : (i * 0.12) + 's';
+    svg.appendChild(fill);
+  });
+  const closedN = st.rings.filter(ringClosed).length;
+  const mid = document.createElementNS(svgNS, 'text');
+  Object.entries({ x: C0, y: C0 + 1, 'text-anchor': 'middle', 'dominant-baseline': 'middle', class: 'rings-card-mid' + (closedN === 3 ? ' all' : '') })
+    .forEach(([k, v]) => mid.setAttribute(k, v));
+  mid.textContent = `${closedN}/3`;
+  const midTitle = document.createElementNS(svgNS, 'title'); midTitle.textContent = `${closedN} of 3 rings closed today`;
+  mid.appendChild(midTitle);
+  svg.appendChild(mid);
+  card.appendChild(svg);
+
+  const legend = document.createElement('div'); legend.className = 'rings-card-legend';
+  st.rings.forEach(r => {
+    const none = r.of === 0, closed = ringClosed(r);
+    const row = document.createElement('div');
+    row.className = 'rings-card-row' + (closed ? ' closed' : '');
+    row.style.setProperty('--ring', RING_COLORS[r.key]);
+    row.innerHTML = `<div class="rcr-head"><span class="rcr-label">${r.label}</span>`
+      + `<span class="rcr-count">${none ? '<small>nothing due</small>' : `${r.n}<small>/${r.of}</small>`}${closed ? '<i class="ti ti-check"></i>' : ''}</span></div>`
+      + `<div class="rcr-tip">${esc(r.tip)}</div>`;
+    legend.appendChild(row);
+  });
+  const s = st.streak, bits = [];
+  if (st.overdue) bits.push(`<span class="rings-overdue" title="Open tasks past their due date">${st.overdue} overdue</span>`);
+  if (s.current > 1) bits.push(`<span title="Workdays in a row you finished or launched something"><i class="ti ti-flame" style="color:var(--accent)"></i> ${s.current}d${s.freezes ? ` <i class="ti ti-snowflake" style="color:#7090c8"></i>${s.freezes}` : ''}</span>`);
+  else if (s.lapsed && !s.todayOk) bits.push('<span>fresh start — today can be day 1</span>');
+  if (bits.length) legend.insertAdjacentHTML('beforeend', `<div class="rings-card-foot">${bits.join('')}</div>`);
+  card.appendChild(legend);
+  return card;
 }
 
 // Cheer a ring the moment it closes, once per ring per day. The first call after
