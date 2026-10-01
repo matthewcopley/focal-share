@@ -338,6 +338,15 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .proj-override-row input[type=number]:focus{border-color:var(--accent-dim)}
 .proj-notes{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--r-btn);font-size:13px;color:var(--text);background:var(--bg);font-family:inherit;resize:vertical;min-height:80px;outline:none;transition:border-color .15s;line-height:1.5}
 .proj-notes:focus{border-color:var(--text-muted);background:var(--surface)}
+.pnote-list{margin-top:14px;display:flex;flex-direction:column;gap:10px}
+.pnote-bar{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--text-subtle)}
+.pnote{border:1px solid var(--border);border-radius:var(--r-btn);padding:8px 10px;background:var(--surface)}
+.pnote-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.pnote-date{font-size:11px;font-weight:600;color:var(--text-muted)}
+.pnote-edited{font-weight:400;color:var(--text-subtle)}
+.pnote-del{background:none;border:none;color:var(--text-subtle);cursor:pointer;padding:2px 4px;font-size:14px;border-radius:var(--r-btn)}
+.pnote-del:hover{color:var(--overdue-text)}
+.pnote-text{min-height:60px}
 /* ── Idea status pills ── */
 .idea-status{padding:2px 8px;border-radius:var(--r-pill);font-size:11px;font-weight:600;white-space:nowrap}
 .idea-status-inbox{background:var(--border);color:var(--text-muted)}
@@ -1401,11 +1410,13 @@ function dbLoadAll() {
   const projRes = S.db.exec('SELECT * FROM projects ORDER BY id');
   S.projects = projRes.length ? projRes[0].values.map(row => {
     const o = {}; projRes[0].columns.forEach((c,i) => o[c]=row[i]);
+    let noteList=[]; try { noteList=JSON.parse(o.noteList||'[]'); } catch(e) {}
+    if (!Array.isArray(noteList)) noteList=[];
     return { id:o.id, title:o.title||'', status:o.status||'not-started',
       progress:o.progress||0, progressManual:o.progressManual===1,
       startDate:o.startDate||'', dueDate:o.dueDate||'', type:o.type||'client',
       jobNumber:o.jobNumber||'', notes:o.notes||'', created:o.created||new Date().toISOString(),
-      wikiPage:o.wikiPage||'' };
+      wikiPage:o.wikiPage||'', noteList };
   }) : [];
 
   const catRes = S.db.exec('SELECT * FROM categories ORDER BY id');
@@ -1484,7 +1495,7 @@ function dbSaveAll() {
     tSt.free();
 
     S.db.run('DELETE FROM projects');
-    const pSt = S.db.prepare('INSERT INTO projects (id,title,status,progress,progressManual,startDate,dueDate,type,jobNumber,notes,created,wikiPage) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
+    const pSt = S.db.prepare('INSERT INTO projects (id,title,status,progress,progressManual,startDate,dueDate,type,jobNumber,notes,created,wikiPage,noteList) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const p of S.projects) {
       pSt.run([
         toInt(p.id, 0),
@@ -1499,6 +1510,7 @@ function dbSaveAll() {
         String(p.notes || ''),
         String(p.created || new Date().toISOString()),
         String(p.wikiPage || ''),
+        JSON.stringify(Array.isArray(p.noteList) ? p.noteList : []),
       ]);
     }
     pSt.free();
@@ -1560,6 +1572,7 @@ function migrateDB() {
     "ALTER TABLE tasks ADD COLUMN wikiPage TEXT DEFAULT ''",
     "ALTER TABLE projects ADD COLUMN wikiPage TEXT DEFAULT ''",
     "ALTER TABLE tasks ADD COLUMN completedAt TEXT DEFAULT ''",
+    "ALTER TABLE projects ADD COLUMN noteList TEXT DEFAULT '[]'",
     `CREATE TABLE IF NOT EXISTS changelog (id INTEGER PRIMARY KEY, ts TEXT DEFAULT '', entityType TEXT DEFAULT '', entityId INTEGER, action TEXT DEFAULT '', description TEXT DEFAULT '')`,
     // Billing module removed 2026-07 — drop leftover tables from older DBs
     "DROP TABLE IF EXISTS billing_jobs",
@@ -4163,7 +4176,7 @@ function renderProjects(c) {
   let projs=[...S.projects];
   if (f.search.trim()) {
     const q=f.search.trim().toLowerCase();
-    projs=projs.filter(p=>p.title.toLowerCase().includes(q)||(p.jobNumber||'').toLowerCase().includes(q)||(p.notes||'').toLowerCase().includes(q));
+    projs=projs.filter(p=>p.title.toLowerCase().includes(q)||(p.jobNumber||'').toLowerCase().includes(q)||(p.notes||'').toLowerCase().includes(q)||(p.noteList||[]).some(n=>(n.text||'').toLowerCase().includes(q)));
   }
   if (f.statusSingle) projs=projs.filter(p=>p.status===f.statusSingle);
   if (f.type) projs=projs.filter(p=>p.type===f.type);
@@ -4280,13 +4293,14 @@ function renderProjectDetail(id, c) {
     markUnsaved();
   };
 
-  // Notes section
+  // Notes section — the free-form "General" field plus any number of dated notes
   const notesSection=document.createElement('div'); notesSection.className='proj-detail-section';
   notesSection.innerHTML='<h4>Notes</h4>';
   const notesArea=document.createElement('textarea'); notesArea.className='proj-notes';
-  notesArea.placeholder='Add project notes...'; notesArea.value=proj.notes||'';
+  notesArea.placeholder='General project notes...'; notesArea.value=proj.notes||'';
   notesArea.oninput=()=>{ proj.notes=notesArea.value; markUnsaved(); };
   notesSection.appendChild(notesArea);
+  notesSection.appendChild(mkProjectNoteList(proj));
   c.appendChild(notesSection);
 
   // Tasks section
@@ -4400,6 +4414,63 @@ function saveProjectModal() {
     logChange('project', proj.id, 'create', 'Created project: "' + proj.title + '"');
   }
   closeProjectModal(); markUnsaved(); render();
+}
+
+// Dated notes on a project (proj.noteList), newest first. Each is
+// {id, text, created, updated}; ids are per-project, timestamps UTC ISO.
+function mkProjectNoteList(proj, focusId) {
+  if (!Array.isArray(proj.noteList)) proj.noteList=[];
+  const wrap=document.createElement('div'); wrap.className='pnote-list';
+  const redraw=fid=>wrap.replaceWith(mkProjectNoteList(proj, fid));
+
+  const bar=document.createElement('div'); bar.className='pnote-bar';
+  bar.innerHTML=`<span>${proj.noteList.length} note${proj.noteList.length!==1?'s':''}</span>`;
+  const addBtn=document.createElement('button'); addBtn.className='new-task-btn';
+  addBtn.innerHTML='<i class="ti ti-plus"></i>Add note';
+  addBtn.onclick=()=>{
+    const id=proj.noteList.reduce((m,n)=>Math.max(m,n.id||0),0)+1;
+    const now=new Date().toISOString();
+    proj.noteList.push({ id, text:'', created:now, updated:now });
+    logChange('project', proj.id, 'update', 'Added note to project: '+(proj.title||''));
+    markUnsaved(); redraw(id);
+  };
+  bar.appendChild(addBtn);
+  wrap.appendChild(bar);
+
+  const fmtTs=ts=>{ const d=new Date(ts); return isNaN(d) ? '' :
+    d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})+' · '+
+    d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); };
+
+  [...proj.noteList].sort((a,b)=>(b.created||'').localeCompare(a.created||'')).forEach(n=>{
+    const card=document.createElement('div'); card.className='pnote';
+    const head=document.createElement('div'); head.className='pnote-head';
+    const edited=n.updated&&n.updated!==n.created&&fmtTs(n.updated)!==fmtTs(n.created);
+    head.innerHTML=`<span class="pnote-date">${esc(fmtTs(n.created))}${edited?` <span class="pnote-edited">· edited ${esc(fmtTs(n.updated))}</span>`:''}</span>`;
+    const del=document.createElement('button'); del.className='pnote-del'; del.title='Delete note';
+    del.innerHTML='<i class="ti ti-trash"></i>';
+    del.onclick=()=>{
+      const idx=proj.noteList.indexOf(n); if (idx<0) return;
+      proj.noteList.splice(idx,1);
+      logChange('project', proj.id, 'update', 'Deleted note from project: '+(proj.title||''));
+      markUnsaved(); redraw();
+      showToast('Note deleted',{label:'Undo',action:()=>{
+        proj.noteList.splice(Math.min(idx,proj.noteList.length),0,n);
+        markUnsaved(); if (S.view==='project:'+proj.id) render();
+      }});
+    };
+    head.appendChild(del);
+    card.appendChild(head);
+
+    const ta=document.createElement('textarea'); ta.className='proj-notes pnote-text';
+    ta.placeholder='Write a note...'; ta.value=n.text||'';
+    card.appendChild(ta);
+    const imgs=mkImageStrip(n.text||'');
+    card.appendChild(imgs);
+    bindImageField(ta, imgs, v=>{ n.text=v; n.updated=new Date().toISOString(); markUnsaved(); });
+    wrap.appendChild(card);
+    if (n.id===focusId) requestAnimationFrame(()=>ta.focus());
+  });
+  return wrap;
 }
 
 function deleteProject(id) {
