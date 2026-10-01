@@ -1283,6 +1283,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   id INTEGER PRIMARY KEY, taskId INTEGER, started TEXT DEFAULT '', ended TEXT DEFAULT '',
   plannedMin INTEGER DEFAULT 5, outcome TEXT DEFAULT '', step TEXT DEFAULT '',
   plan TEXT DEFAULT '', sticky INTEGER DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS prefs (
+  key TEXT PRIMARY KEY, value TEXT DEFAULT ''
 );`;
 
 // Changelog retention — streaks, heatmap and "all-time" stats are derived from
@@ -1337,6 +1340,7 @@ const S = {
   wikiPages: [],
   changelog: [],
   sessions: [],          // Launch sessions — permanent, unlike the capped changelog
+  prefs: {},             // key → string; settings that should follow focal.db across devices
   launch: null,          // the running Launch session, mirrored to localStorage
   launchView: null,      // 'setup' | 'run' | 'park' while the overlay is drawn
   launchSetup: null,     // draft fields while picking a step and a timebox
@@ -1701,6 +1705,10 @@ function dbLoadAll() {
       plan:o.plan||'', sticky:o.sticky===1 };
   }) : [];
 
+  const prefRes = S.db.exec('SELECT key, value FROM prefs');
+  S.prefs = {};
+  if (prefRes.length) prefRes[0].values.forEach(([k, v]) => { S.prefs[k] = v ?? ''; });
+
   // Backfill complete entries for tasks/subtasks that predate logging
   backfillCompletions();
   // Backfill task.completedAt from the changelog for tasks done before the column existed
@@ -1710,6 +1718,16 @@ function dbLoadAll() {
 }
 
 function toInt(v, fallback) { const n = parseInt(v, 10); return isNaN(n) ? (fallback ?? 0) : n; }
+// Prefs that live in focal.db, so every device that opens it sees them. Most
+// display prefs are still per-browser localStorage; put one here only when it
+// should follow the data. null deletes.
+function getPref(key) { return Object.prototype.hasOwnProperty.call(S.prefs, key) ? S.prefs[key] : null; }
+function setPref(key, value) {
+  if (value == null) { if (getPref(key) === null) return; delete S.prefs[key]; }
+  else if (S.prefs[key] === String(value)) return;
+  else S.prefs[key] = String(value);
+  markUnsaved();
+}
 function toIntOrNull(v) { if (v == null || v === '') return null; const n = parseInt(v, 10); return isNaN(n) ? null : n; }
 
 function dbSaveAll() {
@@ -1818,6 +1836,11 @@ function dbSaveAll() {
         toInt(s.plannedMin,5), String(s.outcome||''), String(s.step||''), String(s.plan||''), s.sticky ? 1 : 0]);
     }
     seSt.free();
+
+    S.db.run('DELETE FROM prefs');
+    const prSt = S.db.prepare('INSERT INTO prefs (key,value) VALUES (?,?)');
+    for (const [k, v] of Object.entries(S.prefs)) prSt.run([String(k), String(v)]);
+    prSt.free();
 
     S.db.run('COMMIT');
   } catch(e) { S.db.run('ROLLBACK'); console.error('dbSaveAll failed:',e); throw e; }
@@ -2614,12 +2637,14 @@ function ftTier(score) {
 }
 // ── Dashboard modules ───────────────────────────────────────────────────────
 // The dashboard is a 12-column grid of modules. Which ones show, in what order
-// and how wide is a per-browser pref (DASH_KEY: {mods:[{id, span}], seen:[ids]}).
+// and how wide is stored in focal.db (prefs row DASH_PREF: {mods:[{id, span}],
+// seen:[ids]}), so the layout is the same on every device.
 // Customize switches to edit mode: drag a module by its grip to move it, drag
 // its right edge to resize (snaps to columns), × removes it, and the manager
 // panel adds it back. Each module renders into its body only *after* it's in
 // the DOM, so charts can size themselves to the width the module actually got.
-const DASH_KEY  = 'focal_dash_layout';
+const DASH_PREF = 'dash_layout';
+const DASH_KEY  = 'focal_dash_layout';   // old per-browser home, adopted by dashLayoutRaw()
 const DASH_COLS = 12;
 const DASH_GAP  = 14;   // must match .dash-grid gap
 
@@ -2639,9 +2664,20 @@ const DASH_MODULES = [
 ];
 const DASH_BY_ID = new Map(DASH_MODULES.map(m => [m.id, m]));
 
+// The layout used to be per-browser. The first browser to open focal.db after
+// the move hands its layout over; once the DB has one, a browser's old copy is dropped.
+function dashLayoutRaw() {
+  let raw = getPref(DASH_PREF), local = null;
+  try { local = localStorage.getItem(DASH_KEY); } catch(e) {}
+  if (local !== null) {
+    if (raw === null) { raw = local; setPref(DASH_PREF, local); }
+    try { localStorage.removeItem(DASH_KEY); } catch(e) {}
+  }
+  return raw;
+}
 function dashLayout() {
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(DASH_KEY) || 'null'); } catch(e) {}
+  try { saved = JSON.parse(dashLayoutRaw() || 'null'); } catch(e) {}
   if (!saved || !Array.isArray(saved.mods)) return DASH_MODULES.filter(m => m.show).map(m => ({ id: m.id, span: m.span }));
   const seen = new Set(saved.seen || []);
   const ids = new Set();
@@ -2653,7 +2689,7 @@ function dashLayout() {
   return mods;
 }
 function saveDashLayout(mods) {
-  localStorage.setItem(DASH_KEY, JSON.stringify({ mods, seen: DASH_MODULES.map(m => m.id) }));
+  setPref(DASH_PREF, JSON.stringify({ mods, seen: DASH_MODULES.map(m => m.id) }));
 }
 const dashSpanLabel = s => s === DASH_COLS ? 'full' : ({ 3:'¼', 4:'⅓', 6:'½', 8:'⅔', 9:'¾' })[s] || `${s}/12`;
 
@@ -2849,10 +2885,10 @@ function mkDashManager(c, layout) {
     list.appendChild(b);
   });
   p.querySelector('.launch-small-btn').onclick = () => {
-    const prev = localStorage.getItem(DASH_KEY);
+    const prev = getPref(DASH_PREF);
     if (prev === null) return;
-    localStorage.removeItem(DASH_KEY); rerenderDash(c);
-    showToast('Layout reset to the default.', { label: 'Undo', action: () => { localStorage.setItem(DASH_KEY, prev); rerenderDash(c); } });
+    setPref(DASH_PREF, null); rerenderDash(c);
+    showToast('Layout reset to the default.', { label: 'Undo', action: () => { setPref(DASH_PREF, prev); rerenderDash(c); } });
   };
   return p;
 }
