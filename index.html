@@ -489,7 +489,7 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .dash-ft-part-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
 .dash-ft-part-val{font-size:15px;font-weight:700;color:var(--text)}
 .dash-ft-part-sub{font-size:10px;color:var(--text-muted);margin-top:5px}
-@media(max-width:700px){.dash-row1{grid-template-columns:1fr}.dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-breakdown{grid-template-columns:1fr}.dash-ft-parts{grid-template-columns:1fr;gap:12px}}
+@media(max-width:700px){.dash-row1{grid-template-columns:1fr}.dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-breakdown{grid-template-columns:1fr}.dash-ft-parts{grid-template-columns:1fr;gap:12px}.dash-streak-row{grid-template-columns:repeat(2,1fr)}}
 /* ── Gamification ── */
 /* Task completion flash */
 @keyframes task-complete-flash{0%{background:rgba(77,200,138,.12);border-color:#4DC88A}100%{background:var(--surface);border-color:var(--border)}}
@@ -507,8 +507,103 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .daily-goal-fill{height:100%;transition:width .4s cubic-bezier(.4,0,.2,1),background .4s}
 .daily-goal-count{font-size:12px;font-weight:600;color:var(--text);flex-shrink:0;min-width:40px;text-align:right}
 .daily-goal-hit{font-size:11px;font-weight:600;color:#5FBF8A;flex-shrink:0}
+/* ── Rings (replace the single daily-goal bar) ── */
+.rings-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.ring{display:flex;align-items:center;gap:8px;cursor:default}
+.ring svg{flex-shrink:0;transform:rotate(-90deg)}
+.ring-track{stroke:var(--border-mid)}
+.ring-fill{transition:stroke-dashoffset .5s cubic-bezier(.4,0,.2,1)}
+.ring-text{display:flex;flex-direction:column;line-height:1.25}
+.ring-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.ring-count{font-size:12px;font-weight:600;color:var(--text)}
+.ring-count span{font-weight:400;color:var(--text-muted)}
+.ring.closed .ring-label{color:var(--text)}
+@keyframes ring-pop{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
+.ring.pop svg{animation:ring-pop .6s ease-out}
+.rings-streak{margin-left:auto;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:10px;white-space:nowrap}
+.rings-streak i{font-size:14px}
+.rings-overdue{color:var(--overdue-text)}
+/* ── Fresh-start banner + sticky-task panel (Focus) ── */
+.fresh-banner,.frog-panel{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r-card);padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:14px}
+.fresh-banner>i,.frog-panel>i{font-size:22px;color:var(--accent);flex-shrink:0}
+.fresh-body,.frog-body{flex:1;min-width:0}
+.fresh-title,.frog-kicker{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:3px}
+.fresh-text{font-size:13px;color:var(--text)}
+.fresh-sub,.frog-why{font-size:12px;color:var(--text-muted);margin-top:2px}
+.frog-title{font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frog-actions,.fresh-actions{display:flex;gap:8px;flex-shrink:0;align-items:center}
+.banner-x{background:none;border:none;color:var(--text-subtle);cursor:pointer;font-size:16px;padding:2px;line-height:1}
+.banner-x:hover{color:var(--text)}
+.launch-go{padding:6px 12px;border:1px solid var(--accent-dim);background:transparent;color:var(--accent);cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.launch-go:hover{background:var(--accent);color:#000}
+/* ── Card additions: start button, sticky badge, next step ── */
+.launch-btn{display:flex;align-items:center;padding:3px 6px;border:1px solid transparent;background:transparent;color:var(--text-subtle);cursor:pointer;opacity:0;transition:opacity .15s,color .15s,border-color .15s;flex-shrink:0;line-height:1}
+.launch-btn i{font-size:13px}
+.task-card:hover .launch-btn{opacity:1}
+.launch-btn:hover{color:var(--accent);border-color:var(--accent-dim)}
+.launch-btn.live{opacity:1;color:var(--accent)}
+.sticky-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:var(--r-pill);font-size:11px;font-weight:500;white-space:nowrap;background:var(--today-bg);color:var(--today-text)}
+.sticky-badge i{font-size:11px}
+.task-next-step{font-size:12px;color:var(--accent);opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+/* ── Launch overlay ── */
+#launch-overlay{position:fixed;inset:0;background:var(--bg);z-index:220;display:none;align-items:center;justify-content:center;padding:16px}
+#launch-overlay.open{display:flex}
+#launch-panel{width:580px;max-width:100%;max-height:100%;overflow-y:auto}
+.launch-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.launch-kicker{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.launch-head-btns{display:flex;gap:6px}
+.launch-title{font-size:20px;font-weight:500;color:var(--text);line-height:1.35;margin-bottom:8px;word-break:break-word}
+.launch-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+.launch-history{font-size:11px;color:var(--text-muted);margin-bottom:6px}
+.launch-field{margin-top:18px}
+.launch-field label{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px}
+.launch-field input[type=text],.launch-field textarea{width:100%;padding:10px 12px;border:1px solid var(--border-mid);background:var(--input-bg);color:var(--text);font-family:inherit;font-size:14px;outline:none}
+.launch-field input[type=text]:focus,.launch-field textarea:focus{border-color:var(--accent-dim)}
+.launch-field textarea{min-height:80px;resize:vertical}
+.launch-hint{font-size:11px;color:var(--text-subtle);margin-top:6px}
+.launch-field label.launch-check{display:flex;align-items:center;gap:6px;font-size:12px;letter-spacing:0;text-transform:none;color:var(--text-muted);margin:8px 0 0;cursor:pointer}
+.launch-check input{accent-color:var(--accent);margin:0}
+.launch-boxes{display:flex;gap:0;border:1px solid var(--border-mid);width:fit-content}
+.launch-boxes button{padding:8px 16px;border:none;border-right:1px solid var(--border-mid);background:transparent;color:var(--text-dim);cursor:pointer;font-family:var(--font-mono);font-size:12px}
+.launch-boxes button:last-child{border-right:none}
+.launch-boxes button.active{background:var(--accent);color:#000}
+.launch-footer{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:24px;padding-top:16px;border-top:1px solid var(--border);flex-wrap:wrap}
+.launch-footer-right{display:flex;gap:8px;flex-wrap:wrap}
+.launch-start{padding:10px 26px;font-size:12px}
+.launch-step{font-size:17px;color:var(--text);line-height:1.45;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);display:flex;align-items:flex-start;gap:12px}
+.launch-step span{flex:1;word-break:break-word}
+.launch-step.empty{color:var(--text-muted);font-size:14px}
+.launch-plan{font-size:12px;color:var(--text-muted);margin-top:8px}
+.launch-plan b{color:var(--text-dim);font-weight:500}
+.launch-timer{margin-top:22px}
+.launch-track{height:10px;background:var(--surface);border:1px solid var(--border);overflow:hidden}
+.launch-fill{height:100%;background:var(--accent);transition:width 1s linear}
+.launch-fill.over{background:#4DC88A}
+.launch-clock{display:flex;justify-content:space-between;align-items:baseline;margin-top:8px}
+.launch-remaining{font-size:34px;font-weight:500;color:var(--text);font-variant-numeric:tabular-nums}
+.launch-remaining.over{color:#4DC88A}
+.launch-elapsed{font-size:12px;color:var(--text-muted)}
+.launch-timesup{margin-top:16px;padding:12px 14px;border:1px solid #2a4a36;background:#0D2E1A;color:#4DC88A;font-size:13px;line-height:1.5}
+.launch-small-btn{padding:4px 10px;border:1px solid var(--border-mid);background:transparent;color:var(--text-dim);cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.launch-small-btn:hover{color:var(--text);border-color:var(--accent-dim)}
+.btn-done{padding:8px 18px;border:none;background:#4DC88A;color:#000;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;font-family:inherit}
+.btn-done:hover{opacity:.85}
+#launch-pill{position:fixed;left:16px;bottom:16px;z-index:150;display:none;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--accent-dim);color:var(--text);font-size:12px;cursor:pointer;max-width:min(360px,calc(100vw - 32px))}
+#launch-pill.show{display:flex}
+#launch-pill i{color:var(--accent)}
+#launch-pill .pill-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)}
+#launch-pill .pill-time{font-variant-numeric:tabular-nums;font-weight:600}
+/* ── Completion burst ── */
+.burst{position:fixed;width:0;height:0;pointer-events:none;z-index:400}
+.burst i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;background:var(--c);animation:burst-fly var(--t,.7s) cubic-bezier(.15,.7,.3,1) forwards}
+.burst i.round{border-radius:50%}
+@keyframes burst-fly{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.3);opacity:0}}
+@media (prefers-reduced-motion: reduce){.burst{display:none}.ring.pop svg{animation:none}}
+.cl-action-launch{color:var(--accent);font-weight:600}
+@media (max-width:640px){.rings-streak{margin-left:0}.frog-panel,.fresh-banner{flex-wrap:wrap}.launch-remaining{font-size:28px}}
 /* Streak display in dashboard */
-.dash-streak-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px;margin-bottom:14px}
+.dash-streak-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px;margin-bottom:14px}
+.dash-section-label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin:4px 0 -6px}
 .dash-streak-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:14px 16px}
 .dash-streak-card.highlight{border-color:currentColor}
 .dash-streak-label{font-size:11px;color:var(--text-muted);font-weight:500;margin-bottom:4px}
@@ -1030,6 +1125,11 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 <!-- Full-size image viewer -->
 <div id="img-lightbox"><img alt=""></div>
 
+<!-- Launch — single-task start mode. Content is drawn by renderLaunch(). -->
+<div id="launch-overlay"><div id="launch-panel" role="dialog" aria-modal="true" aria-label="Launch"></div></div>
+<!-- Shown while a launch runs with the overlay hidden; click to bring it back -->
+<div id="launch-pill" role="button" tabindex="0" title="Back to the running session"></div>
+
 <!-- Toasts -->
 <div id="toast-container"></div>
 
@@ -1084,6 +1184,11 @@ CREATE TABLE IF NOT EXISTS changelog (
   entityId INTEGER,
   action TEXT DEFAULT '',
   description TEXT DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  id INTEGER PRIMARY KEY, taskId INTEGER, started TEXT DEFAULT '', ended TEXT DEFAULT '',
+  plannedMin INTEGER DEFAULT 5, outcome TEXT DEFAULT '', step TEXT DEFAULT '',
+  plan TEXT DEFAULT '', sticky INTEGER DEFAULT 0
 );`;
 
 // Changelog retention — streaks, heatmap and "all-time" stats are derived from
@@ -1136,6 +1241,10 @@ const S = {
   dashboardDays: 7,
   wikiPages: [],
   changelog: [],
+  sessions: [],          // Launch sessions — permanent, unlike the capped changelog
+  launch: null,          // the running Launch session, mirrored to localStorage
+  launchView: null,      // 'setup' | 'run' | 'park' while the overlay is drawn
+  launchSetup: null,     // draft fields while picking a step and a timebox
 };
 
 // ─────────────────────────────────────────────
@@ -1435,7 +1544,8 @@ function dbLoadAll() {
       created:o.created||new Date().toISOString(), notes:o.notes||'',
       projectId:o.projectId!=null?o.projectId:null,
       teamFlag:o.teamFlag===1, wikiPage:o.wikiPage||'', completedAt:o.completedAt||'',
-      snoozedUntil:o.snoozedUntil||'', snoozedFrom:o.snoozedFrom||'' };
+      snoozedUntil:o.snoozedUntil||'', snoozedFrom:o.snoozedFrom||'',
+      deferrals:toInt(o.deferrals, 0), nextStep:o.nextStep||'' };
   }) : [];
 
   const projRes = S.db.exec('SELECT * FROM projects ORDER BY id');
@@ -1488,10 +1598,20 @@ function dbLoadAll() {
     return { id:o.id, ts:o.ts||'', entityType:o.entityType||'', entityId:o.entityId??null, action:o.action||'', description:o.description||'' };
   }) : [];
 
+  const sesRes = S.db.exec('SELECT * FROM sessions ORDER BY id');
+  S.sessions = sesRes.length ? sesRes[0].values.map(row => {
+    const o = {}; sesRes[0].columns.forEach((c,i) => o[c]=row[i]);
+    return { id:o.id, taskId:o.taskId??null, started:o.started||'', ended:o.ended||'',
+      plannedMin:toInt(o.plannedMin, 5), outcome:o.outcome||'', step:o.step||'',
+      plan:o.plan||'', sticky:o.sticky===1 };
+  }) : [];
+
   // Backfill complete entries for tasks/subtasks that predate logging
   backfillCompletions();
   // Backfill task.completedAt from the changelog for tasks done before the column existed
   backfillCompletedAt();
+  // First open after tasks.deferrals was added: recount push-backs from the changelog
+  if (_deferralsAdded) backfillDeferrals();
 }
 
 function toInt(v, fallback) { const n = parseInt(v, 10); return isNaN(n) ? (fallback ?? 0) : n; }
@@ -1501,7 +1621,7 @@ function dbSaveAll() {
   S.db.run('BEGIN TRANSACTION');
   try {
     S.db.run('DELETE FROM tasks');
-    const tSt = S.db.prepare('INSERT INTO tasks (id,title,priority,category,due,recur,description,done,subtasks,aiRank,aiReason,created,notes,projectId,teamFlag,wikiPage,completedAt,snoozedUntil,snoozedFrom) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    const tSt = S.db.prepare('INSERT INTO tasks (id,title,priority,category,due,recur,description,done,subtasks,aiRank,aiReason,created,notes,projectId,teamFlag,wikiPage,completedAt,snoozedUntil,snoozedFrom,deferrals,nextStep) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const t of S.tasks) {
       tSt.run([
         toInt(t.id, 0),
@@ -1523,6 +1643,8 @@ function dbSaveAll() {
         String(t.completedAt || ''),
         String(t.snoozedUntil || ''),
         String(t.snoozedFrom || ''),
+        toInt(t.deferrals, 0),
+        String(t.nextStep || ''),
       ]);
     }
     tSt.free();
@@ -1594,11 +1716,28 @@ function dbSaveAll() {
     }
     clSt.free();
 
+    S.db.run('DELETE FROM sessions');
+    const seSt = S.db.prepare('INSERT INTO sessions (id,taskId,started,ended,plannedMin,outcome,step,plan,sticky) VALUES (?,?,?,?,?,?,?,?,?)');
+    for (const s of S.sessions) {
+      seSt.run([toInt(s.id,0), toIntOrNull(s.taskId), String(s.started||''), String(s.ended||''),
+        toInt(s.plannedMin,5), String(s.outcome||''), String(s.step||''), String(s.plan||''), s.sticky ? 1 : 0]);
+    }
+    seSt.free();
+
     S.db.run('COMMIT');
   } catch(e) { S.db.run('ROLLBACK'); console.error('dbSaveAll failed:',e); throw e; }
 }
 
+// Set by migrateDB() when this open is the one that adds tasks.deferrals, so
+// dbLoadAll() knows to recount it from history. Recounting is idempotent, so a
+// DB that's opened again before its first save just gets the same numbers.
+let _deferralsAdded = false;
+
 function migrateDB() {
+  try {
+    const cols = S.db.exec('PRAGMA table_info(tasks)')[0]?.values.map(r => r[1]) || [];
+    _deferralsAdded = !cols.includes('deferrals');
+  } catch(e) { _deferralsAdded = false; }
   // Add columns that were introduced after initial schema — safe to run on every open
   const migrations = [
     "ALTER TABLE tasks ADD COLUMN teamFlag INTEGER DEFAULT 0",
@@ -1608,6 +1747,8 @@ function migrateDB() {
     "ALTER TABLE projects ADD COLUMN noteList TEXT DEFAULT '[]'",
     "ALTER TABLE tasks ADD COLUMN snoozedUntil TEXT DEFAULT ''",
     "ALTER TABLE tasks ADD COLUMN snoozedFrom TEXT DEFAULT ''",
+    "ALTER TABLE tasks ADD COLUMN deferrals INTEGER DEFAULT 0",
+    "ALTER TABLE tasks ADD COLUMN nextStep TEXT DEFAULT ''",
     `CREATE TABLE IF NOT EXISTS changelog (id INTEGER PRIMARY KEY, ts TEXT DEFAULT '', entityType TEXT DEFAULT '', entityId INTEGER, action TEXT DEFAULT '', description TEXT DEFAULT '')`,
     // Billing module removed 2026-07 — drop leftover tables from older DBs
     "DROP TABLE IF EXISTS billing_jobs",
@@ -2435,6 +2576,7 @@ function renderDashboard(c) {
   });
   hdr.appendChild(rangeBtns);
   c.appendChild(hdr);
+  const fresh = mkFreshStartBanner(); if (fresh) c.appendChild(fresh);
 
   // ── row 1: score card + kpi grid ─────────────────────────────────────────
   const row1 = document.createElement('div');
@@ -2754,14 +2896,46 @@ function renderDashboard(c) {
 
   const streakPause = getStreakPause();
   const streakPauseActive = streakPause && today() >= streakPause.start && (!streakPause.end || today() <= streakPause.end);
+  const freezeStr = sData.freezes ? ` · ❄ ${sData.freezes} freeze${sData.freezes > 1 ? 's' : ''}` : '';
   const streakSub = streakPauseActive
     ? `⏸ paused${streakPause.end ? ` until ${streakPause.end}` : ''}`
-    : (sData.current > 0 ? streakTier.label : 'no completions recently');
+    : sData.current > 0 ? streakTier.label + freezeStr
+    : sData.best > 0 ? 'fresh start — today can be day 1'
+    : 'finish or launch something to start';
   const streakColor = streakPauseActive ? '#7C3AED' : (sData.current > 0 ? streakTier.color : 'var(--text-subtle)');
-  streakRow.appendChild(mkStreakCard('Current streak', sData.current > 0 ? `${sData.current}d` : '—', streakSub, streakColor));
+  const recentCard = mkStreakCard('Last 10 workdays', `${sData.recent.n}/${sData.recent.of}`, 'days you showed up', sData.recent.n >= 8 ? '#4DC88A' : sData.recent.n >= 5 ? 'var(--text)' : 'var(--text-muted)');
+  recentCard.title = 'The forgiving view — a missed day costs one, not the whole run';
+  const curCard = mkStreakCard('Current streak', sData.current > 0 ? `${sData.current}d` : '—', streakSub, streakColor);
+  curCard.title = `Workdays in a row with a completion or a Launch session. Every ${STREAK_FREEZE_EVERY} days banks a freeze (max ${STREAK_FREEZE_MAX}), which covers a missed day automatically.`;
+  streakRow.appendChild(curCard);
+  streakRow.appendChild(recentCard);
   streakRow.appendChild(mkStreakCard('Best streak', sData.best > 0 ? `${sData.best}d` : '—', 'longest run', 'var(--text)'));
   streakRow.appendChild(mkStreakCard('All-time completed', sData.allTime, `best day: ${sData.bestDay}`, 'var(--text)'));
   c.appendChild(streakRow);
+
+  // ── launch: starts, focus time, sticky tasks cleared, plan vs reality ─────
+  const sesInRange  = S.sessions.filter(x => localDate(new Date(x.started)) >= fromStr);
+  const focusSecs   = sesInRange.reduce((a, x) => a + sessionSecs(x), 0);
+  const stickyStart = sesInRange.filter(x => x.sticky).length;
+  const stickyDone  = S.tasks.filter(t => t.done && t.completedAt && localDate(new Date(t.completedAt)) >= fromStr && stickyInfo(t)).length;
+  const median = a => { if (!a.length) return null; const v = [...a].sort((x, y) => x - y), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m-1] + v[m]) / 2; };
+  const medPlan = median(sesInRange.map(x => x.plannedMin));
+  const medReal = median(sesInRange.map(x => sessionSecs(x) / 60));
+  const calibSub = medPlan == null ? 'no sessions yet'
+    : medReal >= medPlan * 1.5 ? 'once started, you keep going'
+    : medReal < medPlan * 0.6 ? 'stopping early — try a 5 min box'
+    : 'boxes are about right';
+  const launchLbl = document.createElement('div');
+  launchLbl.className = 'dash-section-label';
+  launchLbl.textContent = `Launch — last ${days}d`;
+  c.appendChild(launchLbl);
+  const launchRow = document.createElement('div');
+  launchRow.className = 'dash-streak-row';
+  launchRow.appendChild(mkStreakCard('Launches', sesInRange.length, sesInRange.length ? `${stickyStart} on sticky tasks` : 'press ▶ on any task', sesInRange.length ? 'var(--accent)' : 'var(--text-subtle)'));
+  launchRow.appendChild(mkStreakCard('Focus time', sesInRange.length ? fmtMins(focusSecs) : '—', sesInRange.length ? `avg ${fmtMins(focusSecs / sesInRange.length)} per session` : 'time inside Launch', 'var(--text)'));
+  launchRow.appendChild(mkStreakCard('Sticky cleared', stickyDone, 'pushed-back or long-stuck tasks finished', stickyDone ? '#4DC88A' : 'var(--text)'));
+  launchRow.appendChild(mkStreakCard('Planned → actual', medPlan == null ? '—' : `${Math.round(medPlan)}→${Math.round(medReal)}m`, calibSub, 'var(--text)'));
+  c.appendChild(launchRow);
 
   // ── activity heatmap (26 weeks) ───────────────────────────────────────────
   const hmCard = document.createElement('div');
@@ -2817,9 +2991,12 @@ function renderDashboard(c) {
       rect.setAttribute('x', x); rect.setAttribute('y', y);
       rect.setAttribute('width', CELL); rect.setAttribute('height', CELL);
       rect.setAttribute('rx', 2); rect.setAttribute('ry', 2);
+      const frozenDay = sData.frozen.has(dateStr);
       rect.setAttribute('fill', hmColor(count));
+      // A day a streak freeze covered: outlined, so it reads as "saved", not as activity
+      if (frozenDay) { rect.setAttribute('stroke', '#A78BFA'); rect.setAttribute('stroke-width', '1.5'); rect.setAttribute('stroke-dasharray', '2 2'); }
       const ttl = document.createElementNS(svgNS, 'title');
-      ttl.textContent = `${dateStr}: ${count} completed`;
+      ttl.textContent = `${dateStr}: ${count} completed${frozenDay ? ' · streak freeze used' : ''}`;
       rect.appendChild(ttl);
       hmSvg.appendChild(rect);
 
@@ -2852,26 +3029,6 @@ function renderDashboard(c) {
   c.appendChild(hmCard);
 }
 
-// Daily goal progress bar. Shared by Focus and every screen that lists tasks:
-// completing a task re-renders the view, so the count and streak stay live
-// wherever the checkbox actually is.
-function mkDailyGoalBar() {
-  const streak = calcStreak();
-  const target = getDailyTarget();
-  const pct    = Math.min(100, Math.round(streak.todayCount / target * 100));
-  const hit    = streak.todayCount >= target;
-  const goalBar = document.createElement('div');
-  goalBar.className = 'daily-goal-bar';
-  const barColor = hit ? '#4DC88A' : pct >= 60 ? '#7090c8' : pct >= 30 ? '#c8a537' : 'var(--border)';
-  goalBar.innerHTML = `
-    <span class="daily-goal-label">Today</span>
-    <div class="daily-goal-track"><div class="daily-goal-fill" style="width:${pct}%;background:${barColor}"></div></div>
-    <span class="daily-goal-count">${streak.todayCount}<span style="font-weight:400;color:var(--text-muted)">/${target}</span></span>
-    ${hit ? `<span class="daily-goal-hit">Goal met</span>` : ''}
-    ${streak.current > 1 ? `<span class="daily-goal-label" style="padding-left:8px;border-left:1px solid var(--border)">${streak.current}d streak</span>` : ''}`;
-  return goalBar;
-}
-
 function renderFocus(c) {
   c.innerHTML='';
   let tasks=[...S.tasks.filter(t=>!t.done||S.pendingDone.has(t.id))];
@@ -2883,6 +3040,8 @@ function renderFocus(c) {
   hdr.querySelector('#whats-next-btn').onclick=askNextAction;
 
   c.appendChild(mkDailyGoalBar());
+  const fresh=mkFreshStartBanner(); if (fresh) c.appendChild(fresh);
+  const frog=mkFrogPanel(); if (frog) c.appendChild(frog);
 
   // AI next-action banner (persistent until dismissed)
   const banner=document.createElement('div'); banner.id='next-action-banner';
@@ -3632,6 +3791,26 @@ async function renderSettings(c) {
     showToast(`Daily goal set to ${v}`);
   };
   genSec.appendChild(goalRow);
+
+  // Launch / momentum preferences — all on by default; off means off, no nagging
+  const mkPrefRow = (key, label, hint) => {
+    const row = document.createElement('div');
+    row.className = 'settings-row';
+    row.innerHTML = `<div><div style="font-size:13px">${label}</div><label>${hint}</label></div>
+      <input type="checkbox" ${prefOn(key) ? 'checked' : ''} style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer">`;
+    row.querySelector('input').onchange = e => { localStorage.setItem(key, e.target.checked ? 'on' : 'off'); };
+    return row;
+  };
+  genSec.appendChild(mkPrefRow('focal_celebrate', 'Celebrations', 'Burst on completion, ring and sticky-task cheers'));
+  genSec.appendChild(mkPrefRow('focal_launch_chime', 'Launch timer chime', 'Two soft notes when a Launch timebox runs out'));
+  genSec.appendChild(mkPrefRow('focal_followup_prompt', 'Offer follow-ups', 'After finishing a task that sends, submits or requests something'));
+  const fuRow = document.createElement('div');
+  fuRow.className = 'settings-row';
+  fuRow.innerHTML = `<div><div style="font-size:13px">Always offer follow-ups for</div><label>Categories, comma-separated — on top of the send/submit/request keywords</label></div>
+    <input type="text" id="followup-cats-input" placeholder="e.g. Billing, Clients" value="${esc(localStorage.getItem('focal_followup_cats') || '')}"
+      style="width:200px;font-size:12px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
+  fuRow.querySelector('input').onchange = e => { localStorage.setItem('focal_followup_cats', e.target.value.trim()); showToast('Follow-up categories saved'); };
+  genSec.appendChild(fuRow);
 
   // AI timeout setting
   const timeoutRow = document.createElement('div');
@@ -4752,6 +4931,8 @@ function mkCard(task, showReason) {
   const tw=document.createElement('div'); tw.className='task-title-wrap';
   tw.innerHTML=`<div class="task-title">${esc(task.title)}</div>`;
   if (showReason && task.aiReason) tw.innerHTML+=`<div class="task-ai-reason">${esc(task.aiReason)}</div>`;
+  // Where the last Launch session said to pick up — the resume cue
+  if (!task.done && task.nextStep) tw.innerHTML+=`<div class="task-next-step" title="Next step, from your last Launch session">→ ${esc(task.nextStep)}</div>`;
 
   const meta=document.createElement('div'); meta.className='task-meta';
   if (newAge!=null) meta.innerHTML+=`<span class="new-badge">New</span>`;
@@ -4760,6 +4941,8 @@ function mkCard(task, showReason) {
     meta.innerHTML+=`<span class="recur-icon" title="${rl}"><i class="ti ti-repeat"></i></span>`;
   }
   if (totSubs) meta.innerHTML+=`<span class="subtask-count">${doneSubs}/${totSubs}</span>`;
+  const sticky=!task.done && stickyInfo(task);
+  if (sticky) meta.innerHTML+=`<span class="sticky-badge" title="Sticky — ${esc(sticky.why)}. Five minutes on it is enough to break it loose."><i class="ti ti-anchor"></i>${esc(sticky.short)}</span>`;
   if (isSnoozed(task)) meta.innerHTML+=`<span class="snoozed-icon" title="Snoozed${task.snoozedFrom?' — originally due '+esc(fmtSnoozeDate(task.snoozedFrom)):''}"><i class="ti ti-zzz"></i></span>`;
   const pd=document.createElement('span'); pd.className='priority-dot'; pd.style.background=pColor(task.priority); pd.title='P'+task.priority;
   meta.appendChild(pd);
@@ -4780,7 +4963,17 @@ function mkCard(task, showReason) {
   tfBtn.innerHTML = '<i class="ti ti-users"></i>';
   tfBtn.onclick = e => { e.stopPropagation(); toggleTeamFlag(task.id); };
 
-  main.appendChild(cb); main.appendChild(tw); main.appendChild(meta); main.appendChild(tfBtn);
+  main.appendChild(cb); main.appendChild(tw); main.appendChild(meta);
+  if (!task.done) {
+    const live = S.launch && S.launch.taskId===task.id;
+    const lb=document.createElement('button');
+    lb.className='launch-btn'+(live?' live':'');
+    lb.title=live?'Launch session running — open it':'Start — just five minutes';
+    lb.innerHTML='<i class="ti ti-player-play"></i>';
+    lb.onclick=e=>{ e.stopPropagation(); openLaunch(task.id); };
+    main.appendChild(lb);
+  }
+  main.appendChild(tfBtn);
   main.onclick=()=>{ S.expandedId=isOpen?null:task.id; renderContent(); };
   card.appendChild(main);
 
@@ -4831,9 +5024,28 @@ function mkCard(task, showReason) {
   delBtn.innerHTML='<i class="ti ti-trash"></i>Delete';
   delBtn.onclick=e=>{ e.stopPropagation(); deleteTask(task.id); };
 
+  const startBtn=document.createElement('button'); startBtn.className='action-btn';
+  startBtn.innerHTML='<i class="ti ti-player-play"></i>Start';
+  startBtn.title='Launch: one tiny first step and a short timebox';
+  startBtn.onclick=e=>{ e.stopPropagation(); openLaunch(task.id); };
+
+  // Follow up → the browser's date picker → a linked "Follow up:" task on that day
+  const fuWrap=document.createElement('div'); fuWrap.className='snooze-wrapper';
+  const fuBtn=document.createElement('button'); fuBtn.className='action-btn';
+  fuBtn.innerHTML='<i class="ti ti-arrow-forward-up"></i>Follow up';
+  fuBtn.title='Create a linked follow-up task for a date';
+  const fuDate=document.createElement('input'); fuDate.type='date'; fuDate.className='snooze-date snooze-hidden'; fuDate.tabIndex=-1;
+  fuDate.min=addDays(today(),1);
+  fuDate.onclick=e=>e.stopPropagation();
+  fuDate.onchange=()=>{ if (fuDate.value && fuDate.value>=fuDate.min) createFollowUp(task, fuDate.value); };
+  fuBtn.onclick=e=>{ e.stopPropagation(); try { fuDate.showPicker(); } catch(_) { fuDate.focus(); fuDate.click(); } };
+  fuWrap.appendChild(fuBtn); fuWrap.appendChild(fuDate);
+
+  if (!task.done) acts.appendChild(startBtn);
   acts.appendChild(editBtn);
   acts.appendChild(copyBtn);
   if (!task.done) acts.appendChild(snWrap);
+  acts.appendChild(fuWrap);
   acts.appendChild(delBtn);
   inner.appendChild(acts);
 
@@ -4922,83 +5134,677 @@ function getStreakPause() {
   return { start, end: localStorage.getItem('focal_streak_pause_end') || null };
 }
 
-// True if dateStr (YYYY-MM-DD) falls within the current pause window
-function isStreakPausedDay(dateStr) {
-  const p = getStreakPause();
-  if (!p) return false;
-  if (dateStr < p.start) return false;
-  if (p.end && dateStr > p.end) return false;
-  return true;
-}
+// Streak freezes are earned, never bought: every STREAK_FREEZE_EVERY counted workdays
+// banks one (up to STREAK_FREEZE_MAX), and a missed workday spends one instead of
+// resetting the run. A reset-to-zero is the moment people quit (the "what-the-hell"
+// effect), so one bad day shouldn't cost a long run.
+const STREAK_FREEZE_EVERY = 5;
+const STREAK_FREEZE_MAX   = 2;
 
+// Everything is derived from history on each call (completions + Launch sessions +
+// pause window), so freezes need no stored state and the numbers can't drift.
 function calcStreak() {
-  const completionDays = new Set(
-    S.changelog
-      .filter(e => e.action === 'complete' && !e.description.includes('Subtask'))
-      .map(e => localDate(new Date(e.ts)))
-  );
-  const todayStr = localDate();
-
-  const isWeekend = d => { const w = d.getDay(); return w === 0 || w === 6; };
-  // A day "counts" if it has completions OR is a paused day (vacation/sick)
-  const dayOk = s => completionDays.has(s) || isStreakPausedDay(s);
-
-  // Day counts for stats
+  const isTaskComplete = e => e.action === 'complete' && !e.description.includes('Subtask');
   const dayCounts = {};
-  S.changelog.filter(e => e.action === 'complete' && !e.description.includes('Subtask'))
+  S.changelog.filter(isTaskComplete)
     .forEach(e => { const k = localDate(new Date(e.ts)); dayCounts[k] = (dayCounts[k]||0) + 1; });
-  const bestDay  = Math.max(0, ...Object.values(dayCounts));
+  // Starting counts as showing up: a Launch session keeps the streak alive on its own
+  const launchDays = new Set((S.sessions||[]).map(x => localDate(new Date(x.started))));
+  const todayStr   = localDate();
+  const bestDay    = Math.max(0, ...Object.values(dayCounts));
   const todayCount = dayCounts[todayStr] || 0;
-  const allTime  = S.changelog.filter(e => e.action === 'complete' && !e.description.includes('Subtask')).length;
+  const allTime    = Object.values(dayCounts).reduce((a, n) => a + n, 0);
 
-  // Current streak: walk backwards through calendar, skipping weekends.
-  // Paused days count the same as days with completions.
-  // If today is a weekday with no completions (and not paused), skip it (still working).
-  let current = 0;
-  const ptr = new Date();
-  if (!isWeekend(ptr) && !dayOk(todayStr)) {
-    ptr.setDate(ptr.getDate() - 1);
-  }
-  while (true) {
-    if (isWeekend(ptr)) { ptr.setDate(ptr.getDate() - 1); continue; }
-    const s = localDate(ptr);
-    if (dayOk(s)) { current++; ptr.setDate(ptr.getDate() - 1); }
-    else break;
-  }
-
-  // Best streak: same logic, paused days count
-  let best = current;
-  const allDays = new Set([...completionDays]);
-  // Add paused weekdays to the set for best-streak calculation
   const pause = getStreakPause();
-  if (pause) {
-    const p = new Date(pause.start + 'T12:00:00');
-    const pEnd = pause.end ? new Date(pause.end + 'T12:00:00') : new Date();
-    while (p <= pEnd) {
-      if (!isWeekend(p)) allDays.add(localDate(p));
-      p.setDate(p.getDate() + 1);
-    }
-  }
-  const sorted = [...allDays].sort();
-  if (sorted.length > 0) {
-    const p = new Date(sorted[0] + 'T12:00:00');
-    const end = new Date();
-    let run = 0;
-    while (p <= end) {
-      if (!isWeekend(p)) {
-        const s = localDate(p);
-        if (allDays.has(s)) { run++; best = Math.max(best, run); }
-        else { run = 0; }
+  const paused = s => !!pause && s >= pause.start && (!pause.end || s <= pause.end);
+  const isWeekend = s => { const w = new Date(s + 'T12:00:00').getDay(); return w === 0 || w === 6; };
+  const dayOk = s => !!dayCounts[s] || launchDays.has(s) || paused(s);
+
+  // Walk every workday from the first active one to today, oldest first. Today
+  // never breaks anything — it isn't over yet.
+  let run = 0, best = 0, freezes = 0;
+  const frozen = new Set(), counted = new Set();
+  const first = [...Object.keys(dayCounts), ...launchDays].sort()[0];
+  if (first) {
+    for (let d = first; d <= todayStr; d = addDays(d, 1)) {
+      if (isWeekend(d)) continue;
+      if (dayOk(d)) {
+        counted.add(d); run++; best = Math.max(best, run);
+        if (run % STREAK_FREEZE_EVERY === 0) freezes = Math.min(STREAK_FREEZE_MAX, freezes + 1);
+      } else if (d === todayStr) {
+        // still in play
+      } else if (freezes > 0) {
+        freezes--; frozen.add(d);
+      } else {
+        run = 0;
       }
-      p.setDate(p.getDate() + 1);
     }
   }
 
-  return { current, best, bestDay, allTime, todayCount };
+  // The forgiving view: of the last 10 finished workdays (plus today once it
+  // counts), how many showed up. Frozen days don't count as shown-up here.
+  const last10 = [];
+  for (let d = todayStr; last10.length < 10; d = addDays(d, -1)) {
+    if (isWeekend(d)) continue;
+    if (d === todayStr && !dayOk(d)) continue;
+    last10.push(d);
+    if (first && d < first) break;
+  }
+  const recent = { n: last10.filter(d => counted.has(d)).length, of: last10.length };
+
+  return { current: run, best, bestDay, allTime, todayCount, freezes, frozen, recent,
+           todayOk: dayOk(todayStr), lapsed: run === 0 && best > 0 };
 }
 
 function getDailyTarget() {
   return parseInt(localStorage.getItem('focal_daily_target') || '5', 10);
+}
+
+// ─────────────────────────────────────────────
+// LAUNCH — start mode, sticky tasks, rings, fresh starts, follow-ups, celebrations
+// Built on what reliably helps people start things they're avoiding (ADHD especially):
+// shrink the first step, make time visible, reward *starting* and not only finishing,
+// reward immediately, aim the reward at the hard tasks rather than the count, and
+// never punish a lapse. No AI here — every piece works offline.
+// ─────────────────────────────────────────────
+
+function prefOn(key) { return localStorage.getItem(key) !== 'off'; }
+const celebrationsOn = () => prefOn('focal_celebrate');
+const chimeOn        = () => prefOn('focal_launch_chime');
+
+function dayDiff(a, b) {
+  return Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 86400000);
+}
+
+// A push-back: the due date moved later, or was cleared. Moving it earlier isn't one.
+function isDeferral(oldDue, newDue) {
+  return !!oldDue && (!newDue || newDue > oldDue);
+}
+
+// Recount tasks.deferrals from the changelog — snoozes, and due edits that moved
+// later. The changelog is capped, so the oldest push-backs may be gone: this is a
+// floor, not an exact count. Sets rather than adds, so re-running is harmless.
+function backfillDeferrals() {
+  const n = new Map();
+  for (const e of S.changelog) {
+    if (e.entityType !== 'task' || e.action !== 'update' || e.entityId == null) continue;
+    let k = / — Snoozed until \d{4}-\d{2}-\d{2}/.test(e.description) ? 1 : 0;
+    const m = e.description.match(/Due: "([^"]*)" → "([^"]*)"/);
+    if (m && isDeferral(m[1] === '(none)' ? '' : m[1], m[2] === '(none)' ? '' : m[2])) k++;
+    if (k) n.set(e.entityId, (n.get(e.entityId) || 0) + k);
+  }
+  for (const t of S.tasks) t.deferrals = n.get(t.id) || 0;
+}
+
+// ── Sticky tasks ────────────────────────────────────────────────────────────
+// The ones that keep sliding. Volume isn't usually the problem — the same few
+// tasks rotting while easy ones get done is. These get surfaced, not buried.
+const STICKY_PUSHES  = 2;   // pushed back this many times,
+const STICKY_OVERDUE = 3;   // or this many days past due,
+const STICKY_AGE     = 21;  // or open this long with no due date at all
+
+// {short, why} if the task is sticky, else null. A done task is judged as of its
+// completion day, so "you cleared a sticky one" stays true after the fact.
+function stickyInfo(t) {
+  const day = t.done ? (t.completedAt ? localDate(new Date(t.completedAt)) : null) : today();
+  if (!day) return null;
+  const pushes = t.deferrals || 0;
+  if (pushes >= STICKY_PUSHES) return { short: `×${pushes}`, why: `pushed back ${pushes} times` };
+  if (t.due) {
+    const n = dayDiff(t.due, day);
+    if (n >= STICKY_OVERDUE) return { short: `${n}d`, why: `${n} days overdue` };
+  } else if (t.created) {
+    const n = dayDiff(localDate(new Date(t.created)), day);
+    if (n >= STICKY_AGE) return { short: `${n}d`, why: `open ${n} days` };
+  }
+  return null;
+}
+
+// "Not today" on the Focus panel skips a task for the rest of the day only
+const FROG_SKIP_KEY = 'focal_frog_skip';
+function frogSkips() {
+  try { const o = JSON.parse(localStorage.getItem(FROG_SKIP_KEY) || 'null'); return o && o.day === today() ? o.ids : []; }
+  catch(e) { return []; }
+}
+function skipFrog(id) {
+  localStorage.setItem(FROG_SKIP_KEY, JSON.stringify({ day: today(), ids: [...frogSkips(), id] }));
+}
+
+// The stickiest open task — the one Focus offers five minutes on
+function pickFrog() {
+  const skip = new Set(frogSkips()), day = today();
+  let best = null, bestScore = -Infinity;
+  for (const t of S.tasks) {
+    if (t.done || isSnoozed(t) || skip.has(t.id) || !stickyInfo(t)) continue;
+    const overdue = t.due && t.due < day ? dayDiff(t.due, day) : 0;
+    const age = t.created ? dayDiff(localDate(new Date(t.created)), day) : 0;
+    const score = (t.deferrals || 0) * 4 + overdue + age / 7 + (5 - (t.priority || 3)) * 2;
+    if (score > bestScore) { best = t; bestScore = score; }
+  }
+  return best;
+}
+
+// ── Rings ───────────────────────────────────────────────────────────────────
+// Three daily rings instead of one completion count. Launch rewards starting, On
+// time rewards the deadline, Clear is the old daily goal — the warm-up. A count
+// alone is always met by the quick tasks, which is exactly the wrong thing to pay.
+const RING_COLORS = { launch: '#c8a537', ontime: '#7090c8', clear: '#4DC88A' };
+
+function ringState() {
+  const day = today();
+  const doneToday = t => t.done && t.completedAt && localDate(new Date(t.completedAt)) === day;
+  const streak   = calcStreak();
+  const launches = S.sessions.filter(x => localDate(new Date(x.started)) === day).length;
+  const frogs    = S.tasks.filter(t => doneToday(t) && stickyInfo(t)).length;
+  const dueToday = S.tasks.filter(t => t.due === day && (!t.done || doneToday(t)));
+  const target   = getDailyTarget();
+  return {
+    streak,
+    overdue: S.tasks.filter(t => !t.done && t.due && t.due < day).length,
+    rings: [
+      { key: 'launch', label: 'Launch', n: launches + frogs, of: 1,
+        tip: 'Start one thing with Launch (▶ on any task), or finish a sticky one. Starting is the win.' },
+      { key: 'ontime', label: 'On time', n: dueToday.filter(t => t.done).length, of: dueToday.length,
+        tip: 'Everything due today, done today.' },
+      { key: 'clear',  label: 'Clear', n: streak.todayCount, of: target,
+        tip: `Daily goal: ${target} tasks (change it in Settings).` },
+    ],
+  };
+}
+const ringClosed = r => r.of > 0 && r.n >= r.of;
+
+// Shared by Focus and every screen that lists tasks — completing re-renders the
+// view, so the rings stay live wherever the checkbox actually is.
+let _ringPop = new Set();
+function mkDailyGoalBar() {
+  const st = ringState();
+  const bar = document.createElement('div'); bar.className = 'rings-bar';
+  const R = 12, C = 2 * Math.PI * R;
+  for (const r of st.rings) {
+    const none = r.of === 0;
+    const pct  = none ? 1 : Math.min(1, r.n / r.of);
+    const el = document.createElement('div');
+    el.className = 'ring' + (ringClosed(r) ? ' closed' : '') + (_ringPop.has(r.key) ? ' pop' : '');
+    el.title = r.tip;
+    el.innerHTML = `<svg width="30" height="30" viewBox="0 0 30 30"><circle class="ring-track" cx="15" cy="15" r="${R}" fill="none" stroke-width="4"/>`
+      + `<circle class="ring-fill" cx="15" cy="15" r="${R}" fill="none" stroke="${none ? 'var(--border-mid)' : RING_COLORS[r.key]}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C * (1 - pct)).toFixed(2)}"${pct === 0 ? ' opacity="0"' : ''}/></svg>`
+      + `<div class="ring-text"><span class="ring-label">${r.label}</span><span class="ring-count">${none ? '<span>nothing due</span>' : `${r.n}<span>/${r.of}</span>`}</span></div>`;
+    bar.appendChild(el);
+  }
+  const s = st.streak, bits = [];
+  if (st.overdue) bits.push(`<span class="rings-overdue" title="Open tasks past their due date">${st.overdue} overdue</span>`);
+  if (s.current > 1) {
+    const fz = s.freezes ? ` · ${s.freezes} freeze${s.freezes > 1 ? 's' : ''} banked` : '';
+    bits.push(`<span title="Workdays in a row you finished or launched something${fz}"><i class="ti ti-flame" style="color:var(--accent)"></i> ${s.current}d${s.freezes ? ` <i class="ti ti-snowflake" style="color:#7090c8"></i>${s.freezes}` : ''}</span>`);
+  } else if (s.lapsed && !s.todayOk) {
+    bits.push(`<span title="The streak reset — today can be day 1">fresh start</span>`);
+  }
+  const side = document.createElement('div'); side.className = 'rings-streak'; side.innerHTML = bits.join('');
+  bar.appendChild(side);
+  return bar;
+}
+
+// Cheer a ring the moment it closes, once per ring per day. The first call after
+// load only records what's already closed, so a refresh doesn't re-cheer.
+let _ringsSeen = null;
+function checkRingCloses() {
+  const st = ringState(), day = today();
+  const closed = st.rings.filter(ringClosed).map(r => r.key);
+  if (!_ringsSeen) { _ringsSeen = { day, keys: new Set(closed) }; return; }
+  if (_ringsSeen.day !== day) _ringsSeen = { day, keys: new Set() };
+  const newly = closed.filter(k => !_ringsSeen.keys.has(k));
+  if (!newly.length) return;
+  newly.forEach(k => _ringsSeen.keys.add(k));
+  _ringPop = new Set(newly);
+  setTimeout(() => { _ringPop = new Set(); }, 1200);
+  if (!celebrationsOn()) return;
+  const msg = { launch: 'Launch ring closed — you started something.',
+                ontime: 'On-time ring closed — everything due today is done.',
+                clear:  'Clear ring closed — daily goal met.' };
+  if (closed.length === 3) showToast('All three rings closed. That’s a full day.');
+  else newly.forEach(k => showToast(msg[k]));
+}
+
+// ── Fresh starts ────────────────────────────────────────────────────────────
+// People restart most readily at temporal landmarks — a new week, a new month,
+// or right after a lapse — so those days open on a clean-slate banner.
+const FRESH_KEY = 'focal_fresh_dismissed';
+function freshStart() {
+  const day = today(), w = new Date(day + 'T12:00:00').getDay();
+  if (w === 0 || w === 6 || localStorage.getItem(FRESH_KEY) === day) return null;
+  const som = startOfMonth(day);
+  if (skipWeekend(som) === day) {
+    const lastSom = startOfMonth(addDays(som, -1));
+    return { title: 'New month — clean slate.', span: 'Last month', from: lastSom, to: addDays(som, -1), unit: 'month' };
+  }
+  if (w === 1) return { title: 'New week — clean slate.', span: 'Last week', from: addDays(day, -7), to: addDays(day, -1), unit: 'week' };
+  const s = calcStreak();
+  if (s.lapsed && !s.todayOk) return { title: 'Fresh start — today can be day 1.', span: 'Last 7 days', from: addDays(day, -7), to: addDays(day, -1), unit: 'day' };
+  return null;
+}
+
+function mkFreshStartBanner() {
+  const f = freshStart(); if (!f) return null;
+  const ft = followThrough(ftContext(), f.to, dayDiff(f.from, f.to) + 1);
+  const summary = `${f.span}: ${ft.completed} done${ft.dated ? `, ${Math.round(ft.onTime / ft.dated * 100)}% on time` : ''}.`;
+  const frog = pickFrog();
+  const el = document.createElement('div'); el.className = 'fresh-banner';
+  el.innerHTML = `<i class="ti ti-sunrise"></i><div class="fresh-body"><div class="fresh-title">Fresh start</div>`
+    + `<div class="fresh-text">${f.title}</div><div class="fresh-sub">${summary} Whatever happened, this ${f.unit} starts at zero.${frog ? ' Pick one stuck task and give it five minutes.' : ''}</div></div>`
+    + `<div class="fresh-actions">${frog ? `<button class="launch-go" title="${esc(frog.title)}"><i class="ti ti-player-play"></i>5 min on it</button>` : ''}<button class="banner-x" title="Dismiss for today">&times;</button></div>`;
+  if (frog) el.querySelector('.launch-go').onclick = () => openLaunch(frog.id);
+  el.querySelector('.banner-x').onclick = () => { localStorage.setItem(FRESH_KEY, today()); el.remove(); };
+  return el;
+}
+
+// Focus view: the running session if there is one, else the stickiest task
+function mkFrogPanel() {
+  const el = document.createElement('div'); el.className = 'frog-panel';
+  if (S.launch) {
+    const t = S.tasks.find(x => x.id === S.launch.taskId);
+    el.innerHTML = `<i class="ti ti-player-play"></i><div class="frog-body"><div class="frog-kicker">Launch running</div><div class="frog-title">${esc(t?.title || '')}</div></div>`
+      + `<div class="frog-actions"><button class="launch-go">Open</button></div>`;
+    el.querySelector('.launch-go').onclick = () => { S.launchView = 'run'; showLaunch(); };
+    return el;
+  }
+  const t = pickFrog(); if (!t) return null;
+  const info = stickyInfo(t);
+  el.innerHTML = `<i class="ti ti-anchor"></i><div class="frog-body"><div class="frog-kicker">Stuck on this one?</div>`
+    + `<div class="frog-title">${esc(t.title)}</div><div class="frog-why">${esc(info.why)}${t.category ? ' · ' + esc(t.category) : ''} — five minutes is enough to break it loose.</div></div>`
+    + `<div class="frog-actions"><button class="launch-go"><i class="ti ti-player-play"></i>Start 5 min</button><button class="launch-small-btn" title="Skip it for today">Not today</button></div>`;
+  el.querySelector('.launch-go').onclick = () => openLaunch(t.id);
+  el.querySelector('.launch-small-btn').onclick = () => { skipFrog(t.id); renderContent(); };
+  return el;
+}
+
+// ── Launch (start mode) ─────────────────────────────────────────────────────
+// One task, one tiny first step, a short visible timebox. Starting is the part
+// that's hard, so a session counts toward the streak and the Launch ring whether
+// or not the task gets finished. The running session lives in S.launch and is
+// mirrored to localStorage so a reload doesn't lose the clock.
+const LAUNCH_KEY     = 'focal_launch_active';
+const LAUNCH_MIN_SEC = 60;            // shorter than this and a park isn't logged — a misclick isn't a start
+const LAUNCH_BOXES   = [5, 15, 25, 45];
+const BASE_TITLE     = document.title;
+let _launchTick = null;
+
+function sessionSecs(s) { return Math.max(0, (new Date(s.ended || Date.now()) - new Date(s.started)) / 1000); }
+function fmtClock(sec) {
+  const a = Math.floor(Math.abs(sec)), h = Math.floor(a / 3600), m = Math.floor(a / 60) % 60, s = a % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+}
+function fmtMins(sec) {
+  const m = Math.max(1, Math.round(sec / 60));
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+function nextSubId(t) { return (t.subtasks || []).reduce((mx, s) => Math.max(mx, s.id || 0), 0) + 1; }
+function saveLaunchLocal()  { localStorage.setItem(LAUNCH_KEY, JSON.stringify(S.launch)); }
+function clearLaunchLocal() { localStorage.removeItem(LAUNCH_KEY); }
+
+function openLaunch(taskId) {
+  if (S.launch) {
+    if (S.launch.taskId !== taskId) showToast('A session is already running — finish or park it first');
+    S.launchView = 'run'; showLaunch(); return;
+  }
+  const t = S.tasks.find(x => x.id === taskId); if (!t || t.done) return;
+  // Prefill the step: where the last session said to resume, else the first open subtask
+  const openSub = (t.subtasks || []).find(s => !s.done);
+  const step = t.nextStep || (openSub ? openSub.title : '');
+  const sub  = (t.subtasks || []).find(s => !s.done && s.title === step);
+  const prev = [...S.sessions].reverse().find(s => s.taskId === taskId);
+  S.launchSetup = { taskId, step, subId: sub ? sub.id : null, plan: prev?.plan || '', minutes: 5, addSub: true };
+  S.launchView = 'setup'; showLaunch();
+}
+
+function showLaunch() {
+  document.getElementById('launch-overlay').classList.add('open');
+  renderLaunch(); updateLaunchPill();
+}
+
+// Setup: close. Running: hide — the clock keeps going and the pill brings it back.
+function hideLaunch() {
+  document.getElementById('launch-overlay').classList.remove('open');
+  S.launchView = null;
+  if (!S.launch) S.launchSetup = null;
+  updateLaunchPill();
+}
+
+function renderLaunch() {
+  const panel = document.getElementById('launch-panel');
+  const v = S.launchView;
+  const t = S.tasks.find(x => x.id === (v === 'setup' ? S.launchSetup?.taskId : S.launch?.taskId));
+  if (!t) { if (S.launch) endLaunch('parked'); else hideLaunch(); return; }
+
+  const info = !t.done && stickyInfo(t);
+  const hist = S.sessions.filter(s => s.taskId === t.id);
+  const head = (kicker, btns) => `<div class="launch-head"><span class="launch-kicker">${kicker}</span><div class="launch-head-btns">${btns}</div></div>`
+    + `<div class="launch-title">${esc(t.title)}</div><div class="launch-meta">`
+    + (t.category ? `<span class="cat-pill" style="background:${catColor(t.category)}">${esc(t.category)}</span>` : '')
+    + (t.due ? `<span class="due-badge due-${dueStatus(t.due) || 'future'}">${formatDue(t.due)}</span>` : '')
+    + (info ? `<span class="sticky-badge"><i class="ti ti-anchor"></i>${esc(info.why)}</span>` : '')
+    + `</div>` + (hist.length ? `<div class="launch-history">${hist.length} earlier session${hist.length > 1 ? 's' : ''} · ${fmtMins(hist.reduce((a, s) => a + sessionSecs(s), 0))} total</div>` : '');
+
+  if (v === 'setup') {
+    const d = S.launchSetup;
+    panel.innerHTML = head('Launch', `<button class="launch-small-btn" data-act="close">Close</button>`)
+      + `<div class="launch-field"><label for="launch-step">First tiny step</label>`
+      + `<input type="text" id="launch-step" maxlength="200" placeholder="The very first physical action — e.g. open the file" value="${esc(d.step)}">`
+      + `<label class="launch-check"${d.subId != null ? ' style="display:none"' : ''}><input type="checkbox" id="launch-addsub"${d.addSub ? ' checked' : ''}>Add it as a subtask</label>`
+      + `<div class="launch-hint">Make it small enough to feel almost silly. This is the only part you have to do.</div></div>`
+      + `<div class="launch-field"><label for="launch-plan">If I get stuck or distracted, I’ll… <span style="text-transform:none;letter-spacing:0;color:var(--text-subtle)">(optional)</span></label>`
+      + `<input type="text" id="launch-plan" maxlength="200" placeholder="e.g. write down what’s blocking me and do the next smallest thing" value="${esc(d.plan)}"></div>`
+      + `<div class="launch-field"><label>Timebox</label><div class="launch-boxes">`
+      + LAUNCH_BOXES.map(m => `<button data-min="${m}"${m === d.minutes ? ' class="active"' : ''}>${m} min</button>`).join('')
+      + `</div><div class="launch-hint">${d.minutes === 5 ? 'Just five minutes. You can stop after that — or keep going.' : 'When it runs out you can stop, extend, or keep going.'}</div></div>`
+      + `<div class="launch-footer"><span class="launch-hint" style="margin:0">Enter to start · Esc to close</span><div class="launch-footer-right">`
+      + `<button class="btn-cancel" data-act="close">Cancel</button><button class="btn-primary launch-start" data-act="start"><i class="ti ti-player-play"></i> Start</button></div></div>`;
+    const stepIn = panel.querySelector('#launch-step'), planIn = panel.querySelector('#launch-plan');
+    stepIn.oninput = () => {
+      d.step = stepIn.value;
+      // Typed away from the subtask it was prefilled from — it's a new step now
+      if (d.subId != null && (t.subtasks || []).find(s => s.id === d.subId)?.title !== stepIn.value.trim()) {
+        d.subId = null; panel.querySelector('.launch-check').style.display = '';
+      }
+    };
+    planIn.oninput = () => { d.plan = planIn.value; };
+    panel.querySelector('#launch-addsub').onchange = e => { d.addSub = e.target.checked; };
+    panel.querySelectorAll('.launch-boxes button').forEach(b => b.onclick = () => { d.minutes = +b.dataset.min; renderLaunch(); });
+    [stepIn, planIn].forEach(inp => inp.onkeydown = e => {
+      if (e.key === 'Enter') { e.preventDefault(); startLaunch(); }
+      else if (e.key === 'Escape') { e.preventDefault(); hideLaunch(); }
+    });
+    setTimeout(() => stepIn.focus(), 30);
+  } else if (v === 'run') {
+    const L = S.launch;
+    panel.innerHTML = head('Launched', `<button class="launch-small-btn" data-act="hide" title="Hide (Esc) — the timer keeps running">Hide</button>`)
+      + `<div class="launch-field"><label>Step</label><div class="launch-step${L.step ? '' : ' empty'}">`
+      + `<span id="launch-step-text">${L.step ? esc(L.step) : 'No step set — just begin anywhere.'}</span>`
+      + (L.step ? `<button class="launch-small-btn" data-act="stepdone"><i class="ti ti-check"></i> Step done</button>` : `<button class="launch-small-btn" data-act="stepdone">Set a step</button>`)
+      + `</div><div id="launch-next-wrap" class="launch-field" style="display:none;margin-top:8px"><input type="text" id="launch-next" maxlength="200" placeholder="Next tiny step — Enter to set, Esc to skip"></div>`
+      + (L.plan ? `<div class="launch-plan"><b>If stuck:</b> ${esc(L.plan)}</div>` : '') + `</div>`
+      + `<div class="launch-timer"><div class="launch-track"><div class="launch-fill" id="launch-fill"></div></div>`
+      + `<div class="launch-clock"><span class="launch-remaining" id="launch-remaining"></span><span class="launch-elapsed" id="launch-elapsed"></span></div></div>`
+      + `<div id="launch-timesup" class="launch-timesup" style="display:none">Time’s up — you started, and that was the hard part. Keep going (the clock keeps counting), park it, or call it done.</div>`
+      + `<div class="launch-footer"><div class="launch-footer-right"><button class="launch-small-btn" data-act="add5">+5 min</button><button class="launch-small-btn" data-act="add15">+15 min</button></div>`
+      + `<div class="launch-footer-right"><button class="btn-cancel" data-act="park">Park it</button><button class="btn-done" data-act="done"><i class="ti ti-check"></i> Done — complete task</button></div></div>`;
+    launchTick();
+  } else if (v === 'park') {
+    const secs = sessionSecs(S.launch);
+    panel.innerHTML = head('Park it', '')
+      + `<div class="launch-hint">${secs < LAUNCH_MIN_SEC ? 'Under a minute — this one won’t be logged.' : `${fmtMins(secs)} in. Leave yourself a note so restarting is easy.`}</div>`
+      + `<div class="launch-field"><label for="park-where">Where did you get to?</label><textarea id="park-where" placeholder="e.g. drafted the first half, stuck on the numbers"></textarea></div>`
+      + `<div class="launch-field"><label for="park-next">Next step when you come back</label><input type="text" id="park-next" maxlength="200" placeholder="The first thing to do next time" value="${esc(S.launch.step || '')}"></div>`
+      + `<div class="launch-footer"><span class="launch-hint" style="margin:0">⌘/Ctrl+Enter to park</span><div class="launch-footer-right"><button class="btn-cancel" data-act="back">Back</button><button class="btn-primary" data-act="parkconfirm">Park</button></div></div>`;
+    panel.querySelectorAll('#park-where,#park-next').forEach(inp => inp.onkeydown = e => {
+      if (e.key === 'Escape') { e.preventDefault(); launchAction('back'); }
+      else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || inp.tagName === 'INPUT')) { e.preventDefault(); launchAction('parkconfirm'); }
+    });
+    setTimeout(() => panel.querySelector('#park-where').focus(), 30);
+  }
+  panel.querySelectorAll('[data-act]').forEach(b => b.onclick = () => launchAction(b.dataset.act));
+}
+
+function launchAction(act) {
+  const val = sel => document.querySelector(sel)?.value || '';
+  switch (act) {
+    case 'close': case 'hide': hideLaunch(); break;
+    case 'start':       startLaunch(); break;
+    case 'add5':        addLaunchTime(5); break;
+    case 'add15':       addLaunchTime(15); break;
+    case 'park':        S.launchView = 'park'; renderLaunch(); break;
+    case 'back':        S.launchView = 'run'; renderLaunch(); break;
+    case 'parkconfirm': endLaunch('parked', { where: val('#park-where'), next: val('#park-next') }); break;
+    case 'done':        endLaunch('done'); break;
+    case 'stepdone':    launchStepDone(); break;
+  }
+}
+
+function startLaunch() {
+  const d = S.launchSetup; if (!d) return;
+  const t = S.tasks.find(x => x.id === d.taskId); if (!t || t.done) { hideLaunch(); return; }
+  const step = (d.step || '').trim();
+  let subId = d.subId;
+  if (step && subId == null && d.addSub) {
+    const existing = (t.subtasks || []).find(s => !s.done && s.title === step);
+    if (existing) subId = existing.id;
+    else { subId = nextSubId(t); t.subtasks = [...(t.subtasks || []), { id: subId, title: step, done: false }]; }
+  }
+  S.launch = { taskId: t.id, started: new Date().toISOString(), plannedMin: d.minutes, step,
+               plan: (d.plan || '').trim(), subId, addSub: d.addSub, sticky: !!stickyInfo(t), chimed: false };
+  S.launchSetup = null; S.launchView = 'run';
+  saveLaunchLocal();
+  clearInterval(_launchTick); _launchTick = setInterval(launchTick, 1000);
+  markUnsaved(); renderContent(); renderLaunch();
+}
+
+function addLaunchTime(min) {
+  const L = S.launch; if (!L) return;
+  L.plannedMin += min;
+  L.chimed = sessionSecs(L) >= L.plannedMin * 60;
+  saveLaunchLocal(); launchTick();
+}
+
+// Tick the bar down; at zero, chime and bring the overlay back if it was hidden.
+// Time running out is a transition cue, not a stop — the clock keeps counting.
+function launchTick() {
+  const L = S.launch; if (!L) return;
+  const el = sessionSecs(L), total = L.plannedMin * 60, left = total - el, over = left <= 0;
+  document.title = (over ? '+' + fmtClock(-left) : fmtClock(left)) + ' · ' + BASE_TITLE;
+  if (over && !L.chimed) {
+    L.chimed = true; saveLaunchLocal();
+    if (chimeOn()) launchChime();
+    if (!S.launchView) { S.launchView = 'run'; showLaunch(); return; }
+  }
+  if (S.launchView === 'run') {
+    const f = document.getElementById('launch-fill');
+    if (f) { f.style.width = (over ? 100 : left / total * 100) + '%'; f.classList.toggle('over', over); }
+    const r = document.getElementById('launch-remaining');
+    if (r) { r.textContent = over ? '+' + fmtClock(-left) : fmtClock(left); r.classList.toggle('over', over); }
+    const e = document.getElementById('launch-elapsed');
+    if (e) e.textContent = `${fmtClock(el)} elapsed · ${L.plannedMin} min box`;
+    const tu = document.getElementById('launch-timesup');
+    if (tu) tu.style.display = over ? '' : 'none';
+  }
+  updateLaunchPill();
+}
+
+function updateLaunchPill() {
+  const pill = document.getElementById('launch-pill'), L = S.launch;
+  if (!L || S.launchView) { pill.classList.remove('show'); return; }
+  const t = S.tasks.find(x => x.id === L.taskId);
+  const left = L.plannedMin * 60 - sessionSecs(L);
+  pill.innerHTML = `<i class="ti ti-player-play"></i><span class="pill-time">${left <= 0 ? '+' + fmtClock(-left) : fmtClock(left)}</span><span class="pill-title">${esc(t?.title || '')}</span>`;
+  pill.classList.add('show');
+}
+
+// Tick the step's subtask off, then ask for the next tiny step
+function launchStepDone() {
+  const L = S.launch; if (!L) return;
+  const t = S.tasks.find(x => x.id === L.taskId);
+  if (L.step && t && L.subId != null) {
+    const sub = (t.subtasks || []).find(s => s.id === L.subId);
+    if (sub && !sub.done) toggleSub(t.id, sub.id);
+  }
+  if (L.step) {
+    const b = document.querySelector('[data-act="stepdone"]')?.getBoundingClientRect();
+    if (b) burstAt(b.left + b.width / 2, b.top + b.height / 2, false);
+  }
+  L.subId = null;
+  document.getElementById('launch-step-text').textContent = L.step ? 'Step done ✓ — what’s the next tiny one?' : 'What’s the first tiny step?';
+  document.querySelector('[data-act="stepdone"]')?.remove();
+  const wrap = document.getElementById('launch-next-wrap'), inp = document.getElementById('launch-next');
+  wrap.style.display = '';
+  inp.onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); setLaunchStep(inp.value); }
+    else if (e.key === 'Escape') { e.preventDefault(); setLaunchStep(''); }
+  };
+  inp.focus();
+}
+
+function setLaunchStep(text) {
+  const L = S.launch; if (!L) return;
+  const t = S.tasks.find(x => x.id === L.taskId);
+  L.step = text.trim(); L.subId = null;
+  if (L.step && L.addSub && t) {
+    L.subId = nextSubId(t);
+    t.subtasks = [...(t.subtasks || []), { id: L.subId, title: L.step, done: false }];
+    markUnsaved(); renderContent();
+  }
+  saveLaunchLocal(); renderLaunch();
+}
+
+// outcome: 'done' (task finished) | 'parked' (stopping for now)
+function endLaunch(outcome, extra = {}) {
+  const L = S.launch; if (!L) return;
+  clearInterval(_launchTick); _launchTick = null;
+  S.launch = null; S.launchView = null; clearLaunchLocal();
+  document.title = BASE_TITLE;
+  document.getElementById('launch-overlay').classList.remove('open');
+  updateLaunchPill();
+
+  const t = S.tasks.find(x => x.id === L.taskId);
+  const ended = new Date().toISOString();
+  const secs = (new Date(ended) - new Date(L.started)) / 1000;
+  if (outcome !== 'done' && secs < LAUNCH_MIN_SEC) { showToast('Under a minute — not logged'); renderContent(); return; }
+
+  const id = S.sessions.reduce((mx, s) => Math.max(mx, s.id), 0) + 1;
+  S.sessions.push({ id, taskId: L.taskId, started: L.started, ended, plannedMin: L.plannedMin,
+                    outcome, step: L.step, plan: L.plan, sticky: !!L.sticky });
+  if (t) {
+    if (outcome === 'parked') {
+      // The resume cue: next time Launch opens on this step, and the card shows it
+      t.nextStep = (extra.next || '').trim();
+      const where = (extra.where || '').trim();
+      if (where || t.nextStep) {
+        const stamp = new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const line = `[${stamp} · ${fmtMins(secs)}] ${where}${where && t.nextStep ? ' ' : ''}${t.nextStep ? '→ Next: ' + t.nextStep : ''}`;
+        t.notes = (t.notes ? t.notes.replace(/\s+$/, '') + '\n' : '') + line;
+      }
+    } else {
+      t.nextStep = '';
+    }
+    logChange('task', t.id, 'launch', `"${t.title}" — Launch: ${fmtMins(secs)}, ${outcome}`);
+  }
+  markUnsaved();
+  if (outcome === 'done' && t && !t.done) { toggleDone(t.id); return; }   // completeTask re-renders and cheers
+  checkRingCloses(); render();
+  if (outcome === 'parked') showToast(`Parked after ${fmtMins(secs)} — it counts. Next time picks up where you left off.`);
+}
+
+// Restore a session that was running when the page reloaded. One left for more
+// than 12h is closed out at its planned length — it was still a real start.
+function restoreLaunch() {
+  let L = null;
+  try { L = JSON.parse(localStorage.getItem(LAUNCH_KEY) || 'null'); } catch(e) {}
+  if (!L) return;
+  const t = S.tasks.find(x => x.id === L.taskId);
+  const age = Date.now() - new Date(L.started);
+  if (!t || t.done || !(age >= 0)) { clearLaunchLocal(); return; }
+  if (age > 12 * 3600e3) {
+    clearLaunchLocal();
+    const id = S.sessions.reduce((mx, s) => Math.max(mx, s.id), 0) + 1;
+    S.sessions.push({ id, taskId: L.taskId, started: L.started, ended: new Date(new Date(L.started).getTime() + L.plannedMin * 60000).toISOString(),
+                      plannedMin: L.plannedMin, outcome: 'parked', step: L.step || '', plan: L.plan || '', sticky: !!L.sticky });
+    markUnsaved(); return;
+  }
+  S.launch = L; S.launchView = 'run';
+  _launchTick = setInterval(launchTick, 1000);
+  showLaunch();
+}
+
+// Runs once after the first render on every boot path
+function launchBoot() {
+  restoreLaunch();
+  checkRingCloses();   // first call only records what's already closed
+}
+
+// Two soft notes — a transition alarm, not an alert
+function launchChime() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    [[660, 0], [880, 0.18]].forEach(([f, t0]) => {
+      const o = ac.createOscillator(), g = ac.createGain(), at = ac.currentTime + t0;
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(0.18, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.5);
+      o.connect(g).connect(ac.destination); o.start(at); o.stop(at + 0.55);
+    });
+    setTimeout(() => ac.close(), 1500);
+  } catch(e) {}
+}
+
+// ── Follow-ups ──────────────────────────────────────────────────────────────
+// Sending something isn't the end of it — the reply is. Completing a task that
+// hands something to someone else offers a dated follow-up, written as an if-then
+// plan, so the open loop lives in Focal instead of in working memory.
+const FOLLOWUP_RE = /\b(send|sent|submit|submitted|e-?mail|emailed|request|requested|ask|asked|propos\w*|quote|invoice|pitch|apply|reach out|call|ping|remind)\b/i;
+
+function followUpCats() {
+  return (localStorage.getItem('focal_followup_cats') || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+}
+function wantsFollowUp(t) {
+  if (!prefOn('focal_followup_prompt') || /^follow[ -]?up\b/i.test(t.title)) return false;
+  return followUpCats().includes((t.category || '').toLowerCase()) || FOLLOWUP_RE.test(t.title);
+}
+function followUpDue(days) { return days === 7 ? skipWeekend(addDays(today(), 7)) : addBusinessDays(today(), days); }
+
+function createFollowUp(t, due) {
+  const fu = { id: nextId(), title: 'Follow up: ' + t.title, priority: t.priority || 3, category: t.category || '', due, recur: '',
+    description: `If “${t.title}” still isn’t settled by ${fmtSnoozeDate(due)}, then chase it.`,
+    done: false, subtasks: [], aiRank: null, aiReason: '', created: new Date().toISOString(), notes: '',
+    projectId: t.projectId ?? null, teamFlag: false, wikiPage: '', completedAt: '',
+    snoozedUntil: '', snoozedFrom: '', deferrals: 0, nextStep: '' };
+  S.tasks.push(fu);
+  addLink('task', t.id, 'task', fu.id, 'follow-up');
+  logChange('task', fu.id, 'create', `Follow-up created: "${fu.title}" (due ${due})`);
+  markUnsaved(); render(); announceNewTask(fu);
+}
+
+function offerFollowUp(t) {
+  if (!wantsFollowUp(t)) return;
+  const short = t.title.length > 34 ? t.title.slice(0, 34) + '…' : t.title;
+  showToast(`Follow up on “${short}”?`, { duration: 10000, actions: [
+    { label: '3 days', action: () => createFollowUp(t, followUpDue(3)) },
+    { label: '1 week', action: () => createFollowUp(t, followUpDue(7)) },
+  ]});
+}
+
+// ── Celebration ─────────────────────────────────────────────────────────────
+// Immediate and sensory — a reward later is worth little to a brain that
+// discounts delay steeply. Every completion bursts; sticky tasks always get the
+// big one; and now and then an ordinary one does too. That unpredictability is
+// deliberate: a reward you can't quite predict holds attention far longer.
+const CHEERS = ['Off the list.', 'One less thing.', 'Handled.', 'Gone. Nice.', 'Cleared.', 'That’s done.', 'Momentum.', 'Look at you go.'];
+const BURST_COLORS = ['#c8a537', '#4DC88A', '#7090c8', '#A78BFA', '#d0d0c8'];
+
+function burstAt(x, y, big) {
+  if (!celebrationsOn() || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const b = document.createElement('div'); b.className = 'burst';
+  b.style.left = x + 'px'; b.style.top = y + 'px';
+  const n = big ? 26 : 12;
+  for (let i = 0; i < n; i++) {
+    const p = document.createElement('i');
+    const ang = (i / n) * Math.PI * 2 + Math.random() * 0.5;
+    const dist = big ? 70 + Math.random() * 70 : 30 + Math.random() * 24;
+    p.style.setProperty('--dx', (Math.cos(ang) * dist).toFixed(1) + 'px');
+    p.style.setProperty('--dy', (Math.sin(ang) * dist).toFixed(1) + 'px');
+    p.style.setProperty('--c', BURST_COLORS[Math.floor(Math.random() * BURST_COLORS.length)]);
+    p.style.setProperty('--t', ((big ? 0.8 : 0.6) + Math.random() * 0.3).toFixed(2) + 's');
+    if (Math.random() < 0.5) p.className = 'round';
+    b.appendChild(p);
+  }
+  document.body.appendChild(b);
+  setTimeout(() => b.remove(), 1300);
+}
+
+function celebrateCompletion(t, origin) {
+  if (!celebrationsOn()) return;
+  const info = stickyInfo(t), lucky = !info && Math.random() < 1 / 6;
+  const at = origin || { x: innerWidth / 2, y: innerHeight / 2 };
+  burstAt(at.x, at.y, !!info || lucky);
+  if (info) showToast(`Sticky task cleared — ${info.why}. That’s the hard kind.`);
+  else if (lucky) showToast(CHEERS[Math.floor(Math.random() * CHEERS.length)]);
 }
 
 function getLMTimeout() {
@@ -5059,6 +5865,9 @@ function toggleDone(id) {
 // after the fact. closeSubs marks any still-open subtasks done along with the task.
 function completeTask(id, closeSubs) {
   const t=S.tasks.find(x=>x.id===id); if(!t||t.done) return;
+  // Where the burst starts — read before the re-render replaces the card
+  const cbRect=document.querySelector(`.task-card[data-id="${id}"] .task-checkbox`)?.getBoundingClientRect();
+  const origin=cbRect&&cbRect.width ? {x:cbRect.left+cbRect.width/2, y:cbRect.top+cbRect.height/2} : null;
   let autoSubs=null;
   if (closeSubs) {
     // Re-read the open set — the dialog was up for a while and the list may have moved
@@ -5085,7 +5894,7 @@ function completeTask(id, closeSubs) {
   if (t.recur) {
     const nextDue = nextRecurDue(t);
     if (nextDue) {
-      const spawn={...t,id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',due:nextDue,snoozedUntil:'',snoozedFrom:'',created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
+      const spawn={...t,id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',due:nextDue,snoozedUntil:'',snoozedFrom:'',deferrals:0,nextStep:'',created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
       S.tasks.push(spawn);
       spawnId=spawn.id;
     }
@@ -5095,7 +5904,12 @@ function completeTask(id, closeSubs) {
     render();
   }, 4000);
   S.pendingDone.set(id, {timer, spawnId, autoSubs});
+  // Ticked off from the list while its Launch session runs — that session is done too
+  if (S.launch && S.launch.taskId===id) endLaunch('done');
+  checkRingCloses();
   markUnsaved(); render();
+  celebrateCompletion(t, origin);
+  offerFollowUp(t);
 }
 
 function uncompleteTask(id) {
@@ -5162,6 +5976,7 @@ function deleteTask(id) {
     S.pendingDone.delete(id);
     if (pending.spawnId!=null) S.tasks=S.tasks.filter(x=>x.id!==pending.spawnId);
   }
+  if (S.launch && S.launch.taskId===id) endLaunch('parked');
   logChange('task', id, 'delete', 'Deleted task: ' + (t.title||''));
   S.tasks=S.tasks.filter(x=>x.id!==id);
   if (S.expandedId===id) S.expandedId=null;
@@ -5178,9 +5993,10 @@ function fmtSnoozeDate(d) {
 function snooze(id, until) {
   const t=S.tasks.find(x=>x.id===id); if(!t) return;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(until||'') || until<=today()) { showToast('Pick a date after today'); return; }
-  const prev={due:t.due, snoozedUntil:t.snoozedUntil||'', snoozedFrom:t.snoozedFrom||'', aiRank:t.aiRank};
+  const prev={due:t.due, snoozedUntil:t.snoozedUntil||'', snoozedFrom:t.snoozedFrom||'', aiRank:t.aiRank, deferrals:t.deferrals||0};
   if (!snoozeLive(t)) t.snoozedFrom=t.due||'';
   t.snoozedUntil=until; t.due=until; t.aiRank=null;
+  t.deferrals=(t.deferrals||0)+1;
   logChange('task', id, 'update', `"${t.title}" — Snoozed until ${until}`);
   markUnsaved(); render();
   showToast('Snoozed until '+fmtSnoozeDate(until),{label:'Undo',action:()=>{ Object.assign(t,prev); markUnsaved(); render(); }});
@@ -5198,7 +6014,7 @@ function unsnooze(id) {
 function duplicateTask(task) {
   // Open the New Task modal pre-filled from `task`; saving creates a fresh task
   // (S.editingTask stays null) so the original is untouched.
-  const copy={...task, done:false, completedAt:'', snoozedUntil:'', snoozedFrom:'', subtasks:(task.subtasks||[]).map(s=>({...s, done:false}))};
+  const copy={...task, done:false, completedAt:'', snoozedUntil:'', snoozedFrom:'', deferrals:0, nextStep:'', subtasks:(task.subtasks||[]).map(s=>({...s, done:false}))};
   openModal(copy, undefined, true);
 }
 
@@ -5304,6 +6120,7 @@ function saveModal() {
     const snap = {...S.editingTask};
     const diff = diffLog(snap, data, TASK_DIFF_FIELDS);
     Object.assign(S.editingTask, data);
+    if (isDeferral(snap.due, data.due) && !snap.done) S.editingTask.deferrals=(snap.deferrals||0)+1;
     logChange('task', S.editingTask.id, 'update', `"${S.editingTask.title}"${diff ? ' — ' + diff : ''}`);
   } else {
     const cf=S.copyFrom;
@@ -6063,15 +6880,17 @@ Output the JSON array immediately.${futureContext}`;
 // ─────────────────────────────────────────────
 // TOASTS
 // ─────────────────────────────────────────────
+// opts: {label, action} for one button, or {actions:[{label, action}…]}; duration in ms
 function showToast(msg, opts) {
   const c=document.getElementById('toast-container');
   const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
-  if (opts) {
-    const b=document.createElement('button'); b.className='toast-action'; b.textContent=opts.label||'Undo';
-    b.onclick=()=>{ opts.action(); c.contains(t)&&c.removeChild(t); };
+  const acts=opts ? (opts.actions || (opts.action ? [{label:opts.label||'Undo', action:opts.action}] : [])) : [];
+  for (const a of acts) {
+    const b=document.createElement('button'); b.className='toast-action'; b.textContent=a.label;
+    b.onclick=()=>{ a.action(); c.contains(t)&&c.removeChild(t); };
     t.appendChild(b);
   }
-  c.appendChild(t); setTimeout(()=>{ c.contains(t)&&c.removeChild(t); },3000);
+  c.appendChild(t); setTimeout(()=>{ c.contains(t)&&c.removeChild(t); }, opts?.duration||3000);
 }
 
 // ─────────────────────────────────────────────
@@ -6102,7 +6921,7 @@ async function init() {
     if (res.ok) {
       await _bootFromBytes(await res.arrayBuffer());
       S.usingLauncher = true;
-      markSaved(); ruleRank(); render(); checkLM(); checkWiki(); setupEvents(); autoBackup(true);
+      markSaved(); ruleRank(); render(); checkLM(); checkWiki(); setupEvents(); launchBoot(); autoBackup(true);
       // Pull any tasks external agents queued while Focal was closed, then keep
       // watching. Background tabs throttle the interval, so also drain on refocus.
       drainPendingTasks();
@@ -6120,7 +6939,7 @@ async function init() {
         const perm = await handle.queryPermission({mode:'readwrite'});
         if (perm === 'granted') {
           await initDB(handle);
-          markSaved(); ruleRank(); render(); checkLM(); checkWiki(); setupEvents(); autoBackup(true); return;
+          markSaved(); ruleRank(); render(); checkLM(); checkWiki(); setupEvents(); launchBoot(); autoBackup(true); return;
         } else {
           S.dbHandle = handle; // keep for later prompt on first save
         }
@@ -6130,7 +6949,7 @@ async function init() {
 
   // 3. Nothing found — start with an empty DB, no dialog
   await initDB();
-  markSaved(); ruleRank(); render(); checkLM(); checkWiki(); setupEvents(); autoBackup(true);
+  markSaved(); ruleRank(); render(); checkLM(); checkWiki(); setupEvents(); launchBoot(); autoBackup(true);
 }
 
 async function importFromCSV() {
@@ -6316,9 +7135,22 @@ function setupEvents() {
   // Pasted images — modal description field and the full-size viewer
   _syncDescImgs = bindImageField(document.getElementById('f-desc'), document.getElementById('f-desc-imgs'));
   document.getElementById('img-lightbox').addEventListener('click', closeImageLightbox);
+  // Launch — the pill brings a hidden session back
+  const pill=document.getElementById('launch-pill');
+  pill.addEventListener('click', ()=>{ S.launchView='run'; showLaunch(); });
+  pill.addEventListener('keydown', e=>{ if (e.key==='Enter'||e.key===' ') { e.preventDefault(); pill.click(); } });
   // Keyboard shortcuts
   document.addEventListener('keydown',e=>{
     if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+    // The Launch overlay owns the keyboard while it's up: Esc closes setup, hides a
+    // running session (the clock keeps going) and backs out of parking
+    if (document.getElementById('launch-overlay').classList.contains('open')) {
+      if (e.key==='Escape' && !document.getElementById('confirm-overlay').classList.contains('open')) {
+        e.preventDefault();
+        if (S.launchView==='park') launchAction('back'); else hideLaunch();
+      }
+      return;
+    }
     if ((e.key==='n'||e.key==='N') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openModal(null); }
     if ((e.key==='i'||e.key==='I') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openIdeaModal(null); }
     if (e.key==='Escape' && document.getElementById('img-lightbox').classList.contains('open')) {
