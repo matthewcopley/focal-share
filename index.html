@@ -575,6 +575,18 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .team-flag-btn i{font-size:12px}
 #digest-modal-overlay,#ai-output-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:none;align-items:center;justify-content:center}
 #digest-modal-overlay.open,#ai-output-overlay.open{display:flex}
+/* Confirm dialog — sits above the other modals so it can be raised from inside one */
+#confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:300;display:none;align-items:center;justify-content:center}
+#confirm-overlay.open{display:flex}
+#confirm-modal{background:var(--surface);border-radius:var(--r-card);border:1px solid var(--border-mid);width:420px;max-width:92vw;padding:24px}
+#confirm-modal h3{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.12em;color:var(--accent);margin:0 0 12px}
+#confirm-body{font-size:13px;line-height:1.6;color:var(--text)}
+#confirm-body .confirm-note{color:var(--text-dim);font-size:12px;margin-top:10px}
+#confirm-subs{list-style:none;margin:12px 0 0;padding:0;max-height:180px;overflow-y:auto}
+#confirm-subs li{padding:6px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+#confirm-subs li:last-child{border-bottom:none}
+/* it's a preview, not a control — the real checkboxes are on the card */
+#confirm-subs .task-checkbox{cursor:default}
 #digest-modal{background:var(--surface);border-radius:var(--r-card);border:1px solid var(--border-mid);width:440px;max-width:95vw;padding:24px}
 #digest-modal h3{font-size:11px;font-weight:500;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.12em;color:var(--accent)}
 #ai-output-modal{background:var(--surface);border-radius:var(--r-card);border:1px solid var(--border-mid);width:640px;max-width:95vw;padding:24px}
@@ -989,6 +1001,18 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 
 
 <input type="file" id="open-db-hidden" accept=".db" style="display:none">
+
+<!-- Confirm dialog — replaces window.confirm() so the prompt is styled like the app -->
+<div id="confirm-overlay">
+  <div id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <h3 id="confirm-title"></h3>
+    <div id="confirm-body"></div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="confirm-cancel">Cancel</button>
+      <button class="btn-primary" id="confirm-ok"></button>
+    </div>
+  </div>
+</div>
 
 <!-- Full-size image viewer -->
 <div id="img-lightbox"><img alt=""></div>
@@ -4822,81 +4846,102 @@ function aiHeaders(json=true) {
 function toggleDone(id) {
   const t=S.tasks.find(x=>x.id===id); if(!t) return;
   if (!t.done) {
-    // Completing a task with subtasks still open is usually a slip — confirm, and on
-    // OK close them out too so the card doesn't sit in Done reading "2/5"
+    // Completing a task with subtasks still open is usually a slip — ask first.
+    // showConfirm() doesn't block, so the completion itself lives in completeTask()
     const openSubs=(t.subtasks||[]).filter(s=>!s.done);
-    let autoSubs=null;
     if (openSubs.length) {
       const n=openSubs.length;
-      const msg='"'+(t.title||'')+'" has '+n+' unfinished subtask'+(n===1?'':'s')+'.\n\n'
-        +'OK — complete the task and mark '+(n===1?'it':'them all')+' done.\n'
-        +'Cancel — leave the task open.';
-      if (!confirm(msg)) return;
-      autoSubs=openSubs.map(s=>s.id);
-      // Log each one in toggleSub's exact format: the stats filters and
-      // backfillCompletions both key off that "Subtask" wording
-      openSubs.forEach(s=>{
-        s.done=true;
-        s.doneAt=localDate();
-        logChange('task', id, 'complete', `✓ Subtask completed: "${s.title}" (in "${t.title}")`);
+      showConfirm({
+        title: 'Unfinished subtasks',
+        body: `<div>“${esc(t.title||'')}” still has <strong>${n}</strong> unfinished subtask${n===1?'':'s'}.</div>`
+          + `<ul id="confirm-subs">${openSubs.map(s=>`<li><span class="task-checkbox"></span><span class="subtask-title">${esc(s.title||'')}</span></li>`).join('')}</ul>`
+          + `<div class="confirm-note">Completing the task will mark ${n===1?'it':'them all'} done.</div>`,
+        confirmLabel: 'Complete all',
+        onConfirm: () => completeTask(id, true)
       });
+      return;
     }
-    _justCompleted.add(id);
-    setTimeout(() => _justCompleted.delete(id), 800);
-    // Mark done and start grace period — task stays visible for 4s
-    t.done=true;
-    t.completedAt=new Date().toISOString();
-    logChange('task', id, 'complete', '✓ Completed: "' + (t.title||'') + '"');
-    if (S.expandedId===id) S.expandedId=null;
-    // Spawn the next occurrence now so it lands in the same save as the completion —
-    // deferring it past the 2s auto-save means a tab close mid-grace kills the recurrence chain
-    let spawnId=null;
-    if (t.recur) {
-      const nextDue = nextOccurrence(t.due || today(), t.recur);
-      if (nextDue) {
-        const spawn={...t,id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',due:nextDue,created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
-        S.tasks.push(spawn);
-        spawnId=spawn.id;
-      }
-    }
-    const timer=setTimeout(()=>{
-      S.pendingDone.delete(id);
-      render();
-    }, 4000);
-    S.pendingDone.set(id, {timer, spawnId, autoSubs});
-    markUnsaved(); render();
+    completeTask(id, false);
   } else {
-    const pending=S.pendingDone.get(id);
-    if (pending) {
-      // Uncheck within grace — cancel timer and remove the spawned occurrence by id
-      clearTimeout(pending.timer);
-      S.pendingDone.delete(id);
-      if (pending.spawnId!=null) {
-        const spawnedIdx=S.tasks.findIndex(x=>x.id===pending.spawnId&&!x.done);
-        if (spawnedIdx!==-1) S.tasks.splice(spawnedIdx,1);
-      }
-      // ...and reopen the subtasks that completing the task closed on the user's behalf,
-      // so an undo inside the grace window puts the card back exactly as it was
-      if (pending.autoSubs) pending.autoSubs.forEach(sid=>{
-        const s=(t.subtasks||[]).find(x=>x.id===sid); if(!s||!s.done) return;
-        s.done=false; delete s.doneAt;
-        logChange('task', id, 'uncomplete', `↩ Subtask reopened: "${s.title}" (in "${t.title}")`);
-      });
-    } else if (t.recur) {
-      // Grace already expired and the spawn id is gone — match the spawned
-      // occurrence by shape and remove it, otherwise reopening leaves a duplicate
-      const nextDue = nextOccurrence(t.due || today(), t.recur);
-      const spawnedIdx = S.tasks.findIndex(x => x.id !== t.id && !x.done && x.recur === t.recur && x.title === t.title && x.due === nextDue);
-      if (spawnedIdx !== -1) {
-        logChange('task', S.tasks[spawnedIdx].id, 'delete', 'Removed next occurrence of "' + (t.title||'') + '" (task reopened)');
-        S.tasks.splice(spawnedIdx, 1);
-      }
-    }
-    t.done=false;
-    t.completedAt='';
-    logChange('task', id, 'uncomplete', '↩ Reopened: "' + (t.title||'') + '"');
-    markUnsaved(); render();
+    uncompleteTask(id);
   }
+}
+
+// The completing half of toggleDone(), split out so the confirm dialog can call it
+// after the fact. closeSubs marks any still-open subtasks done along with the task.
+function completeTask(id, closeSubs) {
+  const t=S.tasks.find(x=>x.id===id); if(!t||t.done) return;
+  let autoSubs=null;
+  if (closeSubs) {
+    // Re-read the open set — the dialog was up for a while and the list may have moved
+    const openSubs=(t.subtasks||[]).filter(s=>!s.done);
+    autoSubs=openSubs.map(s=>s.id);
+    // Log each one in toggleSub's exact format: the stats filters and
+    // backfillCompletions both key off that "Subtask" wording
+    openSubs.forEach(s=>{
+      s.done=true;
+      s.doneAt=localDate();
+      logChange('task', id, 'complete', `✓ Subtask completed: "${s.title}" (in "${t.title}")`);
+    });
+  }
+  _justCompleted.add(id);
+  setTimeout(() => _justCompleted.delete(id), 800);
+  // Mark done and start grace period — task stays visible for 4s
+  t.done=true;
+  t.completedAt=new Date().toISOString();
+  logChange('task', id, 'complete', '✓ Completed: "' + (t.title||'') + '"');
+  if (S.expandedId===id) S.expandedId=null;
+  // Spawn the next occurrence now so it lands in the same save as the completion —
+  // deferring it past the 2s auto-save means a tab close mid-grace kills the recurrence chain
+  let spawnId=null;
+  if (t.recur) {
+    const nextDue = nextOccurrence(t.due || today(), t.recur);
+    if (nextDue) {
+      const spawn={...t,id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',due:nextDue,created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
+      S.tasks.push(spawn);
+      spawnId=spawn.id;
+    }
+  }
+  const timer=setTimeout(()=>{
+    S.pendingDone.delete(id);
+    render();
+  }, 4000);
+  S.pendingDone.set(id, {timer, spawnId, autoSubs});
+  markUnsaved(); render();
+}
+
+function uncompleteTask(id) {
+  const t=S.tasks.find(x=>x.id===id); if(!t) return;
+  const pending=S.pendingDone.get(id);
+  if (pending) {
+    // Uncheck within grace — cancel timer and remove the spawned occurrence by id
+    clearTimeout(pending.timer);
+    S.pendingDone.delete(id);
+    if (pending.spawnId!=null) {
+      const spawnedIdx=S.tasks.findIndex(x=>x.id===pending.spawnId&&!x.done);
+      if (spawnedIdx!==-1) S.tasks.splice(spawnedIdx,1);
+    }
+    // ...and reopen the subtasks that completing the task closed on the user's behalf,
+    // so an undo inside the grace window puts the card back exactly as it was
+    if (pending.autoSubs) pending.autoSubs.forEach(sid=>{
+      const s=(t.subtasks||[]).find(x=>x.id===sid); if(!s||!s.done) return;
+      s.done=false; delete s.doneAt;
+      logChange('task', id, 'uncomplete', `↩ Subtask reopened: "${s.title}" (in "${t.title}")`);
+    });
+  } else if (t.recur) {
+    // Grace already expired and the spawn id is gone — match the spawned
+    // occurrence by shape and remove it, otherwise reopening leaves a duplicate
+    const nextDue = nextOccurrence(t.due || today(), t.recur);
+    const spawnedIdx = S.tasks.findIndex(x => x.id !== t.id && !x.done && x.recur === t.recur && x.title === t.title && x.due === nextDue);
+    if (spawnedIdx !== -1) {
+      logChange('task', S.tasks[spawnedIdx].id, 'delete', 'Removed next occurrence of "' + (t.title||'') + '" (task reopened)');
+      S.tasks.splice(spawnedIdx, 1);
+    }
+  }
+  t.done=false;
+  t.completedAt='';
+  logChange('task', id, 'uncomplete', '↩ Reopened: "' + (t.title||'') + '"');
+  markUnsaved(); render();
 }
 
 function toggleTeamFlag(id) {
@@ -5492,6 +5537,23 @@ function closeAIOutput() {
   document.getElementById('ai-output-overlay').classList.remove('open');
 }
 
+// In-app replacement for window.confirm(). Unlike the native one this doesn't block,
+// so the caller's follow-on work has to live in onConfirm rather than after the call.
+let _confirmFn = null;
+function showConfirm({title, body, confirmLabel, onConfirm}) {
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-body').innerHTML = body;   // callers esc() their own data
+  const ok = document.getElementById('confirm-ok');
+  ok.textContent = confirmLabel || 'Confirm';
+  _confirmFn = onConfirm;
+  document.getElementById('confirm-overlay').classList.add('open');
+  ok.focus();
+}
+function closeConfirm() {
+  document.getElementById('confirm-overlay').classList.remove('open');
+  _confirmFn = null;
+}
+
 async function runDigest(startDate, endDate) {
   // endDate defaults to startDate for single-day
   const end = endDate || startDate;
@@ -5935,6 +5997,12 @@ function setupEvents() {
   document.getElementById('prioritize-btn').addEventListener('click',()=>{ document.getElementById('ai-menu').classList.remove('open'); prioritize(); });
   document.getElementById('digest-btn').addEventListener('click',()=>{ document.getElementById('ai-menu').classList.remove('open'); openDigestModal(); });
   document.getElementById('insight-btn').addEventListener('click',()=>{ document.getElementById('ai-menu').classList.remove('open'); runInsight(); });
+  // Confirm dialog
+  document.getElementById('confirm-cancel').addEventListener('click', closeConfirm);
+  document.getElementById('confirm-ok').addEventListener('click', ()=>{
+    const fn=_confirmFn; closeConfirm(); if (fn) fn();   // close first — fn may open another dialog
+  });
+  document.getElementById('confirm-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('confirm-overlay')) closeConfirm(); });
   // Digest modal
   document.getElementById('digest-modal-cancel').addEventListener('click', closeDigestModal);
   document.getElementById('digest-modal-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('digest-modal-overlay')) closeDigestModal(); });
@@ -6047,6 +6115,9 @@ function setupEvents() {
     if ((e.key==='i'||e.key==='I') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openIdeaModal(null); }
     if (e.key==='Escape' && document.getElementById('img-lightbox').classList.contains('open')) {
       closeImageLightbox(); return;   // it sits above whatever opened it — don't close that too
+    }
+    if (e.key==='Escape' && document.getElementById('confirm-overlay').classList.contains('open')) {
+      closeConfirm(); return;   // same — cancelling the prompt must not close the modal behind it
     }
     if (e.key==='Escape') {
       closeModal(); closeProjectModal(); closeIdeaModal(); closeSuccessModal();
