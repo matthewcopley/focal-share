@@ -1111,6 +1111,7 @@ const S = {
   addedFilter: 'week',   // Recently Added view — same keys as doneFilter, over tasks.created
   addedFrom: '',         // custom added-on range (inclusive), YYYY-MM-DD
   addedTo: '',
+  upcomingFilter: 'all', // Upcoming view — 'all' (next 14 days) | 'tomorrow'
   editingTask: null,
   editingProject: null,
   modalSubs: [],
@@ -2143,6 +2144,7 @@ function setView(v) {
   S.sort = v==='focus' ? 'default' : 'due';
   if (v==='done') { S.doneFilter='today'; S.doneFrom=''; S.doneTo=''; }
   if (v==='recent') { S.addedFilter='week'; S.addedFrom=''; S.addedTo=''; }
+  if (v==='upcoming') S.upcomingFilter='all';
   if (!isTaskView(v)) S.taskSearch='';
   if (v!=='projects') S.projFilters={ statusSingle:'', type:'', sort:'default', search:'' };
   if (v!=='successes') S.successFilters={ year:'', status:'', impactLevel:'', area:'', search:'' };
@@ -2993,6 +2995,30 @@ function mkDateRangeBar({label, filterKey, fromKey, toKey, fallback}) {
   return bar;
 }
 
+// Upcoming view's due window: the full 14 days, or just tomorrow
+function mkUpcomingBar() {
+  const rangeBar = document.createElement('div');
+  rangeBar.style.cssText = 'display:flex;gap:0;border:1px solid var(--border);width:fit-content';
+  for (const {k, l} of [{k:'all', l:'Next 14 days'}, {k:'tomorrow', l:'Tomorrow'}]) {
+    const btn = document.createElement('button');
+    const active = S.upcomingFilter === k;
+    btn.style.cssText = `padding:4px 12px;border:none;border-right:1px solid var(--border);background:${active?'var(--surface)':'transparent'};color:${active?'var(--accent)':'var(--text-dim)'};cursor:pointer;font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;transition:color .1s`;
+    btn.textContent = l;
+    btn.onclick = () => { S.upcomingFilter = k; renderContent(); };
+    rangeBar.appendChild(btn);
+  }
+  rangeBar.lastChild.style.borderRight = 'none';
+
+  const bar = document.createElement('div');
+  bar.style.cssText = 'display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px';
+  const lbl = document.createElement('span');
+  lbl.style.cssText = 'font-family:var(--font-mono);font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-subtle)';
+  lbl.textContent = 'Due';
+  bar.appendChild(lbl);
+  bar.appendChild(rangeBar);
+  return bar;
+}
+
 // taskId → most-recent completion day (local). task.completedAt is authoritative;
 // the changelog is the fallback for rows backfillCompletedAt() couldn't fill.
 function completionDayMap(tasks) {
@@ -3068,6 +3094,8 @@ function renderList(c) {
     c.appendChild(mkDateRangeBar({label:'Completed on', filterKey:'doneFilter', fromKey:'doneFrom', toKey:'doneTo', fallback:'today'}));
   } else if (S.view === 'recent') {
     c.appendChild(mkDateRangeBar({label:'Added on', filterKey:'addedFilter', fromKey:'addedFrom', toKey:'addedTo', fallback:'week'}));
+  } else if (S.view === 'upcoming') {
+    c.appendChild(mkUpcomingBar());
   }
 
   c.appendChild(mkFilterBar());
@@ -3080,6 +3108,9 @@ function renderList(c) {
     base = filterByDayRange(base, t => completedOn.get(t.id), 'doneFilter', 'doneFrom', 'doneTo');
   } else if (S.view === 'recent') {
     base = filterByDayRange(base, t => t.created ? localDate(new Date(t.created)) : '', 'addedFilter', 'addedFrom', 'addedTo');
+  } else if (S.view === 'upcoming' && S.upcomingFilter === 'tomorrow') {
+    const tmr = addDays(today(), 1);
+    base = base.filter(t => t.due === tmr);
   }
 
   if (S.taskSearch.trim()) {
@@ -3090,6 +3121,7 @@ function renderList(c) {
   if (!filtered.length) {
     const emptyMsg = S.taskSearch.trim() ? 'No tasks match "'+S.taskSearch+'"'
                    : S.view==='recent' ? 'No tasks added in this range'
+                   : S.view==='upcoming' && S.upcomingFilter==='tomorrow' ? 'Nothing due tomorrow'
                    : 'No tasks here';
     c.appendChild(mkEmpty(S.view==='recent'?'ti-history':'ti-list', emptyMsg));
     return;
