@@ -507,8 +507,9 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .dash-list-more:hover{color:var(--accent)}
 @container (min-width:900px){.dash-mod .dash-kpis{grid-template-columns:repeat(6,1fr)}}
 @container (max-width:440px){.dash-mod .dash-kpis{grid-template-columns:repeat(2,1fr)}.dash-mod .dash-score-big{font-size:44px}}
-@container (max-width:560px){.dash-mod .dash-launch-stats .dash-streak-card:nth-child(odd){border-left:none;padding-left:0}.dash-mod .dash-streak-row{grid-template-columns:repeat(2,1fr)}.dash-mod .dash-ft-parts{grid-template-columns:1fr;gap:12px}}
-@container (max-width:230px){.dash-mod .dash-kpis,.dash-mod .dash-streak-row{grid-template-columns:1fr}.dash-mod .dash-launch-stats .dash-streak-card{border-left:none;padding-left:0}}
+@container (max-width:899px){.dash-mod .dash-launch-stats{grid-template-columns:repeat(2,1fr)}.dash-mod .dash-launch-stats .dash-streak-card:nth-child(odd){border-left:none;padding-left:0}.dash-mod .dash-launch-stats .dash-streak-card:nth-child(-n+2){padding-bottom:14px}.dash-mod .dash-launch-stats .dash-streak-card:nth-child(n+3){border-top:1px solid var(--border);padding-top:14px}}
+@container (max-width:560px){.dash-mod .dash-streak-row{grid-template-columns:repeat(2,1fr)}.dash-mod .dash-ft-parts{grid-template-columns:1fr;gap:12px}}
+@container (max-width:230px){.dash-mod .dash-kpis,.dash-mod .dash-streak-row{grid-template-columns:1fr}.dash-mod .dash-launch-stats .dash-streak-card{border-left:none;padding-left:0}.dash-mod .dash-launch-stats .dash-streak-card:nth-child(n+2){border-top:1px solid var(--border);padding-top:12px}.dash-mod .dash-launch-stats .dash-streak-card:nth-child(-n+3){padding-bottom:12px}}
 /* Edit mode */
 .dash-editing .dash-mod{outline:1px dashed var(--border-mid);outline-offset:4px;transition:outline-color .1s}
 .dash-editing .dash-mod:hover{outline-color:var(--accent-dim)}
@@ -691,8 +692,11 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 @media (max-width:640px){.rings-streak{margin-left:0}.frog-panel,.fresh-banner{flex-wrap:wrap}.launch-remaining{font-size:28px}}
 /* Streak display in dashboard */
 .dash-streak-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.dash-launch-stats{gap:14px 0}
-.dash-launch-stats .dash-streak-card{background:none;border:none;border-left:1px solid var(--border);padding:2px 16px}
+/* The Launch card fills whatever height its row gives it: the stat grid
+   grows into the card and its rows split the height, values centred. */
+.dash-launch-card{display:flex;flex-direction:column}
+.dash-launch-stats{flex:1;gap:0;grid-auto-rows:1fr}
+.dash-launch-stats .dash-streak-card{background:none;border:none;border-left:1px solid var(--border);padding:4px 16px;display:flex;flex-direction:column;justify-content:center}
 .dash-launch-stats .dash-streak-card:first-child{border-left:none;padding-left:0}
 .dash-streak-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:14px 16px}
 .dash-streak-card.highlight{border-color:currentColor}
@@ -3353,6 +3357,7 @@ function dashLaunch(b, x) {
     : 'boxes are about right';
   // One card with its title inside, like every other module; the stats sit flat in it
   const card = mkDashCard(b, `Launch — last ${days}d`);
+  card.classList.add('dash-launch-card');
   const launchRow = document.createElement('div');
   launchRow.className = 'dash-streak-row dash-launch-stats';
   launchRow.appendChild(mkStreakCard('Launches', sesInRange.length, sesInRange.length ? `${stickyStart} on sticky tasks` : 'press ▶ on any task', sesInRange.length ? 'var(--accent)' : 'var(--text-subtle)'));
