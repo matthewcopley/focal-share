@@ -460,6 +460,12 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 /* Task completion flash */
 @keyframes task-complete-flash{0%{background:rgba(77,200,138,.12);border-color:#4DC88A}100%{background:var(--surface);border-color:var(--border)}}
 .task-flash{animation:task-complete-flash .7s ease-out forwards}
+/* Newly added task — gold glow + "New" pill that fade over NEW_TASK_MS. --new-delay is a
+   negative offset so a re-render mid-highlight resumes the fade rather than restarting it. */
+@keyframes task-new-glow{0%,60%{border-color:var(--accent);background:rgba(200,165,55,.08);box-shadow:inset 3px 0 0 var(--accent)}100%{border-color:var(--border);background:var(--surface);box-shadow:inset 3px 0 0 transparent}}
+@keyframes task-new-badge{0%,75%{opacity:1}100%{opacity:0}}
+.task-card.task-new{animation:task-new-glow 8s ease-out;animation-delay:var(--new-delay,0ms)}
+.new-badge{padding:2px 8px;border-radius:var(--r-pill);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;background:var(--accent);color:#000;animation:task-new-badge 8s ease-out forwards;animation-delay:var(--new-delay,0ms)}
 /* Daily goal bar */
 .daily-goal-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px}
 .daily-goal-label{font-size:12px;color:var(--text-muted);flex-shrink:0;white-space:nowrap}
@@ -1599,7 +1605,7 @@ async function drainPendingTasks() {
         projectId: (q.projectId != null && q.projectId !== '') ? parseInt(q.projectId, 10) : null,
         teamFlag: !!q.teamFlag, wikiPage: '', completedAt: '',
       };
-      S.tasks.push(t); added.push(t);
+      S.tasks.push(t); added.push(t); markJustAdded(t.id);
     }
     render();
     try {
@@ -4454,6 +4460,9 @@ function mkFilterBar() {
 function mkCard(task, showReason) {
   const card=document.createElement('div');
   card.className='task-card'+(task.done?' done-card':'')+(_justCompleted.has(task.id)?' task-flash':'');
+  card.dataset.id=task.id;
+  const newAge=justAddedAge(task.id);
+  if (newAge!=null) { card.classList.add('task-new'); card.style.setProperty('--new-delay', -newAge+'ms'); }
   const isOpen=S.expandedId===task.id;
   const dueStr=formatDue(task.due);
   const dueSt=dueStatus(task.due);
@@ -4473,6 +4482,7 @@ function mkCard(task, showReason) {
   if (showReason && task.aiReason) tw.innerHTML+=`<div class="task-ai-reason">${esc(task.aiReason)}</div>`;
 
   const meta=document.createElement('div'); meta.className='task-meta';
+  if (newAge!=null) meta.innerHTML+=`<span class="new-badge">New</span>`;
   if (task.recur) {
     const rl=task.recur==='daily'?'Daily':task.recur==='weekly'?'Weekly':task.recur==='monthly'?'Monthly':task.recur.startsWith('every:')?`Every ${task.recur.slice(6)} days`:task.recur;
     meta.innerHTML+=`<span class="recur-icon" title="${rl}"><i class="ti ti-repeat"></i></span>`;
@@ -4586,6 +4596,45 @@ function mkEmpty(icon, text) {
 // ─────────────────────────────────────────────
 // ── Gamification helpers ────────────────────────────────────────────────────
 const _justCompleted = new Set(); // task IDs that should flash on next render
+
+// Newly added tasks: id → ms timestamp the highlight started. mkCard() reads the age so a
+// re-render (auto-save, 4s inbox poll) resumes the fade instead of restarting it.
+const NEW_TASK_MS = 8000;
+const _justAdded = new Map();
+function justAddedAge(id) {
+  const t0=_justAdded.get(id); if (t0==null) return null;
+  const age=Date.now()-t0; return age<NEW_TASK_MS ? age : null;
+}
+function markJustAdded(id) {
+  const t0=Date.now(); _justAdded.set(id, t0);
+  setTimeout(()=>{
+    if (_justAdded.get(id)!==t0) return;   // restarted since — a later timer owns it
+    _justAdded.delete(id);
+    const card=document.querySelector(`.task-card[data-id="${id}"]`);
+    if (card) { card.classList.remove('task-new'); card.querySelector('.new-badge')?.remove(); }
+  }, NEW_TASK_MS);
+}
+// Confirm a new task once the user can actually see the list (i.e. after the modal closes):
+// restart its highlight, scroll it into view, and toast — with a "Show" jump if the
+// current view filters it out.
+function announceNewTask(task) {
+  markJustAdded(task.id);
+  requestAnimationFrame(()=>{
+    const card=document.querySelector(`.task-card[data-id="${task.id}"]`);
+    const label='Added "'+(task.title.length>40?task.title.slice(0,40)+'…':task.title)+'"';
+    if (card) {
+      card.style.setProperty('--new-delay','0ms');
+      for (const el of [card, card.querySelector('.new-badge')]) {
+        if (!el) continue;
+        el.style.animation='none'; void el.offsetWidth; el.style.animation='';
+      }
+      card.scrollIntoView({block:'nearest', behavior:'smooth'});
+      showToast(label);
+    } else {
+      showToast(label+' — not in this view', {label:'Show', action:()=>{ setView('all'); announceNewTask(task); }});
+    }
+  });
+}
 
 // Returns {start, end|null} if streak is paused, null otherwise
 function getStreakPause() {
@@ -4856,8 +4905,12 @@ function openModal(task, presetProjectId, asCopy) {
 }
 
 function closeModal() {
+  // Quick-add creates the task before opening this modal, so it's announced here —
+  // on save or cancel alike — once the list is visible again.
+  const fresh = S.editingTask && _justAdded.has(S.editingTask.id) ? S.editingTask : null;
   document.getElementById('modal-overlay').classList.remove('open');
   S.editingTask=null; S.modalSubs=[]; S.copyFrom=null;
+  if (fresh) announceNewTask(fresh);
 }
 
 function renderModalSubs() {
@@ -4906,6 +4959,7 @@ function saveModal() {
     const task={id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',created:new Date().toISOString(),notes:cf?.notes||'',teamFlag:cf?.teamFlag||false,...data};
     S.tasks.push(task);
     logChange('task', task.id, 'create', (cf?'Duplicated task: "':'Created task: "') + task.title + '"');
+    announceNewTask(task);
   }
   closeModal(); markUnsaved(); render();
 }
@@ -5672,7 +5726,7 @@ function setupEvents() {
       setTimeout(()=>openIdeaModal(S.ideas.find(i=>i.id===idea.id)),50);
     } else {
       const task={id:nextId(),title,priority:3,category:S.lastCat||(S.categories[0]?.name||''),due:'',recur:'',description:'',done:false,completedAt:'',subtasks:[],aiRank:null,aiReason:'',created:new Date().toISOString(),notes:'',teamFlag:false,wikiPage:''};
-      S.tasks.push(task); e.target.value=''; markUnsaved(); render();
+      S.tasks.push(task); markJustAdded(task.id); e.target.value=''; markUnsaved(); render();
       setTimeout(()=>openModal(S.tasks.find(t=>t.id===task.id)),50);
     }
   });
