@@ -575,14 +575,19 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .daily-goal-count{font-size:12px;font-weight:600;color:var(--text);flex-shrink:0;min-width:40px;text-align:right}
 .daily-goal-hit{font-size:11px;font-weight:600;color:#5FBF8A;flex-shrink:0}
 /* ── Rings (replace the single daily-goal bar) ── */
-.rings-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.ring{display:flex;align-items:center;gap:8px;cursor:default}
+.rings-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.rings-bar.launch-open{border-left:3px solid var(--accent)}
+.ring{display:flex;align-items:center;gap:10px;cursor:default}
+.ring-lead{display:flex;align-items:center;gap:14px;padding-right:22px;border-right:1px solid var(--border)}
+.ring-lead .ring-label{color:var(--ring);font-weight:600}
+.ring-lead .ring-count{font-size:18px}
+@media (max-width:700px){.ring-lead{flex-wrap:wrap;gap:10px;padding-right:0;border-right:none}}
 .ring svg{flex-shrink:0;transform:rotate(-90deg)}
 .ring-track:not([stroke]){stroke:var(--border-mid)}
 .ring-fill{transition:stroke-dashoffset .5s cubic-bezier(.4,0,.2,1)}
 .ring-text{display:flex;flex-direction:column;line-height:1.25}
-.ring-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
-.ring-count{font-size:12px;font-weight:600;color:var(--text)}
+.ring-label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}
+.ring-count{font-size:14px;font-weight:600;color:var(--text)}
 .ring-count span{font-weight:400;color:var(--text-muted)}
 .ring.closed .ring-label{color:var(--text)}
 @keyframes ring-pop{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
@@ -5800,17 +5805,33 @@ let _ringPop = new Set();
 function mkDailyGoalBar() {
   const st = ringState();
   const bar = document.createElement('div'); bar.className = 'rings-bar';
-  const R = 12, C = 2 * Math.PI * R;
+  // Launch leads: a bigger ring set apart from the other two, and while it's still
+  // open a one-click start on the stickiest task (Focus has its own frog panel).
+  const launchOpen = !ringClosed(st.rings[0]);
+  if (launchOpen) bar.classList.add('launch-open');
   for (const r of st.rings) {
-    const none = r.of === 0;
+    const none = r.of === 0, lead = r.key === 'launch';
+    const D = lead ? 46 : 38, SW = lead ? 6 : 5, R = (D - SW) / 2 - 1, C = 2 * Math.PI * R, c = D / 2;
     const pct  = none ? 1 : Math.min(1, r.n / r.of);
     const el = document.createElement('div');
     el.className = 'ring' + (ringClosed(r) ? ' closed' : '') + (_ringPop.has(r.key) ? ' pop' : '');
     el.title = r.tip;
-    el.innerHTML = `<svg width="30" height="30" viewBox="0 0 30 30"><circle class="ring-track" cx="15" cy="15" r="${R}" fill="none" stroke-width="4"${none ? '' : ` stroke="${RING_COLORS[r.key]}" stroke-opacity=".16"`}/>`
-      + `<circle class="ring-fill" cx="15" cy="15" r="${R}" fill="none" stroke="${none ? 'var(--border-mid)' : RING_COLORS[r.key]}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C * (1 - pct)).toFixed(2)}"${pct === 0 ? ' opacity="0"' : ''}/></svg>`
+    el.innerHTML = `<svg width="${D}" height="${D}" viewBox="0 0 ${D} ${D}"><circle class="ring-track" cx="${c}" cy="${c}" r="${R}" fill="none" stroke-width="${SW}"${none ? '' : ` stroke="${RING_COLORS[r.key]}" stroke-opacity=".16"`}/>`
+      + `<circle class="ring-fill" cx="${c}" cy="${c}" r="${R}" fill="none" stroke="${none ? 'var(--border-mid)' : RING_COLORS[r.key]}" stroke-width="${SW}" stroke-linecap="round" stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C * (1 - pct)).toFixed(2)}"${pct === 0 ? ' opacity="0"' : ''}/></svg>`
       + `<div class="ring-text"><span class="ring-label">${r.label}</span><span class="ring-count">${none ? '<span>nothing due</span>' : `${r.n}<span>/${r.of}</span>`}</span></div>`;
-    bar.appendChild(el);
+    if (!lead) { bar.appendChild(el); continue; }
+    const wrap = document.createElement('div'); wrap.className = 'ring-lead';
+    wrap.style.setProperty('--ring', RING_COLORS.launch);
+    wrap.appendChild(el);
+    const frog = launchOpen && S.view !== 'focus' ? pickFrog() : null;
+    if (S.launch && S.view !== 'focus') {
+      wrap.insertAdjacentHTML('beforeend', '<button class="launch-go"><i class="ti ti-player-play"></i>Running</button>');
+      wrap.lastChild.onclick = () => { S.launchView = 'run'; showLaunch(); };
+    } else if (frog) {
+      wrap.insertAdjacentHTML('beforeend', `<button class="launch-go" title="5 minutes on: ${esc(frog.title)}"><i class="ti ti-player-play"></i>Start 5 min</button>`);
+      wrap.lastChild.onclick = () => openLaunch(frog.id);
+    }
+    bar.appendChild(wrap);
   }
   const s = st.streak, bits = [];
   if (st.overdue) bits.push(`<span class="rings-overdue" title="Open tasks past their due date">${st.overdue} overdue</span>`);
