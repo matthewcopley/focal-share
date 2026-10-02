@@ -31,8 +31,11 @@ If there's no input: **Continue**.
 
 1. **If** · *Shortcut Input* · **has any value**
    - **Set Variable** `Email` to *Shortcut Input*
-   - **Text** → leave it empty → **Set Variable** `Header`
-   - **Text** `Selection` → **Set Variable** `Source`
+   - **Text** → leave it empty → **Set Variable** `Header` to *Text*
+   - **Text** `Selection` → **Set Variable** `Source` to *Text*
+
+   Each **Text** needs its own **Set Variable** right after it, and the variable must
+   be named. A "Set variable *Variable Name*" left at its placeholder saves nothing.
 2. **Otherwise**
    - **Run AppleScript**, replacing the template with:
 
@@ -43,18 +46,21 @@ If there's no input: **Continue**.
              if sel is {} then return ""
              set m to item 1 of sel
              set body to content of m
-             if (length of body) > 6000 then set body to text 1 thru 6000 of body
              set hdr to "From: " & (sender of m) & linefeed & ¬
                  "Subject: " & (subject of m) & linefeed & ¬
                  "message://%3C" & (message id of m) & "%3E"
-             return hdr & linefeed & "@@BODY@@" & linefeed & body
          end tell
+         -- trim outside the tell block: inside it, Mail turns "text" into "rich text"
+         if (length of body) > 6000 then set body to text 1 thru 6000 of body
+         return hdr & linefeed & "@@BODY@@" & linefeed & body
      end run
      ```
    - **Split Text** *AppleScript Result* by **Custom** `@@BODY@@`
-   - **Get Item from List**: **First Item** of *Split Text* → **Set Variable** `Header`
+   - **Get Item from List**: **First Item** of *Split Text*
+   - **Set Variable** `Header` to *Item from List*
    - **Set Variable** `Email` to *AppleScript Result*
-   - **Text** `Mail` → **Set Variable** `Source`
+   - **Text** `Mail`
+   - **Set Variable** `Source` to *Text*
 3. **End If**
 
 The `message://` line becomes an **Open email** link on the task, which opens the
