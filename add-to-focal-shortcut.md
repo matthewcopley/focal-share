@@ -5,131 +5,72 @@ Apple Intelligence (on-device or Private Cloud Compute). The task lands in Focal
 **Review** list. Nothing is added to your tasks until you Approve, Edit or Discard it.
 
 Needs macOS 26+ with Apple Intelligence turned on, running on the same Mac as the Focal launcher.
-Build time: about 5 minutes.
 
 ## How it flows
 
 ```
-Mail (⌃⌥F) or selected text → Shortcut → Use Model (Apple AI) → POST /pending-tasks → Focal ▸ Review
+Mail (⌃⌥F) or selected text → Run AppleScript → Use Model (Apple AI) → POST /pending-tasks → Focal ▸ Review
 ```
 
-## 1. Create the shortcut
+## 1. Build it
 
-Shortcuts app → **+** → name it **Add to Focal**.
+In the Shortcuts app, create **Add to Focal**. In **ⓘ Details**, tick **Use as Quick Action** and **Services Menu**, then **Add Keyboard Shortcut** (e.g. ⌃⌥F). It's four actions, no variables. Receive **Text** from **Quick Actions**; if there's no
+input, **Continue**.
 
-In the right sidebar, open the **ⓘ Details** tab:
+1. **Run AppleScript** with *Shortcut Input*:
 
-- ✅ **Use as Quick Action**, then tick **Services Menu**.
-- Click **Add Keyboard Shortcut** and press **⌃⌥F** (or any combo you like).
-
-At the top of the editor, the "Receive" line should read: Receive **Text** from **Quick Actions**.
-If there's no input: **Continue**.
-
-## 2. Add the actions in order
-
-### A. Get the text: either the selection or the open email
-
-1. **If** · *Shortcut Input* · **has any value**
-   - **Set Variable** `Email` to *Shortcut Input*
-   - **Text** → leave it empty → **Set Variable** `Header` to *Text*
-   - **Text** `Selection` → **Set Variable** `Source` to *Text*
-
-   Each **Text** needs its own **Set Variable** right after it, and the variable must
-   be named. A "Set variable *Variable Name*" left at its placeholder saves nothing.
-2. **Otherwise**
-   - **Run AppleScript**, replacing the template with:
-
-     ```applescript
-     on run {input, parameters}
-         tell application "Mail"
-             set sel to selection
-             if sel is {} then return ""
-             set m to item 1 of sel
-             set body to content of m
-             set hdr to "From: " & (sender of m) & linefeed & ¬
-                 "Subject: " & (subject of m) & linefeed & ¬
-                 "message://%3C" & (message id of m) & "%3E"
-         end tell
-         -- trim outside the tell block: inside it, Mail turns "text" into "rich text"
-         if (length of body) > 6000 then set body to text 1 thru 6000 of body
-         return hdr & linefeed & "@@BODY@@" & linefeed & body
-     end run
-     ```
-   - **Split Text** *AppleScript Result* by **Custom** `@@BODY@@`
-   - **Get Item from List**: **First Item** of *Split Text*
-   - **Set Variable** `Header` to *Item from List*
-   - **Set Variable** `Email` to *AppleScript Result*
-   - **Text** `Mail`
-   - **Set Variable** `Source` to *Text*
-3. **End If**
-
-The `message://` line becomes an **Open email** link on the task, which opens the
-original message in Mail. The body is capped at 6000 characters because the
-on-device model has a small context window.
-
-### B. Ask Apple Intelligence for the task
-
-4. **Get Current Date** → **Format Date**: Custom, `yyyy-MM-dd EEEE`
-5. **Use Model**: pick **Private Cloud Compute**. It reads long emails better.
-   **On-Device** also works and keeps everything on the Mac. Prompt:
-
-   ```
-   Turn this into one to-do task for me. Today is [Formatted Date].
-   Reply with ONLY a JSON object, no other text, no code fences:
-   {"title": "", "description": "", "due": "", "priority": 3, "category": ""}
-
-   - title: a short imperative action, under 70 characters ("Send Q3 invoice to Acme").
-   - description: 1-3 sentences with what's needed and key details (amounts, names, dates).
-   - due: YYYY-MM-DD, only if the text states or clearly implies a deadline; otherwise "".
-   - priority: 1 critical, 2 high, 3 medium (default), 4 low.
-   - category: exactly one of <your Focal categories, comma-separated>,
-     or "" if none fits.
-
-   Text:
-   [Email]
+   ```applescript
+   on run {input, parameters}
+   	set today to "Today: " & (date string of (current date))
+   	set picked to ""
+   	try
+   		set picked to input as text
+   	end try
+   	if picked is not "" then return today & linefeed & "Source: Selection" & linefeed & "@@BODY@@" & linefeed & picked
+   	tell application "Mail"
+   		set sel to selection
+   		if sel is {} then error "Select an email in Mail first."
+   		set m to item 1 of sel
+   		set body to content of m
+   		set hdr to "From: " & (sender of m) & linefeed & "Subject: " & (subject of m) & linefeed & "message://%3C" & (message id of m) & "%3E"
+   	end tell
+   	-- trim outside the tell block: inside it, Mail turns "text" into "rich text"
+   	if (length of body) > 6000 then set body to text 1 thru 6000 of body
+   	return today & linefeed & hdr & linefeed & "@@BODY@@" & linefeed & body
+   end run
    ```
 
-   (Insert *Formatted Date* and the `Email` variable as variables, not typed text.)
-6. **Match Text**: pattern `\{[\s\S]*\}` in *Response*. This strips any stray prose or
-   ``` fences the model adds.
-7. **Get Dictionary from Input** · *Matches*
-
-### C. Send it to Focal
-
-8. **Text**, then **Set Variable** `Description`:
+   Selected text wins. With nothing selected it reads the email open in Mail. The
+   body is capped at 6000 characters because the on-device model's context is small.
+2. **Use Model**: Private Cloud Compute. Expand the action (⧁) and set the output to
+   **Dictionary**. Prompt, ending with the *AppleScript Result* variable:
 
    ```
-   [Dictionary.description]
+   Turn the email or text below into one to-do task for me. Return a dictionary with exactly these keys:
+   title: a short imperative action, under 70 characters.
+   description: 1-3 sentences with what's needed and the key details (amounts, names, dates).
+   due: the deadline as YYYY-MM-DD, only if the text states or clearly implies one, otherwise empty. Work out relative dates like "Friday" or "end of month" from the Today line.
+   priority: 1 critical, 2 high, 3 medium (the default), 4 low.
+   category: exactly one of <your Focal categories, comma-separated>, or empty if none fits.
 
-   [Header]
+   [AppleScript Result]
    ```
+3. **Get Contents of URL** `http://localhost:8080/pending-tasks`,
+   Method **POST**, Request Body **JSON**, with Text fields `title`, `description`, `due`,
+   `priority` and `category`. Each one is the *Response* variable → **Get Value for Key** → that name.
+   Add one more field, `email` = *AppleScript Result*. The launcher puts the From /
+   Subject / `message://` lines under the description. That's what becomes the
+   **Open email** link.
+4. **Show Notification** "Sent to Focal for review", body *Response → title*.
 
-   To insert `Dictionary.description`, add the *Dictionary* variable, click it, and choose
-   **Get Value for Key** → `description`.
-9. **Get Contents of URL**
-   - URL: `http://localhost:8080/pending-tasks`
-   - Method: **POST**
-   - Request Body: **JSON**, with these Text fields:
-
-     | Key | Value |
-     |---|---|
-     | `title` | Dictionary → `title` |
-     | `description` | `Description` |
-     | `due` | Dictionary → `due` |
-     | `priority` | Dictionary → `priority` |
-     | `category` | Dictionary → `category` |
-     | `source` | `Source` |
-10. **Show Notification**: `Sent to Focal for review: [Dictionary.title]`
-
-## 3. First run
+## 2. First run
 
 Open an email in Mail and press **⌃⌥F**. macOS will ask to let Shortcuts control Mail
-and to run AppleScript. Allow both. Pressing the shortcut with no email selected sends
-an empty prompt, so select a message first.
+and to run AppleScript. Allow both.
 
 To send text instead: select it anywhere, right-click → **Services → Add to Focal**.
 
-## 4. In Focal
+## 3. In Focal
 
 A **Review** entry appears in the sidebar under Focus, along with a toast ("New task
 to review"), within about 4 seconds. Each item shows its priority, due date, category
@@ -149,9 +90,10 @@ there even if Focal is closed, and every device sees the same list.
   before the Review feature existed adds these as plain tasks instead.
 - **"Could not connect".** Check that the Focal launcher is running. Test with
   `curl http://localhost:8080/pending-tasks`.
-- **"Get Dictionary" fails.** The model answered with something other than JSON. Run
-  the shortcut from the editor to see the *Response*. Switching to Private Cloud
-  Compute usually fixes it.
+- **The task arrives with an empty or odd title.** Run the shortcut from the editor
+  with an email selected and look at the Use Model *Response*: its keys must be
+  exactly `title`, `description`, `due`, `priority`, `category`. Private Cloud Compute
+  follows the key list more reliably than On-Device.
 - **Test the endpoint without the shortcut:**
 
   ```bash

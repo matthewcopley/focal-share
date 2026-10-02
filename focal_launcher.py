@@ -280,9 +280,21 @@ def queue_task_for_review():
         pr = _PRIORITY_WORDS.get(str(pr or '').strip().lower(), 3)
     if pr < 1 or pr > 4:
         pr = 3
+    # `email` is the shortcut's raw capture: header lines (From / Subject / message:// link),
+    # then '@@BODY@@', then the text the model read. The header goes under the description
+    # so the task links back to the email; the shortcut stays four actions with no text
+    # plumbing of its own.
+    description, source = s('description', 20000), s('source', 40)
+    head, sep, _ = s('email', 60000).partition('@@BODY@@')
+    if sep:
+        lines = [ln.strip() for ln in head.splitlines()
+                 if ln.strip() and not ln.startswith(('Today:', 'Source:'))]
+        if lines:
+            description = (description + '\n\n' + '\n'.join(lines)).strip()
+        source = source or ('Mail' if 'message://' in head else 'Selection')
     item = {
-        'title': title, 'description': s('description', 20000), 'notes': s('notes', 20000),
-        'due': due, 'priority': pr, 'category': s('category', 80), 'source': s('source', 40),
+        'title': title, 'description': description, 'notes': s('notes', 20000),
+        'due': due, 'priority': pr, 'category': s('category', 80), 'source': source,
         'review': True, 'created': _now_iso(),
     }
     INBOX_DIR.mkdir(exist_ok=True)
