@@ -188,6 +188,14 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .snooze-row{flex-wrap:wrap}
 .snooze-row .recur-title{cursor:pointer;flex:1 1 180px}
 .snooze-row .recur-title:hover{text-decoration:underline}
+.task-description a{color:var(--accent);text-decoration:none}
+.task-description a:hover{text-decoration:underline}
+.review-row{align-items:flex-start;flex-wrap:wrap;padding:10px 12px;margin-bottom:6px}
+.review-body{flex:1 1 260px;min-width:0}
+.review-body .task-title{white-space:normal}
+.review-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px}
+.review-row .task-description{margin:8px 0 0;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.review-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .snooze-until{display:flex;align-items:center;gap:5px;color:var(--text-subtle);flex-shrink:0}
 .action-btn{padding:5px 12px;border-radius:var(--r-btn);border:1px solid var(--border);background:transparent;cursor:pointer;font-size:11px;font-family:inherit;letter-spacing:0.05em;color:var(--text-dim);display:flex;align-items:center;gap:5px;transition:background .1s,color .1s}
 .action-btn:hover{background:rgba(255,255,255,.03);color:var(--text)}
@@ -931,6 +939,7 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
     <div id="sidebar-resizer"></div>
     <div class="nav-item" data-view="dashboard"><i class="ti ti-layout-dashboard"></i><span class="nav-label">Dashboard</span></div>
     <div class="nav-item" data-view="focus"><i class="ti ti-bolt"></i><span class="nav-label">Focus</span><span class="nav-badge" id="badge-focus">0</span></div>
+    <div class="nav-item" data-view="review" id="nav-review" style="display:none"><i class="ti ti-inbox"></i><span class="nav-label">Review</span><span class="nav-badge" id="badge-review">0</span></div>
     <!-- Tasks group -->
     <div class="nav-group-header" id="tasks-nav-toggle">
       <i class="ti ti-checkbox"></i>
@@ -1436,6 +1445,8 @@ const S = {
   addedTo: '',
   upcomingFilter: 'all', // Upcoming view — 'all' (next 14 days) | 'week' (through Sunday) | 'tomorrow'
   editingTask: null,
+  review: [],            // queued tasks awaiting approval (launcher inbox items with review:true)
+  reviewing: null,       // the review item the task modal is editing, if any
   editingProject: null,
   modalSubs: [],
   copyFrom: null,
@@ -2082,7 +2093,42 @@ async function saveDB() {
 // JSON files in the launcher's .focal_inbox. We pull them here, add them to our own model,
 // PERSIST, then ack (which deletes the files). Acking only after a successful save means a
 // crash mid-drain just re-queues the task rather than losing it. Focal assigns the id.
+//
+// Items flagged review:true (POST /pending-tasks, e.g. the "Add to Focal" macOS Shortcut)
+// are NOT drained: they stay as inbox files until approved or discarded in the Review
+// view. Leaving them on the launcher means they show on every device, survive Focal
+// being closed (the launcher's flusher skips them too), and never touch focal.db or the
+// stats until a person says yes.
 let _draining = false;
+// queue_id → 'busy' (approving, or discarded with Undo still open) | 'done' (acked).
+// Hides the item from S.review until the launcher stops listing it; 'done' ones still
+// listed get re-acked, so a failed ack can't bring an approved task back for review.
+const _reviewGone = new Map();
+const _reviewSeen = new Set();   // queue_ids already announced with a toast
+
+function taskFromQueued(q) {
+  const p = parseInt(q.priority, 10);
+  return {
+    title: String(q.title || '').trim(),
+    priority: (p >= 1 && p <= 4) ? p : 3,
+    category: normalizeCategory(q.category), due: String(q.due || ''),
+    recur: String(q.recur || ''), description: String(q.description || ''),
+    done: false, subtasks: [], aiRank: null, aiReason: '',
+    created: String(q.created || new Date().toISOString()),
+    notes: String(q.notes || ''),
+    projectId: (q.projectId != null && q.projectId !== '') ? parseInt(q.projectId, 10) : null,
+    teamFlag: !!q.teamFlag, wikiPage: '', completedAt: '',
+  };
+}
+
+async function ackQueued(ids) {
+  if (!ids.length) return true;
+  try {
+    const r = await fetch('/pending-tasks/ack', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})});
+    return r.ok;
+  } catch(e) { return false; }
+}
+
 async function drainPendingTasks() {
   if (!S.usingLauncher || !S.db || _draining) return;
   _draining = true;
@@ -2093,25 +2139,17 @@ async function drainPendingTasks() {
       if (!r.ok) return;
       list = (await r.json()).tasks || [];
     } catch(e) { return; }
+
+    syncReview(list.filter(q => q.review));
+    list = list.filter(q => !q.review);
     if (!list.length) return;
 
     const added = [], ids = [];
     for (const q of list) {
       ids.push(q.queue_id);
-      const title = String(q.title || '').trim();
-      if (!title) continue;                 // invalid — ack/delete without adding
-      const p = parseInt(q.priority, 10);
-      const t = {
-        id: nextId(), title,
-        priority: (p >= 1 && p <= 4) ? p : 3,
-        category: normalizeCategory(q.category), due: String(q.due || ''),
-        recur: String(q.recur || ''), description: String(q.description || ''),
-        done: false, subtasks: [], aiRank: null, aiReason: '',
-        created: String(q.created || new Date().toISOString()),
-        notes: String(q.notes || ''),
-        projectId: (q.projectId != null && q.projectId !== '') ? parseInt(q.projectId, 10) : null,
-        teamFlag: !!q.teamFlag, wikiPage: '', completedAt: '',
-      };
+      const t = taskFromQueued(q);
+      if (!t.title) continue;               // invalid — ack/delete without adding
+      t.id = nextId();
       S.tasks.push(t); added.push(t); markJustAdded(t.id);
     }
     render();
@@ -2123,13 +2161,150 @@ async function drainPendingTasks() {
       return;                               // leave files queued; retry next cycle
     }
     for (const t of added) logChange('task', t.id, 'create', 'Added by assistant: "' + t.title + '"');
-    try {
-      await fetch('/pending-tasks/ack', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ids})});
-    } catch(e) {}
+    await ackQueued(ids);
     if (added.length) showToast(added.length + (added.length > 1 ? ' tasks' : ' task') + ' added by assistant');
   } finally {
     _draining = false;
   }
+}
+
+// ─────────────────────────────────────────────
+// REVIEW — queued tasks waiting for approve / edit / discard
+// ─────────────────────────────────────────────
+function syncReview(items) {
+  const listed = new Set(items.map(q => q.queue_id));
+  for (const id of [..._reviewGone.keys()]) if (!listed.has(id)) _reviewGone.delete(id);
+  ackQueued(items.filter(q => _reviewGone.get(q.queue_id) === 'done').map(q => q.queue_id));
+  const next = items.filter(q => !_reviewGone.has(q.queue_id));
+  const fresh = next.filter(q => !_reviewSeen.has(q.queue_id));
+  fresh.forEach(q => _reviewSeen.add(q.queue_id));
+  if (next.map(q => q.queue_id).join() === S.review.map(q => q.queue_id).join()) return;
+  S.review = next;
+  renderSidebar();
+  if (S.view === 'review') renderContent();
+  if (fresh.length && S.view !== 'review') {
+    showToast(fresh.length === 1 ? 'New task to review: "' + shortTitle(fresh[0].title) + '"' : fresh.length + ' new tasks to review',
+              {label:'Review', action:()=>setView('review'), duration:6000});
+  }
+}
+
+function shortTitle(t) { t = String(t || ''); return t.length > 40 ? t.slice(0, 40) + '…' : t; }
+
+function dropFromReview(q, state) {
+  _reviewGone.set(q.queue_id, state);
+  S.review = S.review.filter(x => x.queue_id !== q.queue_id);
+}
+
+// The task for `q` is already in S.tasks: persist it, then ack the inbox file —
+// the same save-before-ack order as the drain above.
+async function settleReview(q) {
+  dropFromReview(q, 'busy');
+  render();
+  await saveDB();
+  await ackQueued([q.queue_id]);
+  _reviewGone.set(q.queue_id, 'done');   // if that ack failed, syncReview retries it
+}
+
+async function approveReview(q) {
+  const t = {...taskFromQueued(q), id: nextId()};
+  S.tasks.push(t);
+  logChange('task', t.id, 'create', 'Approved from review: "' + t.title + '"');
+  await settleReview(q);
+  announceNewTask(t);
+}
+
+async function approveAllReview() {
+  const items = [...S.review];
+  const added = items.map(q => {
+    const t = {...taskFromQueued(q), id: nextId()};
+    S.tasks.push(t); markJustAdded(t.id);
+    logChange('task', t.id, 'create', 'Approved from review: "' + t.title + '"');
+    dropFromReview(q, 'busy');
+    return t;
+  });
+  render();
+  await saveDB();
+  await ackQueued(items.map(q => q.queue_id));
+  items.forEach(q => _reviewGone.set(q.queue_id, 'done'));
+  showToast('Approved ' + added.length + ' tasks', {label:'Show', action:()=>setView('recent')});
+}
+
+function editReview(q) {
+  S.reviewing = q;
+  openModal(taskFromQueued(q), undefined, true);   // asCopy: saving creates a new task
+}
+
+// Discard waits out the Undo toast before acking, so Undo is just "show it again".
+function discardReview(q) {
+  dropFromReview(q, 'busy');
+  render();
+  const timer = setTimeout(() => { _reviewGone.set(q.queue_id, 'done'); ackQueued([q.queue_id]); }, 6000);
+  showToast('Discarded "' + shortTitle(q.title) + '"', {duration: 6000, label:'Undo', action:() => {
+    clearTimeout(timer);
+    _reviewGone.delete(q.queue_id);
+    S.review = [...S.review, q].sort((a, b) => a.queue_id.localeCompare(b.queue_id));
+    render();
+  }});
+}
+
+function renderReview(c) {
+  c.innerHTML = '';
+  const hdr = document.createElement('div'); hdr.className = 'content-header';
+  hdr.innerHTML = '<h2>Review</h2>';
+  if (S.review.length > 1) {
+    const all = document.createElement('button'); all.className = 'action-btn';
+    all.innerHTML = '<i class="ti ti-checks"></i>Approve all';
+    all.onclick = approveAllReview;
+    hdr.appendChild(all);
+  }
+  c.appendChild(hdr);
+  if (!S.review.length) {
+    c.appendChild(mkEmpty('ti-inbox', 'Nothing to review. Tasks sent from the Add to Focal shortcut wait here until you approve them.'));
+    return;
+  }
+  S.review.forEach(q => {
+    const t = taskFromQueued(q);
+    const row = document.createElement('div'); row.className = 'recur-row review-row';
+    const known = !t.category || S.categories.some(x => x.name === t.category);
+    const dueStr = formatDue(t.due);
+    const desc = stripImgTokens(t.description);
+    const from = [q.source && 'via ' + q.source, fmtStamp(t.created)].filter(Boolean).join(' · ');
+    row.innerHTML = `<div class="review-body">
+        <div class="task-title">${esc(t.title)}</div>
+        <div class="review-meta">
+          <span class="priority-dot" style="background:${pColor(t.priority)}" title="P${t.priority}"></span>
+          <span class="recur-interval">${esc(fmtPriority(t.priority))}</span>
+          ${dueStr ? `<span class="due-badge due-${dueStatus(t.due) || 'future'}">${dueStr}</span>` : '<span class="recur-interval">No due date</span>'}
+          ${t.category ? `<span class="cat-pill" style="background:${catColor(t.category)}"${known ? '' : ' title="Not one of your categories — Edit to pick one"'}>${esc(t.category)}${known ? '' : ' (new)'}</span>` : ''}
+          ${from ? `<span class="recur-interval">${esc(from)}</span>` : ''}
+        </div>
+        ${desc ? `<div class="task-description">${linkify(desc)}</div>` : ''}
+      </div>`;
+    const acts = document.createElement('div'); acts.className = 'review-actions';
+    for (const [icon, label, fn, cls] of [['ti-check', 'Approve', approveReview, ''], ['ti-pencil', 'Edit', editReview, ''], ['ti-trash', 'Discard', discardReview, ' danger']]) {
+      const b = document.createElement('button'); b.className = 'action-btn' + cls;
+      b.innerHTML = `<i class="ti ${icon}"></i>${label}`;
+      b.onclick = () => fn(q);
+      acts.appendChild(b);
+    }
+    row.appendChild(acts);
+    c.appendChild(row);
+  });
+}
+
+// Plain text → escaped HTML with web links and Mail links (message://, which the
+// Add to Focal shortcut writes) clickable. Other schemes stay plain text.
+const LINK_RE = /\b(?:https?|message):\/\/[^\s<>"']*[^\s<>"'.,;:!?)\]]/g;
+function linkify(text) {
+  const s = String(text || '');
+  let out = '', i = 0;
+  for (const m of s.matchAll(LINK_RE)) {
+    const url = m[0], mail = url.startsWith('message:');
+    out += esc(s.slice(i, m.index))
+      + `<a href="${esc(url)}"${mail ? '' : ' target="_blank" rel="noopener"'}>${mail ? 'Open email' : esc(url)}</a>`;
+    i = m.index + url.length;
+  }
+  return out + esc(s.slice(i));
 }
 
 async function exportDB() {
@@ -2488,6 +2663,8 @@ function renderSidebar() {
   document.getElementById('badge-recent').textContent = S.tasks.filter(x=>x.created && localDate(new Date(x.created)) >= wkStart).length;
   document.getElementById('badge-recurring').textContent = S.tasks.filter(x=>!x.done&&x.recur).length;
   document.getElementById('badge-snoozed').textContent = S.tasks.filter(isSnoozed).length;
+  document.getElementById('badge-review').textContent = S.review.length;
+  document.getElementById('nav-review').style.display = (S.review.length || S.view==='review') ? '' : 'none';
   document.getElementById('badge-priority').textContent = pendingCount;
   const projBadge = document.getElementById('badge-projects');
   if (projBadge) projBadge.textContent = S.projects.filter(p=>p.status!=='complete').length;
@@ -2566,6 +2743,7 @@ function renderContent() {
   else if (S.view==='team') renderList(c);
   else if (S.view==='recurring') renderRecurring(c);
   else if (S.view==='snoozed') renderSnoozed(c);
+  else if (S.view==='review') renderReview(c);
   else if (S.view==='checkins') renderCheckins(c);
   else if (S.view==='priority') renderPriority(c);
   else if (S.view==='ideas') renderIdeas(c);
@@ -2586,7 +2764,7 @@ function renderQuickAdd() {
     bar.style.display = '';
     inp.placeholder = 'Quick capture idea — press Enter…';
     inp.dataset.mode = 'idea';
-  } else if (v === 'projects' || v.startsWith('project:') || v.startsWith('idea:') || v === 'successes' || v === 'settings') {
+  } else if (v === 'projects' || v.startsWith('project:') || v.startsWith('idea:') || v === 'successes' || v === 'settings' || v === 'review') {
     bar.style.display = 'none';
     inp.dataset.mode = 'none';
   } else {
@@ -5959,7 +6137,7 @@ function mkCard(task, showReason) {
   const inner=document.createElement('div'); inner.className='task-expand-inner';
   if (task.aiReason && !showReason) inner.innerHTML+=`<div class="task-expand-ai">${esc(task.aiReason)}</div>`;
   const descText = stripImgTokens(task.description);
-  if (descText) inner.innerHTML+=`<div class="task-description">${esc(descText)}</div>`;
+  if (descText) inner.innerHTML+=`<div class="task-description">${linkify(descText)}</div>`;
   // Anything appended below must use appendChild — a later innerHTML+= would wipe it.
   if (imgTokens(task.description).length) inner.appendChild(mkImageStrip(task.description));
   if (totSubs) {
@@ -7613,7 +7791,7 @@ function openModal(task, presetProjectId, asCopy) {
   S.editingTask=(task && !asCopy) ? task : null;
   S.copyFrom=asCopy ? {wikiPage:task.wikiPage||'', notes:task.notes||'', teamFlag:!!task.teamFlag} : null;
   S.modalSubs=task ? JSON.parse(JSON.stringify(task.subtasks||[])) : [];
-  document.getElementById('modal-title').textContent=asCopy?'Duplicate Task':(task?'Edit Task':'New Task');
+  document.getElementById('modal-title').textContent=S.reviewing?'Review Task':asCopy?'Duplicate Task':(task?'Edit Task':'New Task');
   document.getElementById('f-title').value=task?task.title:'';
   document.getElementById('f-priority').value=task?task.priority:3;
   document.getElementById('f-due').value=task?task.due:today();
@@ -7663,7 +7841,7 @@ function closeModal() {
   const fresh = S.editingTask && _justAdded.has(S.editingTask.id) ? S.editingTask : null;
   document.getElementById('modal-overlay').classList.remove('open');
   document.getElementById('f-desc-imgs').innerHTML='';
-  S.editingTask=null; S.modalSubs=[]; S.copyFrom=null;
+  S.editingTask=null; S.modalSubs=[]; S.copyFrom=null; S.reviewing=null;
   if (fresh) announceNewTask(fresh);
 }
 
@@ -7711,11 +7889,12 @@ function saveModal() {
     if (isDeferral(snap.due, data.due) && !snap.done) S.editingTask.deferrals=(snap.deferrals||0)+1;
     logChange('task', S.editingTask.id, 'update', `"${S.editingTask.title}"${diff ? ' — ' + diff : ''}`);
   } else {
-    const cf=S.copyFrom;
-    const task={id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',created:new Date().toISOString(),notes:cf?.notes||'',...data};
+    const cf=S.copyFrom, rq=S.reviewing;
+    const task={id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',created:rq?.created||new Date().toISOString(),notes:cf?.notes||'',...data};
     S.tasks.push(task);
-    logChange('task', task.id, 'create', (cf?'Duplicated task: "':'Created task: "') + task.title + '"');
+    logChange('task', task.id, 'create', (rq?'Approved from review: "':cf?'Duplicated task: "':'Created task: "') + task.title + '"');
     announceNewTask(task);
+    if (rq) { closeModal(); settleReview(rq); return; }
   }
   closeModal(); markUnsaved(); render();
 }

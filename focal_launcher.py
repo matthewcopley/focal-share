@@ -38,6 +38,10 @@ WIKI_SCRIPT = FOCAL_DIR / 'wiki_server.py'
 # INBOX_FLUSH_GRACE seconds), the launcher itself flushes the queue into focal.db — safe,
 # because nothing is live to clobber it. _db_lock serializes launcher writes against the
 # browser's POST /db full-DB saves.
+#
+# POST /pending-tasks adds a second kind of item, flagged review=true (the "Add to Focal"
+# macOS Shortcut). Those wait in the inbox until approved in Focal's Review view: Focal
+# doesn't drain them and the flusher below skips them.
 # ---------------------------------------------------------------------------
 INBOX_DIR = FOCAL_DIR / '.focal_inbox'
 INBOX_FLUSH_GRACE = 90          # seconds with no Focal poll before the launcher writes to disk
@@ -244,6 +248,51 @@ def pending_tasks():
     return jsonify(tasks=tasks)
 
 
+_DUE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+_PRIORITY_WORDS = {'critical': 1, 'urgent': 1, 'high': 2, 'medium': 3, 'normal': 3, 'low': 4}
+
+
+@app.route('/pending-tasks', methods=['POST'])
+def queue_task_for_review():
+    """Queue a task captured outside Focal (e.g. the "Add to Focal" macOS Shortcut) for
+    review. It lands in the same inbox as agent-dropped tasks, but flagged
+    review=true: Focal lists it under Review instead of adding it, and the closed-app
+    flusher leaves it alone, so nothing reaches the task list until it's approved.
+    Fields are coerced rather than rejected — they usually come from a language model."""
+    d = request.get_json(force=True, silent=True)
+    if not isinstance(d, dict):
+        return jsonify(ok=False, error='expected a JSON object'), 400
+
+    def s(key, cap):
+        v = d.get(key)
+        return '' if v is None else str(v).strip()[:cap]
+
+    title = s('title', 300)
+    if not title:
+        return jsonify(ok=False, error='title is required'), 400
+    due = s('due', 10)
+    if not _DUE_RE.match(due):
+        due = ''
+    pr = d.get('priority')
+    try:
+        pr = int(pr)
+    except (TypeError, ValueError):
+        pr = _PRIORITY_WORDS.get(str(pr or '').strip().lower(), 3)
+    if pr < 1 or pr > 4:
+        pr = 3
+    item = {
+        'title': title, 'description': s('description', 20000), 'notes': s('notes', 20000),
+        'due': due, 'priority': pr, 'category': s('category', 80), 'source': s('source', 40),
+        'review': True, 'created': _now_iso(),
+    }
+    INBOX_DIR.mkdir(exist_ok=True)
+    name = f"review-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}.json"
+    tmp = INBOX_DIR / ('.' + name + '.tmp')     # never matched by the *.json glob
+    tmp.write_text(json.dumps(item), encoding='utf-8')
+    os.replace(tmp, INBOX_DIR / name)
+    return jsonify(ok=True, queue_id=name), 201
+
+
 @app.route('/pending-tasks/ack', methods=['POST', 'OPTIONS'])
 def ack_pending():
     """Focal calls this AFTER it has persisted the drained tasks, to delete their inbox
@@ -351,7 +400,8 @@ def _flush_inbox_to_disk():
     while True:
         time.sleep(15)
         try:
-            items = _read_inbox()
+            # Review items wait for a person to approve them in Focal, open or not.
+            items = [(f, d) for f, d in _read_inbox() if not d.get('review')]
             if not items:
                 continue
             if time.time() - _last_pending_poll < INBOX_FLUSH_GRACE:
