@@ -22,14 +22,30 @@ input, **Continue**.
    ```applescript
    on run {input, parameters}
    	set today to "Today: " & (date string of (current date))
+   	-- Selected text. Apps that share rich text (Outlook does) hand it over as a file,
+   	-- so convert files to plain text rather than reading their path.
    	set picked to ""
    	try
-   		set picked to input as text
+   		if class of input is list then
+   			set x to item 1 of input
+   		else
+   			set x to input
+   		end if
+   		if class of x is in {alias, «class furl», file} then
+   			set picked to do shell script "textutil -convert txt -stdout " & quoted form of POSIX path of x
+   		else
+   			set picked to input as text
+   		end if
    	end try
-   	if picked is not "" then return today & linefeed & "Source: Selection" & linefeed & "@@BODY@@" & linefeed & picked
+   	if picked is not "" then
+   		if (length of picked) > 6000 then set picked to text 1 thru 6000 of picked
+   		return today & linefeed & "Source: Selection" & linefeed & "@@BODY@@" & linefeed & picked
+   	end if
+   	-- No selection: read the email open in Apple Mail. Outlook can't be read this way.
+   	if application "Mail" is not running then error "Nothing selected. Select the email's text (click in the message, then Cmd-A) and try again."
    	tell application "Mail"
    		set sel to selection
-   		if sel is {} then error "Select an email in Mail first."
+   		if sel is {} then error "Nothing selected. Select the email's text, or pick a message in Mail, and try again."
    		set m to item 1 of sel
    		set body to content of m
    		set hdr to "From: " & (sender of m) & linefeed & "Subject: " & (subject of m) & linefeed & "message://%3C" & (message id of m) & "%3E"
@@ -40,8 +56,10 @@ input, **Continue**.
    end run
    ```
 
-   Selected text wins. With nothing selected it reads the email open in Mail. The
-   body is capped at 6000 characters because the on-device model's context is small.
+   Selected text wins. Apps that hand over rich text (Outlook does) pass it as a file,
+   which `textutil` converts to plain text. With nothing selected it reads the message
+   selected in Apple Mail. Text is capped at 6000 characters because the on-device
+   model's context is small.
 2. **Use Model**: Private Cloud Compute. Expand the action (⧁) and set the output to
    **Dictionary**. Prompt, ending with the *AppleScript Result* variable:
 
@@ -69,6 +87,13 @@ Open an email in Mail and press **⌃⌥F**. macOS will ask to let Shortcuts con
 and to run AppleScript. Allow both.
 
 To send text instead: select it anywhere, right-click → **Services → Add to Focal**.
+
+**Outlook:** the new Outlook for Mac can't be read by scripts, so the shortcut can't
+pick up the open email the way it does in Mail. Click in the message body, press
+**⌘A** to select the email, then press **⌃⌥F**. If you right-click a message in the
+list, Services won't appear: it only shows for selected text. Select the From and
+Subject lines too if you want them in the task. Outlook has no link back to a
+message, so these tasks won't get an **Open email** link.
 
 ## 3. In Focal
 
