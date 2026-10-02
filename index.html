@@ -743,6 +743,23 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .ci-days button{padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text-dim);cursor:pointer;font-family:inherit;font-size:11px}
 .ci-days button.on{border-color:var(--accent);color:var(--accent)}
 @media (max-width:520px){#checkin-panel{padding:18px 16px}#checkin-panel .launch-boxes{display:grid;grid-template-columns:1fr 1fr;width:100%}#checkin-panel .launch-boxes button{border-bottom:1px solid var(--border-mid)}#checkin-panel .launch-boxes button:nth-child(2n){border-right:none}#checkin-panel .launch-boxes button:nth-last-child(-n+2){border-bottom:none}}
+.ci-when{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.ci-when>span:not(.launch-history){font-size:12px;color:var(--text-muted)}
+.ci-when .launch-history{margin-left:4px}
+.ci-del{color:var(--p1);border-color:rgba(212,112,112,.4)}
+.ci-del:hover{color:var(--p1);border-color:var(--p1)}
+.ci-day-hdr{display:flex;justify-content:space-between;gap:12px}
+.ci-day-hdr span:last-child{font-weight:400;text-transform:none;letter-spacing:0}
+.ci-log-row{cursor:pointer;flex-wrap:wrap}
+.ci-log-row:hover{border-color:var(--border-mid)}
+.ci-log-row:hover .recur-title{color:var(--accent)}
+.ci-log-row .recur-date{min-width:150px}
+.ci-log-rate{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);min-width:150px;white-space:nowrap}
+.ci-log-rate i{display:inline-block;width:9px;height:9px;flex-shrink:0}
+.ci-log-rate .ci-log-brk{border:1px dashed var(--text-subtle)}
+.ci-log-row .recur-title{flex:1 1 200px}
+.ci-log-none{color:var(--text-subtle);font-weight:400}
+.ci-log-extra{max-width:30%;overflow:hidden;text-overflow:ellipsis}
 .ci-time{font-size:12px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit;color-scheme:dark}
 /* ── Completion burst ── */
 .burst{position:fixed;width:0;height:0;pointer-events:none;z-index:400}
@@ -921,6 +938,7 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
     <div class="nav-item" data-view="projects"><i class="ti ti-folders"></i><span class="nav-label">Projects</span><span class="nav-badge" id="badge-projects">0</span></div>
     <div class="nav-item" data-view="ideas"><i class="ti ti-bulb"></i><span class="nav-label">Ideas</span><span class="nav-badge" id="badge-ideas">0</span></div>
     <div class="nav-item" data-view="successes"><i class="ti ti-trophy"></i><span class="nav-label">Successes</span><span class="nav-badge" id="badge-successes">0</span></div>
+    <div class="nav-item" data-view="checkins"><i class="ti ti-clock-check"></i><span class="nav-label">Check-ins</span><span class="nav-badge" id="badge-checkins">0</span></div>
 <div class="nav-item" data-view="team"><i class="ti ti-users"></i><span class="nav-label">Team Agenda</span><span class="nav-badge" id="badge-team">0</span></div>
     <div id="cats-nav-toggle">
       <i class="ti ti-tag"></i>
@@ -1438,6 +1456,9 @@ const S = {
   checkins: [],          // hourly check-ins — permanent, like sessions
   checkinDraft: null,    // the open check-in panel's fields
   hoursDay: '',          // day shown by the dashboard's Hours timeline ('' = today)
+  ciFilter: 'week',      // Check-ins view — same keys as doneFilter, over the day a check-in ended
+  ciFrom: '',
+  ciTo: '',
 };
 
 // ─────────────────────────────────────────────
@@ -2461,6 +2482,8 @@ function renderSidebar() {
   if (ideaBadge) ideaBadge.textContent = S.ideas.filter(i=>i.status!=='archived').length;
   const sucBadge = document.getElementById('badge-successes');
   if (sucBadge) sucBadge.textContent = S.successes.filter(s=>s.status!=='archived').length;
+  const ciBadge = document.getElementById('badge-checkins');
+  if (ciBadge) ciBadge.textContent = S.checkins.filter(k => ciDay(k) === today()).length;   // today's
 
   // Tasks group open/close — auto-open when a task view is active
   const inTaskGroupView = isTaskGroupView(S.view);
@@ -2530,6 +2553,7 @@ function renderContent() {
   else if (S.view==='team') renderList(c);
   else if (S.view==='recurring') renderRecurring(c);
   else if (S.view==='snoozed') renderSnoozed(c);
+  else if (S.view==='checkins') renderCheckins(c);
   else if (S.view==='priority') renderPriority(c);
   else if (S.view==='ideas') renderIdeas(c);
   else if (S.view.startsWith('idea:')) renderIdeaDetail(+S.view.split(':')[1], c);
@@ -3736,8 +3760,10 @@ function dashHourDay(b, x) {
     const ttl = document.createElementNS(svgNS, 'title');
     ttl.textContent = `${fmtHM(k.started)} – ${fmtHM(k.ended)} (${fmtMins(ciSecs(k))})\n`
       + (k.focus ? `${FOCUS_LEVELS[k.focus - 1].label} focus · ${DIFF_LEVELS[k.difficulty - 1].label}` : 'Break / away')
-      + (names.length ? '\n' + names.join(', ') : '') + (k.tags ? '\nIn the way: ' + k.tags : '') + (k.note ? '\n' + k.note : '');
+      + (names.length ? '\n' + names.join(', ') : '') + (k.tags ? '\nIn the way: ' + k.tags : '') + (k.note ? '\n' + k.note : '') + '\nClick to edit';
     r.appendChild(ttl);
+    r.style.cursor = 'pointer';
+    r.addEventListener('click', () => openCheckinEditor(k));
   });
   if (isToday) { const px = Math.min(W - 1, X(Date.now())); el('line', { x1: px, x2: px, y1: top, y2: base + 3, stroke: '#c8a537', 'stroke-width': 1.5 }); }
   card.appendChild(svg);
@@ -6815,9 +6841,14 @@ function renderCheckin() {
     const hiddenPicked = hidden.filter(t => d.taskIds.includes(t.id)).length;
     const same = d.lastIds.length && !d.lastIds.every(id => d.taskIds.includes(id));
     const ready = d.brk || (d.focus && d.difficulty);
-    panel.innerHTML = head('Check-in', `<button class="launch-small-btn" data-ci="later" title="Close (Esc). The pill keeps it waiting.">Later</button>`)
-      + `<div class="launch-title">How did it go since ${fmtHM(from)}?</div>`
-      + `<div class="launch-history">${fmtHM(from)} – ${fmtHM(now)} · ${fmtMins((now - from) / 1000)}</div>`
+    const editing = !!d.mode;   // 'edit' an existing check-in, or log a 'new' past stretch
+    panel.innerHTML = (editing
+        ? head(d.mode === 'edit' ? 'Edit check-in' : 'Log a past stretch', `<button class="launch-small-btn" data-ci="close" title="Close (Esc) without saving">Cancel</button>`)
+          + `<div class="ci-when"><input type="date" class="ci-time" id="ci-day" value="${d.day}" max="${today()}"><input type="time" class="ci-time" id="ci-t0" value="${d.t0}">`
+          + `<span>to</span><input type="time" class="ci-time" id="ci-t1" value="${d.t1}"><span class="launch-history" id="ci-dur"></span></div>`
+        : head('Check-in', `<button class="launch-small-btn" data-ci="later" title="Close (Esc). The pill keeps it waiting.">Later</button>`)
+          + `<div class="launch-title">How did it go since ${fmtHM(from)}?</div>`
+          + `<div class="launch-history">${fmtHM(from)} – ${fmtHM(now)} · ${fmtMins((now - from) / 1000)}</div>`)
       + `<div class="launch-field ci-tasks${d.brk ? ' ci-dim' : ''}"><label>What you worked on <span class="ci-opt">(optional)</span></label>`
       + `<div class="ci-chips">` + chips.map(t => { const on = d.taskIds.includes(t.id);
           return `<button class="ci-chip${on ? ' on' : ''}" data-task="${t.id}" title="${esc(t.title)}"><i class="ti ${on ? 'ti-check' : 'ti-plus'}"></i><span>${esc(t.title)}</span></button>`; }).join('')
@@ -6835,9 +6866,21 @@ function renderCheckin() {
           + CHECKIN_TAGS.map(tg => `<button class="ci-chip${d.tags.includes(tg) ? ' on' : ''}" data-tag="${esc(tg)}"><span>${esc(tg)}</span></button>`).join('')
           + `</div></div><div class="launch-field"><label for="ci-note">Note <span class="ci-opt">(optional)</span></label><input type="text" id="ci-note" maxlength="300" placeholder="Anything worth remembering about this stretch" value="${esc(d.note)}"></div>`
         : `<button class="ci-more" data-ci="more"><i class="ti ti-plus"></i> Note, or what got in the way</button>`)
-      + `<div class="launch-footer"><button class="launch-small-btn" data-ci="skip" title="Leave this stretch unlogged">Skip this one</button>`
-      + `<div class="launch-footer-right"><span class="launch-hint" style="margin:0;align-self:center">${ready ? 'Enter to log' : d.focus && !d.brk ? 'Pick a difficulty' : 'Pick a focus level'}</span>`
-      + `<button class="btn-primary" data-ci="log"${ready ? '' : ' disabled'}>Log it</button></div></div>`;
+      + `<div class="launch-footer">` + (d.mode === 'edit' ? `<button class="launch-small-btn ci-del" data-ci="delete">Delete</button>`
+          : editing ? '<span></span>' : `<button class="launch-small-btn" data-ci="skip" title="Leave this stretch unlogged">Skip this one</button>`)
+      + `<div class="launch-footer-right"><span class="launch-hint" style="margin:0;align-self:center">${ready ? (editing ? 'Enter to save' : 'Enter to log') : d.focus && !d.brk ? 'Pick a difficulty' : 'Pick a focus level'}</span>`
+      + `<button class="btn-primary" data-ci="log"${ready ? '' : ' disabled'}>${editing ? 'Save' : 'Log it'}</button></div></div>`;
+
+    if (editing) {
+      const dayIn = panel.querySelector('#ci-day'), t0In = panel.querySelector('#ci-t0'), t1In = panel.querySelector('#ci-t1'), dur = panel.querySelector('#ci-dur');
+      const upd = () => {
+        d.day = dayIn.value; d.t0 = t0In.value; d.t1 = t1In.value;
+        const [st, en] = ciEditRange(d);
+        dur.textContent = isNaN(st) || isNaN(en) ? '' : fmtMins((en - st) / 1000) + (localDate(st) !== localDate(en) ? ' · starts the day before' : '');
+      };
+      [dayIn, t0In, t1In].forEach(inp => inp.oninput = upd);
+      upd();
+    }
 
     panel.querySelectorAll('[data-task]').forEach(b => b.onclick = () => {
       const id = +b.dataset.task;
@@ -6901,6 +6944,7 @@ function checkinAction(act) {
     case 'break': d.brk = !d.brk; renderCheckin(); break;
     case 'more':  d.more = true; renderCheckin(); setTimeout(() => document.getElementById('ci-note')?.focus(), 30); break;
     case 'allchips': d.allChips = true; renderCheckin(); break;
+    case 'delete': deleteCheckin(d.editId); break;
     case 'same':  d.taskIds = [...new Set([...d.taskIds, ...d.lastIds])]; renderCheckin(); break;
     case 'tolaunch': closeCheckin(); S.launchView = 'run'; showLaunch(); break;
   }
@@ -6939,6 +6983,7 @@ function ciNewTask(title) {
 function submitCheckin() {
   const d = S.checkinDraft; if (!d || d.step !== 'log') return;
   if (!d.brk && !(d.focus && d.difficulty)) return;
+  if (d.mode) return saveCheckinEdit(d);
   const k = { id: S.checkins.reduce((mx, x) => Math.max(mx, x.id), 0) + 1, started: d.from, ended: new Date().toISOString(),
     focus: d.brk ? 0 : d.focus, difficulty: d.brk ? 0 : d.difficulty, taskIds: d.brk ? [] : [...d.taskIds],
     tags: d.more ? d.tags.join(', ') : '', note: d.more ? d.note.trim() : '', nextTaskId: null };
@@ -6948,6 +6993,119 @@ function submitCheckin() {
   d.step = 'next'; d.logged = k.id;
   renderCheckin(); updateCheckinPill();
   if (S.view === 'dashboard') renderContent();
+}
+
+// ── Editing check-ins ──
+// The same panel in edit mode: day, start and end become inputs, there's no
+// Next step, and Save replaces the fields in place. k = null logs a past stretch.
+function openCheckinEditor(k) {
+  if (S.launchView || S.checkinDraft) return;
+  const now = new Date();
+  const st = k ? new Date(k.started) : new Date(now - 3600e3), en = k ? new Date(k.ended) : now;
+  const hm = x => String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0');
+  const sg = checkinSuggestions(st, en);
+  const tags = k?.tags ? k.tags.split(',').map(x => x.trim()).filter(Boolean) : [];
+  S.checkinDraft = { step: 'log', mode: k ? 'edit' : 'new', editId: k ? k.id : null, slot: 0,
+    day: localDate(en), t0: hm(st), t1: hm(en), from: st.toISOString(),
+    taskIds: k ? [...k.taskIds] : sg.pre, sug: sg.sug, lastIds: k ? [] : sg.lastIds,
+    focus: k ? k.focus : 0, difficulty: k ? k.difficulty : 0, brk: !!k && !k.focus,
+    tags, note: k?.note || '', more: !!(tags.length || k?.note), logged: null };
+  document.getElementById('checkin-overlay').classList.add('open');
+  renderCheckin(); updateCheckinPill();
+}
+
+// Start and end from the day + two times. An end at or before the start means
+// the stretch began the day before.
+function ciEditRange(d) {
+  const en = new Date(`${d.day}T${d.t1}:00`);
+  let st = new Date(`${d.day}T${d.t0}:00`);
+  if (st >= en) st = new Date(st.getTime() - 86400e3);
+  return [st, en];
+}
+
+function saveCheckinEdit(d) {
+  const [st, en] = ciEditRange(d);
+  if (isNaN(st) || isNaN(en)) { showToast('Set the day and both times'); return; }
+  if (en.getTime() > Date.now() + 60000) { showToast('That ends in the future'); return; }
+  // Overlapping check-ins would count the same minutes twice
+  const clash = S.checkins.find(x => x.id !== d.editId && new Date(x.started) < en && st < new Date(x.ended));
+  if (clash) {
+    showToast(`Overlaps the ${fmtHM(clash.started)} – ${fmtHM(clash.ended)} check-in on ${new Date(clash.ended).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}. Adjust the times.`, { duration: 5000 });
+    return;
+  }
+  const fields = { started: st.toISOString(), ended: en.toISOString(),
+    focus: d.brk ? 0 : d.focus, difficulty: d.brk ? 0 : d.difficulty, taskIds: d.brk ? [] : [...d.taskIds],
+    tags: d.more ? d.tags.join(', ') : '', note: d.more ? d.note.trim() : '' };
+  if (d.mode === 'edit') {
+    const k = S.checkins.find(x => x.id === d.editId);
+    if (!k) { closeCheckin(); return; }
+    // This browser's "covered until" still points at the old end — move it with the check-in
+    try { if (localStorage.getItem(CHECKIN_COVER_KEY) === k.ended) localStorage.setItem(CHECKIN_COVER_KEY, fields.ended); } catch(e) {}
+    Object.assign(k, fields);
+  } else {
+    S.checkins.push({ id: S.checkins.reduce((mx, x) => Math.max(mx, x.id), 0) + 1, ...fields, nextTaskId: null });
+  }
+  markUnsaved(); closeCheckin();
+  showToast(d.mode === 'edit' ? 'Check-in updated' : 'Check-in added');
+  render();
+}
+
+function deleteCheckin(id) {
+  const i = S.checkins.findIndex(x => x.id === id); if (i < 0) return;
+  const [k] = S.checkins.splice(i, 1);
+  try { if (localStorage.getItem(CHECKIN_COVER_KEY) === k.ended) localStorage.removeItem(CHECKIN_COVER_KEY); } catch(e) {}
+  markUnsaved(); closeCheckin(); render();
+  showToast('Check-in deleted', { label: 'Undo', duration: 6000, action: () => { S.checkins.splice(i, 0, k); markUnsaved(); render(); updateCheckinPill(); } });
+}
+
+// The Check-ins view: every check-in, newest first, grouped by day, in the same
+// date window as Done. Click a row to edit it.
+function renderCheckins(c) {
+  c.innerHTML = '';
+  const hdr = document.createElement('div'); hdr.className = 'content-header';
+  hdr.innerHTML = `<h2>Check-ins</h2><div style="display:flex;gap:8px"><button class="icon-btn" id="ci-past-btn" title="Add a check-in for a stretch you missed or skipped"><i class="ti ti-history"></i>Log a past stretch</button>`
+    + `<button class="new-task-btn" id="ci-now-btn"><i class="ti ti-clock-check"></i>Check in now</button></div>`;
+  c.appendChild(hdr);
+  hdr.querySelector('#ci-past-btn').onclick = () => openCheckinEditor(null);
+  hdr.querySelector('#ci-now-btn').onclick = openCheckin;
+  c.appendChild(mkDateRangeBar({ label: 'Logged on', filterKey: 'ciFilter', fromKey: 'ciFrom', toKey: 'ciTo', fallback: 'week' }));
+
+  if (!S.checkins.length) {
+    const cfg = checkinCfg(), next = checkinSlots(today(), cfg).find(x => x > new Date());
+    c.appendChild(mkEmpty('ti-clock-check', !cfg.on ? 'No check-ins yet. Turn them on under Settings → Hourly check-in.'
+      : next ? `No check-ins yet. The next one comes up at ${fmtHM(next)}.` : 'No check-ins yet.'));
+    return;
+  }
+  const list = filterByDayRange(S.checkins, ciDay, 'ciFilter', 'ciFrom', 'ciTo').sort((p, q) => q.started.localeCompare(p.started));
+  if (!list.length) { c.appendChild(mkEmpty('ti-clock-check', 'No check-ins in this range')); return; }
+
+  const tot = ciTotals(list);
+  c.insertAdjacentHTML('beforeend', `<div class="ci-sum">${list.length} check-in${list.length === 1 ? '' : 's'} · ${fmtHrs(tot.focused)} focused · ${fmtHrs(tot.tracked)} tracked · ${fmtHrs(tot.hard)} hard${tot.brk ? ` · ${fmtHrs(tot.brk)} break` : ''}</div>`);
+  const byDay = new Map();
+  list.forEach(k => { const d = ciDay(k); if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(k); });
+  for (const [day, ks] of byDay) {
+    const t = ciTotals(ks);
+    const label = day === today() ? 'Today' : day === addDays(today(), -1) ? 'Yesterday'
+      : new Date(day + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const h = document.createElement('div'); h.className = 'recur-month-hdr ci-day-hdr';
+    h.innerHTML = `<span>${label}</span><span>${fmtHrs(t.focused)} focused · ${fmtHrs(t.tracked)} tracked</span>`;
+    c.appendChild(h);
+    ks.forEach(k => {
+      const names = k.taskIds.map(id => S.tasks.find(x => x.id === id)?.title).filter(Boolean);
+      const lvl = k.focus ? FOCUS_LEVELS[k.focus - 1] : null;
+      const extra = [k.tags, k.note].filter(Boolean).join(' · ');
+      const row = document.createElement('div'); row.className = 'recur-row ci-log-row';
+      row.title = 'Edit this check-in';
+      row.innerHTML = `<span class="recur-date">${fmtHM(k.started)} – ${fmtHM(k.ended)}</span>`
+        + `<span class="ci-log-rate">${lvl ? `<i style="background:${lvl.color}"></i>${lvl.label} · ${DIFF_LEVELS[k.difficulty - 1]?.label || ''}` : `<i class="ci-log-brk"></i>Break / away`}</span>`
+        + `<span class="recur-title${names.length ? '' : ' ci-log-none'}" title="${esc(names.join(', '))}">${names.length ? esc(names.join(', ')) : k.focus ? 'No tasks picked' : ''}</span>`
+        + (extra ? `<span class="recur-interval ci-log-extra" title="${esc(extra)}">${esc(extra)}</span>` : '')
+        + `<span class="recur-interval">${fmtMins(ciSecs(k))}</span>`
+        + `<button class="action-btn"><i class="ti ti-pencil"></i>Edit</button>`;
+      row.onclick = () => openCheckinEditor(k);
+      c.appendChild(row);
+    });
+  }
 }
 
 // The pill and a dot in the tab title wait while a check-in is due. Launch owns
@@ -7088,6 +7246,7 @@ function openHelp() {
         <li>Then <b>Next</b>: pick one thing and start five minutes on it, or close.</li>
       </ul>
       <p>Missed a few? The next one covers the whole gap. <b>Later</b> (Esc) leaves the pill in the corner. <b>Skip this one</b> leaves the stretch unlogged. Neither counts against you. During a Launch session the check-in waits until the session ends.</p>
+      <p><b>Check-ins</b> in the sidebar lists every one by day. Click one to fix its times, ratings or tasks, or delete it. <b>Log a past stretch</b> adds one you missed. Clicking a block on the dashboard timeline edits it too.</p>
       <p>The dashboard's <b>Hours</b> modules show focused hours (Steady or Deep) today and this week against <b>your own typical</b>, a timeline of each day, and the tasks your hours moved forward, finished or not.</p>
       <div class="help-why">Completions don't measure effort, and a hard day can end with nothing ticked off. This is the record of where the hours went. It rewards checking in, never the numbers, because an honest "Drifted" is worth more than a flattering "Deep".</div>`),
     sec('ti-circle-dashed', 'The three rings', `
@@ -8488,7 +8647,7 @@ function setupEvents() {
       return;
     }
     // Same for a check-in: Esc is "Later", Enter logs it once it's filled in
-    if (document.getElementById('checkin-overlay').classList.contains('open')) {
+    if (document.getElementById('checkin-overlay').classList.contains('open') && !document.getElementById('confirm-overlay').classList.contains('open')) {
       if (e.key==='Escape') { e.preventDefault(); closeCheckin(); }
       else if (e.key==='Enter' && e.target.tagName!=='BUTTON' && S.checkinDraft?.step==='log') { e.preventDefault(); submitCheckin(); }
       return;
