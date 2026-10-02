@@ -21,7 +21,15 @@ input, **Continue**.
 
    ```applescript
    on run {input, parameters}
-   	set today to "Today: " & (date string of (current date))
+   	-- Small models can't count weekdays, so hand them a lookup table for "by Friday".
+   	set now to current date
+   	set coming to {}
+   	repeat with i from 1 to 14
+   		set end of coming to my isoDay(now + i * days)
+   	end repeat
+   	set AppleScript's text item delimiters to ", "
+   	set today to "Today: " & my isoDay(now) & linefeed & "Coming days: " & (coming as text)
+   	set AppleScript's text item delimiters to ""
    	-- Selected text. Apps that share rich text (Outlook does) hand it over as a file,
    	-- so convert files to plain text rather than reading their path.
    	set picked to ""
@@ -54,22 +62,38 @@ input, **Continue**.
    	if (length of body) > 6000 then set body to text 1 thru 6000 of body
    	return today & linefeed & hdr & linefeed & "@@BODY@@" & linefeed & body
    end run
+
+   on isoDay(d)
+   	set m to text -2 thru -1 of ("0" & ((month of d) as integer))
+   	set dd to text -2 thru -1 of ("0" & (day of d))
+   	return ((weekday of d) as text) & " " & (year of d) & "-" & m & "-" & dd
+   end isoDay
    ```
 
    Selected text wins. Apps that hand over rich text (Outlook does) pass it as a file,
    which `textutil` converts to plain text. With nothing selected it reads the message
    selected in Apple Mail. Text is capped at 6000 characters because the on-device
    model's context is small.
-2. **Use Model**: Private Cloud Compute. Expand the action (⧁) and set the output to
+   It also lists the next 14 dates with weekdays: small models can't work out
+   which date "Friday" is, but they can copy it from a list.
+2. **Use Model**: Private Cloud Compute. The on-device model often takes the sender's own plans ("I'm going to call her") for yours. Expand the action (⧁) and set the output to
    **Dictionary**. Prompt, ending with the *AppleScript Result* variable:
 
    ```
-   Turn the email or text below into one to-do task for me. Return a dictionary with exactly these keys:
-   title: a short imperative action, under 70 characters.
-   description: 1-3 sentences with what's needed and the key details (amounts, names, dates).
-   due: the deadline as YYYY-MM-DD, only if the text states or clearly implies one, otherwise empty. Work out relative dates like "Friday" or "end of month" from the Today line.
-   priority: 1 critical, 2 high, 3 medium (the default), 4 low.
-   category: exactly one of <your Focal categories, comma-separated>, or empty if none fits.
+   You write to-do items for <your name>, who <your role> at <your company>. Below is an email or text <your name> selected. Write the ONE task it creates for <your name>.
+
+   Read it carefully first:
+   - Who wrote it and who it's addressed to. Ignore signatures, phone numbers and footers.
+   - What <your name> himself is asked or needs to do. When the writer says "I will" or "I'm going to" do something, that is the writer's job, not <your name>'s. If the email only keeps <your name> informed, <your name>'s task is to review it or follow up with the writer about it.
+
+   Return a dictionary with exactly these keys, in this order:
+   situation: one sentence on who wrote it and what <your name>'s part is.
+   title: <your name>'s action, starting with a verb, under 60 characters, naming the person or thing involved. Examples: "Follow up with Kyle on ERP planning", "Send WTSC final invoice to Jenny", "Pay Acme invoice #2210 ($1,200)".
+   description: 1-3 sentences of context <your name> will need later: who, what, amounts, links.
+   due: a date in YYYY-MM-DD form, only if the text gives a deadline. Copy it from the Today / Coming days lines (for "Friday", use the date listed for Friday). Leave it empty when the text gives no deadline. Never guess one.
+   priority: 1 urgent today, 2 has a deadline this week or money is overdue, 3 normal (the default), 4 low or just informational.
+   category, exactly one of these names:
+     <Category>: <what belongs in it>   (one line per Focal category)
 
    [AppleScript Result]
    ```

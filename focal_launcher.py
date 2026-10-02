@@ -288,7 +288,7 @@ def queue_task_for_review():
     head, sep, _ = s('email', 60000).partition('@@BODY@@')
     if sep:
         lines = [ln.strip() for ln in head.splitlines()
-                 if ln.strip() and not ln.startswith(('Today:', 'Source:'))]
+                 if ln.strip() and not ln.startswith(('Today:', 'Coming days:', 'Source:'))]
         if lines:
             description = (description + '\n\n' + '\n'.join(lines)).strip()
         source = source or ('Mail' if 'message://' in head else 'Selection')
