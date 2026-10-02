@@ -687,6 +687,63 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 #launch-pill i{color:var(--accent)}
 #launch-pill .pill-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)}
 #launch-pill .pill-time{font-variant-numeric:tabular-nums;font-weight:600}
+/* ── Hourly check-in ── */
+#checkin-pill{position:fixed;left:16px;bottom:16px;z-index:150;display:none;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid #2f6b4b;color:var(--text);font-size:12px;cursor:pointer;max-width:min(360px,calc(100vw - 32px))}
+#checkin-pill.show{display:flex}
+#checkin-pill i{color:#5fd59a}
+#checkin-pill .pill-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted)}
+#checkin-pill .pill-time{font-weight:600}
+#launch-pill.show + #checkin-pill{bottom:62px}
+#checkin-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:215;display:none;align-items:center;justify-content:center;padding:16px}
+#checkin-overlay.open{display:flex}
+#checkin-panel{background:var(--surface);border:1px solid var(--border-mid);width:600px;max-width:100%;max-height:92vh;overflow-y:auto;padding:22px 24px}
+#checkin-panel .launch-title{font-size:18px}
+#checkin-panel .launch-boxes{flex-wrap:wrap}
+#checkin-panel .launch-boxes button{display:flex;align-items:center;gap:7px}
+#checkin-panel .btn-primary:disabled{opacity:.35;cursor:default}
+.ci-opt{text-transform:none;letter-spacing:0;color:var(--text-subtle)}
+.ci-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ci-break.active{border-color:var(--accent);color:var(--accent)}
+.ci-swatch{width:9px;height:9px;flex-shrink:0}
+.launch-boxes button.active .ci-swatch{outline:1px solid #000}
+.ci-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ci-chip{display:flex;align-items:center;gap:6px;max-width:100%;padding:5px 10px;border:1px solid var(--border-mid);background:transparent;color:var(--text-dim);cursor:pointer;font-family:inherit;font-size:12px}
+.ci-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px}
+.ci-chip:hover{color:var(--text);border-color:var(--accent-dim)}
+.ci-chip.on{border-color:#3f9e6c;color:var(--text);background:rgba(63,158,108,.12)}
+.ci-chip.on i{color:#5fd59a}
+.ci-same{border-style:dashed}
+.ci-dim{opacity:.4;pointer-events:none}
+.ci-search{position:relative;margin-top:8px}
+.ci-search input{width:100%;padding:8px 10px;border:1px solid var(--border-mid);background:var(--input-bg);color:var(--text);font-family:inherit;font-size:13px;outline:none}
+.ci-search input:focus{border-color:var(--accent-dim)}
+.ci-results{display:none;position:absolute;left:0;right:0;top:100%;z-index:5;background:var(--surface);border:1px solid var(--border-mid);border-top:none;max-height:240px;overflow-y:auto}
+.ci-results.open{display:block}
+.ci-result{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:12px;cursor:pointer;color:var(--text)}
+.ci-result:first-child{background:rgba(255,255,255,.03)}
+.ci-result:hover{background:rgba(255,255,255,.06)}
+.ci-result span:first-of-type{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ci-result-meta{flex:0 0 auto !important;font-size:10px;color:var(--text-muted)}
+.ci-new{color:var(--accent)}
+.ci-more{margin-top:16px;background:none;border:none;padding:0;color:var(--text-muted);font-family:inherit;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.ci-more:hover{color:var(--text)}
+.ci-next-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.ci-next-row:last-child{border-bottom:none}
+.ci-next-row>span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ci-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ci-nav{display:flex;gap:4px}
+.ci-nav .launch-small-btn{padding:2px 8px}
+.ci-nav .launch-small-btn:disabled{opacity:.3;cursor:default}
+.ci-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:10px;color:var(--text-muted);margin-top:8px}
+.ci-legend span{display:flex;align-items:center;gap:5px}
+.ci-legend i{display:inline-block;width:9px;height:9px}
+.ci-sum{font-size:11px;color:var(--text-muted);margin:2px 0 10px}
+.ci-svg{width:100%;display:block}
+.ci-days{display:flex;gap:4px;flex-wrap:wrap}
+.ci-days button{padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text-dim);cursor:pointer;font-family:inherit;font-size:11px}
+.ci-days button.on{border-color:var(--accent);color:var(--accent)}
+@media (max-width:520px){#checkin-panel{padding:18px 16px}#checkin-panel .launch-boxes{display:grid;grid-template-columns:1fr 1fr;width:100%}#checkin-panel .launch-boxes button{border-bottom:1px solid var(--border-mid)}#checkin-panel .launch-boxes button:nth-child(2n){border-right:none}#checkin-panel .launch-boxes button:nth-last-child(-n+2){border-bottom:none}}
+.ci-time{font-size:12px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit;color-scheme:dark}
 /* ── Completion burst ── */
 .burst{position:fixed;width:0;height:0;pointer-events:none;z-index:400}
 .burst i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;background:var(--c);animation:burst-fly var(--t,.7s) cubic-bezier(.15,.7,.3,1) forwards}
@@ -1250,6 +1307,8 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 <div id="launch-overlay"><div id="launch-panel" role="dialog" aria-modal="true" aria-label="Launch"></div></div>
 <!-- Shown while a launch runs with the overlay hidden; click to bring it back -->
 <div id="launch-pill" role="button" tabindex="0" title="Back to the running session"></div>
+<div id="checkin-pill" role="button" tabindex="0" title="A check-in is due"></div>
+<div id="checkin-overlay"><div id="checkin-panel" role="dialog" aria-modal="true" aria-label="Check-in"></div></div>
 
 <!-- Toasts -->
 <div id="toast-container"></div>
@@ -1313,6 +1372,11 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE TABLE IF NOT EXISTS prefs (
   key TEXT PRIMARY KEY, value TEXT DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS checkins (
+  id INTEGER PRIMARY KEY, started TEXT DEFAULT '', ended TEXT DEFAULT '',
+  focus INTEGER DEFAULT 0, difficulty INTEGER DEFAULT 0, taskIds TEXT DEFAULT '[]',
+  tags TEXT DEFAULT '', note TEXT DEFAULT '', nextTaskId INTEGER
 );`;
 
 // Changelog retention — streaks, heatmap and "all-time" stats are derived from
@@ -1371,6 +1435,9 @@ const S = {
   launch: null,          // the running Launch session, mirrored to localStorage
   launchView: null,      // 'setup' | 'run' | 'park' while the overlay is drawn
   launchSetup: null,     // draft fields while picking a step and a timebox
+  checkins: [],          // hourly check-ins — permanent, like sessions
+  checkinDraft: null,    // the open check-in panel's fields
+  hoursDay: '',          // day shown by the dashboard's Hours timeline ('' = today)
 };
 
 // ─────────────────────────────────────────────
@@ -1732,6 +1799,16 @@ function dbLoadAll() {
       plan:o.plan||'', sticky:o.sticky===1 };
   }) : [];
 
+  const ciRes = S.db.exec('SELECT * FROM checkins ORDER BY id');
+  S.checkins = ciRes.length ? ciRes[0].values.map(row => {
+    const o = {}; ciRes[0].columns.forEach((c,i) => o[c]=row[i]);
+    let ids=[]; try { ids=JSON.parse(o.taskIds||'[]'); } catch(e) {}
+    return { id:o.id, started:o.started||'', ended:o.ended||'',
+      focus:toInt(o.focus, 0), difficulty:toInt(o.difficulty, 0),
+      taskIds:Array.isArray(ids) ? ids.map(n => toInt(n, 0)).filter(Boolean) : [],
+      tags:o.tags||'', note:o.note||'', nextTaskId:o.nextTaskId??null };
+  }) : [];
+
   const prefRes = S.db.exec('SELECT key, value FROM prefs');
   S.prefs = {};
   if (prefRes.length) prefRes[0].values.forEach(([k, v]) => { S.prefs[k] = v ?? ''; });
@@ -1863,6 +1940,14 @@ function dbSaveAll() {
         toInt(s.plannedMin,5), String(s.outcome||''), String(s.step||''), String(s.plan||''), s.sticky ? 1 : 0]);
     }
     seSt.free();
+
+    S.db.run('DELETE FROM checkins');
+    const ciSt = S.db.prepare('INSERT INTO checkins (id,started,ended,focus,difficulty,taskIds,tags,note,nextTaskId) VALUES (?,?,?,?,?,?,?,?,?)');
+    for (const k of S.checkins) {
+      ciSt.run([toInt(k.id,0), String(k.started||''), String(k.ended||''), toInt(k.focus,0), toInt(k.difficulty,0),
+        JSON.stringify(k.taskIds || []), String(k.tags||''), String(k.note||''), toIntOrNull(k.nextTaskId)]);
+    }
+    ciSt.free();
 
     S.db.run('DELETE FROM prefs');
     const prSt = S.db.prepare('INSERT INTO prefs (key,value) VALUES (?,?)');
@@ -2424,7 +2509,7 @@ function isTaskGroupView(v) { return TASK_GROUP_VIEWS.has(v) || v.startsWith('ca
 
 function setView(v) {
   S.view=v; S.showAllFocus=false; S.filters={p:new Set(),cats:new Set()};
-  if (v!=='dashboard') S.dashEdit=false;
+  if (v!=='dashboard') { S.dashEdit=false; S.hoursDay=''; }
   // Every task list opens sorted by due date — what's next is the question these
   // screens answer. Focus is the exception: it's the AI ranking, so it keeps the
   // 'default' (Smart) order. The sort bar still offers Smart/Newest and Priority.
@@ -2683,6 +2768,9 @@ const DASH_MODULES = [
   { id:'pri',      title:'By priority',          icon:'ti-flag',           span:6,  min:2, show:true,  desc:'Pending tasks, per priority', render:dashPri },
   { id:'streaks',  title:'Streaks',              icon:'ti-flame',          span:12, min:2, show:true,  desc:'Current and best streak, last 10 workdays, all-time', render:dashStreaks },
   { id:'launch',   title:'Launch',               icon:'ti-player-play',    span:12, min:2, show:true,  desc:'Sessions, focus time, sticky tasks cleared, plan vs reality', render:dashLaunch },
+  { id:'hours',    title:'Hours',                icon:'ti-clock-check',    span:12, min:2, show:true,  desc:'Focused hours today and this week against your typical, hard hours, average focus', render:dashHours },
+  { id:'hourday',  title:'Hours timeline',       icon:'ti-timeline',       span:6,  min:3, show:true,  desc:'One day of check-ins (focus and difficulty) and the tasks the hours moved forward', render:dashHourDay },
+  { id:'hourtrend',title:'Hours by day',         icon:'ti-chart-bar',      span:6,  min:3, show:true,  desc:'Tracked hours per day or week, by focus, against your typical', render:dashHourTrend },
   { id:'heatmap',  title:'Activity heatmap',     icon:'ti-grid-dots',      span:12, min:3, show:true,  desc:'Completions per day — the wider it is, the further back it goes', render:dashHeatmap },
   { id:'rings',    title:'Today’s rings',        icon:'ti-circle-dot',     span:6,  min:3, show:false, desc:'Launch, On time and Clear, nested, with what closes each', render:b => b.appendChild(mkRingsCard()) },
   { id:'frog',     title:'Sticky task',          icon:'ti-anchor',         span:12, min:3, show:false, desc:'The running Launch, or your stickiest task with a 5-min start', render:dashFrog },
@@ -3513,6 +3601,235 @@ function dashProjects(b) {
     more.onclick = () => setView('projects');
     card.appendChild(more);
   }
+}
+
+// ── Hours (from check-ins) ──
+// Focused = Steady or Deep. Breaks are their own thing, never low effort.
+// "Typical" is always your own median, never a target Focal picks.
+function ciTotals(list) {
+  const t = { n: list.length, tracked: 0, focused: 0, hard: 0, brk: 0, wsum: 0, byFocus: { 1: 0, 2: 0, 3: 0, 4: 0 } };
+  list.forEach(k => {
+    const s = ciSecs(k);
+    if (!k.focus) { t.brk += s; return; }
+    t.tracked += s; t.byFocus[k.focus] += s; t.wsum += s * k.focus;
+    if (k.focus >= 3) t.focused += s;
+    if (k.difficulty >= 3) t.hard += s;
+  });
+  t.avgFocus = t.tracked ? t.wsum / t.tracked : 0;
+  return t;
+}
+function ciByDay() {
+  const m = {};
+  S.checkins.forEach(k => { (m[ciDay(k)] ||= []).push(k); });
+  return m;
+}
+const ciMedian = a => { if (!a.length) return null; const v = [...a].sort((p, q) => p - q), m = v.length >> 1; return v.length % 2 ? v[m] : (v[m-1] + v[m]) / 2; };
+// Typical focused time on a day you checked in: last 28 days before today, needs 5 such days
+function ciTypicalDay(byDay, todayStr) {
+  const from = addDays(todayStr, -28);
+  const vals = Object.entries(byDay).filter(([d, l]) => d >= from && d < todayStr && l.some(k => k.focus)).map(([, l]) => ciTotals(l).focused);
+  return vals.length >= 5 ? ciMedian(vals) : null;
+}
+// Typical focused time by this point in the week (Monday through the same weekday), last 8 weeks, needs 2 of them
+function ciTypicalWeekSoFar(byDay, todayStr) {
+  const wk = startOfWeek(todayStr), dow = dayDiff(wk, todayStr), vals = [];
+  for (let i = 1; i <= 8; i++) {
+    const start = addDays(wk, -7 * i); let sum = 0, any = false;
+    for (let j = 0; j <= dow; j++) { const l = byDay[addDays(start, j)]; if (l) { any = true; sum += ciTotals(l).focused; } }
+    if (any) vals.push(sum);
+  }
+  return vals.length >= 2 ? ciMedian(vals) : null;
+}
+
+function dashHours(b, x) {
+  const { days, todayStr, fromStr } = x, cfg = checkinCfg(), byDay = ciByDay();
+  const tod = ciTotals(byDay[todayStr] || []);
+  const wk = startOfWeek(todayStr);
+  const week = ciTotals(S.checkins.filter(k => ciDay(k) >= wk));
+  const range = ciTotals(S.checkins.filter(k => ciDay(k) > fromStr));
+  const typDay = ciTypicalDay(byDay, todayStr), typWeek = ciTypicalWeekSoFar(byDay, todayStr);
+  const wkday = new Date(todayStr + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' });
+  const slots = checkinSlots(todayStr, cfg), next = slots.find(s => s > x.now);
+  const offSub = !cfg.on ? 'check-ins are off · Settings' : next ? `next check-in ${fmtHM(next)}` : 'no check-ins today';
+  const row = document.createElement('div');
+  row.className = 'dash-streak-row';
+  row.appendChild(mkStreakCard('Focused today', tod.tracked ? fmtHrs(tod.focused) : '—',
+    tod.tracked ? `${fmtHrs(tod.tracked)} tracked` + (typDay != null ? ` · typical ${fmtHrs(typDay)}` : '') : tod.n ? `only breaks logged so far` : offSub,
+    typDay != null && tod.focused >= typDay && tod.focused ? '#5fd59a' : tod.tracked ? 'var(--text)' : 'var(--text-subtle)'));
+  row.appendChild(mkStreakCard('This week', week.tracked ? fmtHrs(week.focused) : '—',
+    typWeek != null ? `focused · typical by ${wkday}: ${fmtHrs(typWeek)}` : 'focused · your typical shows after 2 weeks',
+    typWeek != null && week.focused >= typWeek && week.focused ? '#5fd59a' : week.tracked ? 'var(--text)' : 'var(--text-subtle)'));
+  row.appendChild(mkStreakCard('Hard hours', range.tracked ? fmtHrs(range.hard) : '—',
+    `rated hard or very hard · last ${days}d`, 'var(--text)'));
+  const avg = range.avgFocus, lvl = FOCUS_LEVELS[Math.max(0, Math.round(avg) - 1)];
+  row.appendChild(mkStreakCard('Average focus', range.tracked ? lvl.label : '—',
+    range.tracked ? `${avg.toFixed(1)} of 4 · ${range.n} check-in${range.n === 1 ? '' : 's'}, last ${days}d` : `no check-ins in last ${days}d`,
+    range.tracked ? 'var(--text)' : 'var(--text-subtle)'));
+  [...row.children].forEach(el => el.title = 'From your check-ins. Focused = Steady or Deep. Breaks aren’t counted as low effort, just as breaks.');
+  b.appendChild(row);
+}
+
+const ciLegend = withBreak => `<div class="ci-legend">` + FOCUS_LEVELS.map(l => `<span><i style="background:${l.color}"></i>${l.label}</span>`).join('')
+  + (withBreak ? `<span><i style="border:1px solid var(--text-subtle)"></i>Break</span><span>· taller = harder</span>` : '') + `</div>`;
+
+// One day as a strip: a block per check-in, colour = focus, height = difficulty.
+// Underneath, what the hours went into, finished or not.
+function dashHourDay(b, x) {
+  const svgNS = 'http://www.w3.org/2000/svg', cfg = checkinCfg();
+  const day = S.hoursDay && S.hoursDay <= x.todayStr ? S.hoursDay : x.todayStr, isToday = day === x.todayStr;
+  const list = (ciByDay()[day] || []).sort((p, q) => p.started.localeCompare(q.started));
+  const card = document.createElement('div');
+  card.className = 'dash-breakdown-card';
+  const label = isToday ? 'Today' : day === addDays(x.todayStr, -1) ? 'Yesterday'
+    : new Date(day + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  card.innerHTML = `<div class="dash-breakdown-title ci-card-head"><span>Hours · ${label}</span><span class="ci-nav">`
+    + `<button class="launch-small-btn" data-d="-1" title="Previous day">‹</button>`
+    + `<button class="launch-small-btn" data-d="1" title="Next day"${isToday ? ' disabled' : ''}>›</button></span></div>`;
+  b.appendChild(card);
+  card.querySelectorAll('[data-d]').forEach(btn => btn.onclick = () => {
+    const nd = addDays(day, +btn.dataset.d); S.hoursDay = nd >= x.todayStr ? '' : nd; renderContent();
+  });
+  const nowBtn = () => {
+    if (!isToday) return;
+    const more = document.createElement('div');
+    more.className = 'dash-list-more'; more.textContent = 'Check in now →';
+    more.onclick = openCheckin; card.appendChild(more);
+  };
+  if (!list.length) {
+    const slots = checkinSlots(day, cfg), next = slots.find(s => s > x.now);
+    dashMuted(card, !isToday ? 'No check-ins this day.' : !cfg.on ? 'Hourly check-ins are off. Turn them on in Settings.'
+      : next ? `No check-ins yet. The next one comes up at ${fmtHM(next)}.` : 'No check-ins today.');
+    return nowBtn();
+  }
+  const t = ciTotals(list);
+  card.insertAdjacentHTML('beforeend', `<div class="ci-sum">${fmtHrs(t.focused)} focused · ${fmtHrs(t.tracked)} tracked · ${fmtHrs(t.hard)} hard${t.brk ? ` · ${fmtHrs(t.brk)} break` : ''}</div>`);
+
+  // Time axis: the scheduled day, stretched to whatever was actually logged
+  const slots = checkinSlots(day, cfg);
+  let t0 = checkinDayStart(day, cfg).getTime(), t1 = (slots.length ? slots[slots.length - 1] : atMin(day, hmToMin(cfg.last))).getTime();
+  list.forEach(k => { t0 = Math.min(t0, new Date(k.started).getTime()); t1 = Math.max(t1, new Date(k.ended).getTime()); });
+  if (isToday) t1 = Math.max(t1, Date.now());
+  const W = Math.max(240, card.clientWidth - 34), H = 56, top = 4, base = top + H, Ht = base + 18;
+  const X = ms => (ms - t0) / (t1 - t0) * W;
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${Ht}`); svg.setAttribute('class', 'ci-svg');
+  const el = (tag, attrs) => { const n = document.createElementNS(svgNS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); svg.appendChild(n); return n; };
+  el('line', { x1: 0, x2: W, y1: base + .5, y2: base + .5, stroke: '#2c2c32' });
+  const hourPx = W / ((t1 - t0) / 3600e3), every = hourPx >= 46 ? 1 : hourPx >= 24 ? 2 : 3;
+  for (let h = new Date(t0); h.getTime() <= t1; h = new Date(h.getTime() + 3600e3)) {
+    if (h.getMinutes() || h.getSeconds()) { h.setMinutes(60, 0, 0); if (h.getTime() > t1) break; }
+    const px = X(h.getTime());
+    el('line', { x1: px, x2: px, y1: base, y2: base + 3, stroke: '#404048' });
+    if (h.getHours() % every === 0 && px > 8 && px < W - 8) {
+      const tx = el('text', { x: px, y: Ht - 3, 'text-anchor': 'middle', 'font-size': 9, fill: '#777780' });
+      tx.textContent = (h.getHours() % 12 || 12) + (h.getHours() < 12 ? 'a' : 'p');
+    }
+  }
+  // Scheduled prompts as faint ticks above the line
+  slots.forEach(s => { const px = X(s.getTime()); el('line', { x1: px, x2: px, y1: top, y2: base, stroke: '#1d1d22', 'stroke-dasharray': '2 3' }); });
+  list.forEach(k => {
+    const a = X(new Date(k.started).getTime()), z = X(new Date(k.ended).getTime()), w = Math.max(2, z - a - 2);
+    const names = k.taskIds.map(id => S.tasks.find(tt => tt.id === id)?.title).filter(Boolean);
+    let r;
+    if (!k.focus) r = el('rect', { x: a + .5, y: base - H * .3 + .5, width: Math.max(1, w - 1), height: H * .3 - 1, fill: 'none', stroke: '#404048', 'stroke-dasharray': '3 2' });
+    else { const h = H * (.25 + .75 * (k.difficulty - 1) / 3); r = el('rect', { x: a, y: base - h, width: w, height: h, fill: FOCUS_LEVELS[k.focus - 1].color }); }
+    const ttl = document.createElementNS(svgNS, 'title');
+    ttl.textContent = `${fmtHM(k.started)} – ${fmtHM(k.ended)} (${fmtMins(ciSecs(k))})\n`
+      + (k.focus ? `${FOCUS_LEVELS[k.focus - 1].label} focus · ${DIFF_LEVELS[k.difficulty - 1].label}` : 'Break / away')
+      + (names.length ? '\n' + names.join(', ') : '') + (k.tags ? '\nIn the way: ' + k.tags : '') + (k.note ? '\n' + k.note : '');
+    r.appendChild(ttl);
+  });
+  if (isToday) { const px = Math.min(W - 1, X(Date.now())); el('line', { x1: px, x2: px, y1: top, y2: base + 3, stroke: '#c8a537', 'stroke-width': 1.5 }); }
+  card.appendChild(svg);
+  card.insertAdjacentHTML('beforeend', ciLegend(true));
+
+  // Moved forward: each check-in's time split evenly across its tasks
+  const per = new Map();
+  list.forEach(k => { if (!k.focus || !k.taskIds.length) return; const s = ciSecs(k) / k.taskIds.length; k.taskIds.forEach(id => per.set(id, (per.get(id) || 0) + s)); });
+  const rows = [...per.entries()].map(([id, s]) => ({ t: S.tasks.find(tt => tt.id === id), s })).filter(r => r.t).sort((p, q) => q.s - p.s);
+  if (rows.length) {
+    card.insertAdjacentHTML('beforeend', `<div class="dash-ft-part-label" style="margin:14px 0 2px">Moved forward</div>`);
+    rows.slice(0, 6).forEach(({ t: tk, s }) => {
+      const done = tk.done && tk.completedAt && localDate(new Date(tk.completedAt)) === day;
+      const r = document.createElement('div');
+      r.className = 'dash-list-row';
+      r.innerHTML = `<span class="dash-list-when" style="color:var(--text-muted)">${fmtMins(s)}</span><span class="dash-list-title">${esc(tk.title)}</span>`
+        + `<span class="dash-list-meta"${done ? ' style="color:#5fd59a"' : ''}>${done ? '✓ done' : tk.done ? 'done later' : 'in progress'}</span>`;
+      r.onclick = () => openModal(tk);
+      card.appendChild(r);
+    });
+  }
+  nowBtn();
+}
+
+// Tracked hours per day (or per week past 14 days), stacked by focus with the
+// focused part on the baseline, against your own typical focused time
+function dashHourTrend(b, x) {
+  const svgNS = 'http://www.w3.org/2000/svg', byDay = ciByDay(), weekly = x.days > 14;
+  const card = mkDashCard(b, weekly ? 'Hours by week' : 'Hours by day');
+  const buckets = [];
+  if (weekly) {
+    for (let w = startOfWeek(addDays(x.todayStr, -(x.days - 1))); w <= x.todayStr; w = addDays(w, 7)) {
+      const l = []; for (let j = 0; j < 7; j++) l.push(...(byDay[addDays(w, j)] || []));
+      buckets.push({ key: w, label: new Date(w + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), tip: 'Week of ' + new Date(w + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), t: ciTotals(l) });
+    }
+  } else {
+    for (let d = addDays(x.todayStr, -(x.days - 1)); d <= x.todayStr; d = addDays(d, 1)) {
+      const dt = new Date(d + 'T12:00:00');
+      buckets.push({ key: d, label: x.days <= 7 ? dt.toLocaleDateString('en-US', { weekday: 'short' }) : String(dt.getDate()),
+        tip: dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), t: ciTotals(byDay[d] || []) });
+    }
+  }
+  if (!buckets.some(bk => bk.t.tracked)) return dashMuted(card, `No check-ins in the last ${x.days} days.`);
+  let typ = null;
+  if (weekly) {
+    const done = buckets.slice(0, -1).filter(bk => bk.t.tracked).map(bk => bk.t.focused);
+    typ = done.length >= 2 ? ciMedian(done) : null;
+  } else typ = ciTypicalDay(byDay, x.todayStr);
+
+  const W = Math.max(240, card.clientWidth - 34), H = 130, padL = 26, padB = 16, plotW = W - padL, plotH = H - padB - 6;
+  const maxS = Math.max(3600, ...buckets.map(bk => bk.t.tracked), typ || 0);
+  const stepH = maxS / 3600 > 8 ? (weekly ? 10 : 4) : maxS / 3600 > 4 ? 2 : 1;
+  const yMax = Math.ceil(maxS / 3600 / stepH) * stepH * 3600;
+  const Y = s => 6 + plotH - s / yMax * plotH;
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'ci-svg');
+  const el = (tag, attrs, parent = svg) => { const n = document.createElementNS(svgNS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); parent.appendChild(n); return n; };
+  for (let h = 0; h <= yMax / 3600; h += stepH) {
+    const y = Y(h * 3600);
+    el('line', { x1: padL, x2: W, y1: y + .5, y2: y + .5, stroke: h ? '#1d1d22' : '#2c2c32' });
+    el('text', { x: padL - 5, y: y + 3, 'text-anchor': 'end', 'font-size': 9, fill: '#777780' }).textContent = h + 'h';
+  }
+  const slot = plotW / buckets.length, bw = Math.max(3, Math.min(28, slot - 4));
+  const every = Math.ceil(buckets.length / Math.max(1, Math.floor(plotW / 34)));
+  buckets.forEach((bk, i) => {
+    const cx = padL + slot * i + slot / 2, g = el('g', {});
+    let acc = 0;
+    [4, 3, 2, 1].forEach(f => {
+      const s = bk.t.byFocus[f]; if (!s) return;
+      const y0 = Y(acc), y1 = Y(acc + s), h = y0 - y1;
+      el('rect', { x: cx - bw / 2, y: y1 + (acc ? 1 : 0), width: bw, height: Math.max(1, h - (acc ? 1 : 0)), fill: FOCUS_LEVELS[f - 1].color }, g);
+      acc += s;
+    });
+    el('rect', { x: padL + slot * i, y: 0, width: slot, height: H - padB, fill: 'transparent' }, g);
+    const tt = bk.t;
+    el('title', {}, g).textContent = `${bk.tip}\n` + (tt.tracked
+      ? `${fmtHrs(tt.tracked)} tracked · ${fmtHrs(tt.focused)} focused · ${fmtHrs(tt.hard)} hard\n`
+        + FOCUS_LEVELS.slice().reverse().filter(l => tt.byFocus[l.v]).map(l => `${l.label} ${fmtHrs(tt.byFocus[l.v])}`).join(' · ')
+      : 'No check-ins');
+    if (i % every === 0 || i === buckets.length - 1) {
+      el('text', { x: cx, y: H - 3, 'text-anchor': 'middle', 'font-size': 9, fill: bk.key === x.todayStr || (weekly && i === buckets.length - 1) ? '#d0d0c8' : '#777780' }).textContent = bk.label;
+    }
+  });
+  if (typ) {
+    const y = Y(typ);
+    el('line', { x1: padL, x2: W, y1: y, y2: y, stroke: '#c8a537', 'stroke-dasharray': '4 3', 'stroke-width': 1, opacity: .8 });
+  }
+  card.appendChild(svg);
+  // The typical line is labelled in the legend, where it can't sit on a bar
+  card.insertAdjacentHTML('beforeend', ciLegend(false).replace(/<\/div>$/, (typ
+    ? `<span><i style="height:0;border-top:1px dashed #c8a537;width:14px"></i>your typical focused ${weekly ? 'week' : 'day'}: ${fmtHrs(typ)}</span>`
+    : `<span>· your typical shows after ${weekly ? '2 weeks' : '5 days'} of check-ins</span>`) + '</div>'));
 }
 
 function renderFocus(c) {
@@ -4452,6 +4769,44 @@ async function renderSettings(c) {
   renderStreakPauseUI();
   genSec.appendChild(pauseRow);
   c.appendChild(genSec);
+
+  // ── Hourly check-in ──────────────────────────────────
+  // The schedule lives in focal.db (prefs), so every device prompts on the same clock
+  const ciSec = document.createElement('div');
+  ciSec.className = 'settings-section';
+  const renderCheckinSettings = () => {
+    const cfg = checkinCfg();
+    const slots = checkinSlots(today(), { ...cfg, days: [0, 1, 2, 3, 4, 5, 6] });
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    ciSec.innerHTML = `<h3>Hourly check-in</h3>
+      <div class="settings-row"><div><div style="font-size:13px">Check-ins</div><label>A few seconds on a schedule: what you worked on, your focus and how hard it was</label></div>
+        <input type="checkbox" id="ci-on" ${cfg.on ? 'checked' : ''} style="accent-color:var(--accent);width:16px;height:16px;cursor:pointer"></div>
+      <div class="settings-row"><div><div style="font-size:13px">Schedule</div><label>${cfg.on
+          ? `${slots.length} a day: ${slots.slice(0, 3).map(fmtHM).join(', ')}${slots.length > 4 ? ', …' : ''}${slots.length > 3 ? ', ' + fmtHM(slots[slots.length - 1]) : ''}. The first covers from ${fmtHM(checkinDayStart(today(), cfg))}.`
+          : 'Off. Nothing will prompt.'}</label></div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+          <span style="font-size:12px;color:var(--text-muted)">first</span><input type="time" class="ci-time" id="ci-first" value="${cfg.first}">
+          <span style="font-size:12px;color:var(--text-muted)">last</span><input type="time" class="ci-time" id="ci-last" value="${cfg.last}">
+          <span style="font-size:12px;color:var(--text-muted)">every</span><select class="ci-time" id="ci-every">${CHECKIN_EVERY.map(m => `<option value="${m}"${m === cfg.every ? ' selected' : ''}>${m} min</option>`).join('')}</select>
+        </div></div>
+      <div class="settings-row"><div><div style="font-size:13px">Days</div><label>Check-ins only come up on these days</label></div>
+        <div class="ci-days">${[1, 2, 3, 4, 5, 6, 0].map(d => `<button data-day="${d}" class="${cfg.days.includes(d) ? 'on' : ''}">${dayNames[d]}</button>`).join('')}</div></div>
+      <div class="settings-row"><div><div style="font-size:13px">Check in now</div><label>You can log a stretch any time, on schedule or not</label></div>
+        <button class="launch-small-btn" id="ci-now">Check in now</button></div>`;
+    const upd = patch => { saveCheckinCfg({ ...checkinCfg(), ...patch }); renderCheckinSettings(); };
+    ciSec.querySelector('#ci-on').onchange = e => upd({ on: e.target.checked });
+    ciSec.querySelector('#ci-first').onchange = e => { if (e.target.value) upd({ first: e.target.value, last: e.target.value > checkinCfg().last ? e.target.value : checkinCfg().last }); };
+    ciSec.querySelector('#ci-last').onchange = e => { if (!e.target.value) return; if (e.target.value < checkinCfg().first) { showToast('The last check-in has to be after the first'); renderCheckinSettings(); return; } upd({ last: e.target.value }); };
+    ciSec.querySelector('#ci-every').onchange = e => upd({ every: +e.target.value });
+    ciSec.querySelectorAll('[data-day]').forEach(b => b.onclick = () => {
+      const d = +b.dataset.day, days = checkinCfg().days;
+      upd({ days: days.includes(d) ? days.filter(x => x !== d) : [...days, d].sort() });
+    });
+    ciSec.querySelector('#ci-now').onclick = openCheckin;
+    ciSec.appendChild(mkPrefRow('focal_checkin_chime', 'Check-in chime', 'Two soft notes when a check-in comes due (this browser)'));
+  };
+  renderCheckinSettings();
+  c.appendChild(ciSec);
 
   // ── File ──────────────────────────────────
   const fileSec = document.createElement('div');
@@ -6223,6 +6578,7 @@ function endLaunch(outcome, extra = {}) {
   document.title = BASE_TITLE;
   document.getElementById('launch-overlay').classList.remove('open');
   updateLaunchPill();
+  checkinAfterLaunch();
 
   const t = S.tasks.find(x => x.id === L.taskId);
   const ended = new Date().toISOString();
@@ -6278,13 +6634,14 @@ function restoreLaunch() {
 function launchBoot() {
   restoreLaunch();
   checkRingCloses();   // first call only records what's already closed
+  checkinBoot();
 }
 
-// Two soft notes — a transition alarm, not an alert
-function launchChime() {
+// Two soft notes — a transition alarm, not an alert. Check-ins pass their own pair.
+function launchChime(notes = [[660, 0], [880, 0.18]]) {
   try {
     const ac = new (window.AudioContext || window.webkitAudioContext)();
-    [[660, 0], [880, 0.18]].forEach(([f, t0]) => {
+    notes.forEach(([f, t0]) => {
       const o = ac.createOscillator(), g = ac.createGain(), at = ac.currentTime + t0;
       o.type = 'sine'; o.frequency.value = f;
       g.gain.setValueAtTime(0.0001, at);
@@ -6294,6 +6651,339 @@ function launchChime() {
     });
     setTimeout(() => ac.close(), 1500);
   } catch(e) {}
+}
+
+// ── Hourly check-ins ────────────────────────────────────────────────────────
+// A few seconds on a schedule: what you worked on, how focused you were, how
+// hard it was. Completions can't show effort, and a hard day often ends with
+// nothing ticked off; check-ins are the record of where the hours went. They're
+// rewarded for being done, never for the numbers: an honest "Drifted" counts
+// exactly as much as "Deep", or the record stops being honest. Focus and
+// difficulty are separate on purpose, so "hard and locked in" and "easy and
+// locked in" don't read as the same hour.
+const CHECKIN_PREF    = 'checkin_schedule';   // prefs row, so the schedule follows focal.db
+const CHECKIN_DEFAULT = { on: false, first: '09:55', last: '16:55', every: 60, days: [1, 2, 3, 4, 5] };
+const CHECKIN_EVERY   = [30, 45, 60, 90, 120];
+const CHECKIN_COVER_KEY = 'focal_checkin_covered';  // newest check-in or skip in this browser (also syncs other tabs)
+const CHECKIN_LATER_KEY = 'focal_checkin_later';    // the prompt time "Later" was pressed on — don't pop it up again
+const FOCUS_LEVELS = [
+  { v: 1, label: 'Drifted', hint: 'Mostly off track',  color: '#3a3a42' },
+  { v: 2, label: 'Light',   hint: 'On and off',        color: '#2f6b4b' },
+  { v: 3, label: 'Steady',  hint: 'Mostly on it',      color: '#3f9e6c' },
+  { v: 4, label: 'Deep',    hint: 'Locked in',         color: '#5fd59a' },
+];
+const DIFF_LEVELS  = [{ v: 1, label: 'Easy' }, { v: 2, label: 'Moderate' }, { v: 3, label: 'Hard' }, { v: 4, label: 'Very hard' }];
+const CHECKIN_TAGS = ['Meetings', 'Interruptions', 'Distracted', 'Stuck', 'Low energy'];
+const CHECKIN_ACKS = ['On the record.', 'Logged. That hour counts.', 'Got it. Hour accounted for.', 'Logged. One more hour you can see.'];
+const CHECKIN_OVERLAYS = ['modal-overlay', 'project-modal-overlay', 'idea-modal-overlay', 'success-modal-overlay', 'confirm-overlay',
+  'help-overlay', 'launch-overlay', 'digest-modal-overlay', 'ai-output-overlay', 'wiki-modal-overlay', 'link-picker-overlay',
+  'import-proj-overlay', 'img-lightbox'];
+let _ciTick = null, _ciAnnounced = null;
+
+function checkinCfg() {
+  let c = {};
+  try { c = JSON.parse(getPref(CHECKIN_PREF) || '{}') || {}; } catch(e) {}
+  const hm = v => /^\d{2}:\d{2}$/.test(v || '') ? v : null;
+  const cfg = {
+    on:    c.on != null ? !!c.on : CHECKIN_DEFAULT.on,
+    first: hm(c.first) || CHECKIN_DEFAULT.first,
+    last:  hm(c.last)  || CHECKIN_DEFAULT.last,
+    every: CHECKIN_EVERY.includes(+c.every) ? +c.every : CHECKIN_DEFAULT.every,
+    days:  Array.isArray(c.days) ? c.days.map(Number).filter(d => d >= 0 && d <= 6) : CHECKIN_DEFAULT.days,
+  };
+  if (cfg.last < cfg.first) cfg.last = cfg.first;
+  return cfg;
+}
+function saveCheckinCfg(cfg) { setPref(CHECKIN_PREF, JSON.stringify(cfg)); checkinTick(); }
+
+const hmToMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+function atMin(day, min) { const d = new Date(day + 'T00:00:00'); d.setMinutes(min); return d; }
+function fmtHM(d) { return new Date(d).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(' ', ' ').toLowerCase(); }
+function fmtHrs(sec) { return sec < 60 ? '0m' : fmtMins(sec); }
+const ciSecs = k => Math.max(0, (new Date(k.ended) - new Date(k.started)) / 1000);
+const ciDay  = k => localDate(new Date(k.ended));
+
+// The day's prompt times. Empty on a day the schedule skips.
+function checkinSlots(day, cfg = checkinCfg()) {
+  if (!cfg.days.includes(new Date(day + 'T12:00:00').getDay())) return [];
+  const out = [];
+  for (let m = hmToMin(cfg.first); m <= hmToMin(cfg.last); m += cfg.every) out.push(atMin(day, m));
+  return out;
+}
+// Tracked time starts one interval before the first prompt
+function checkinDayStart(day, cfg = checkinCfg()) { return atMin(day, hmToMin(cfg.first) - cfg.every); }
+
+function checkinCoveredUntil() {
+  let t = 0;
+  for (const k of S.checkins) t = Math.max(t, new Date(k.ended).getTime() || 0);
+  try { t = Math.max(t, new Date(localStorage.getItem(CHECKIN_COVER_KEY) || 0).getTime() || 0); } catch(e) {}
+  return t;
+}
+
+// The latest prompt time today that nothing has answered. Earlier missed ones
+// fold into it, so a long gap is one check-in, not a stack of them. A check-in
+// in the half-interval before a prompt counts as answering it.
+function dueCheckinSlot(now = new Date(), cfg = checkinCfg()) {
+  if (!cfg.on) return null;
+  const slots = checkinSlots(localDate(now), cfg).filter(s => s <= now);
+  const slot = slots[slots.length - 1];
+  if (!slot) return null;
+  return checkinCoveredUntil() >= slot.getTime() - cfg.every * 30000 ? null : slot;
+}
+
+// Where the next check-in starts: the last check-in or skip today, else the
+// start of the tracked day (or one interval back when checking in before it)
+function checkinFrom(now = new Date()) {
+  const day = localDate(now), cfg = checkinCfg(), n = now.getTime();
+  const last = checkinCoveredUntil();
+  if (last >= new Date(day + 'T00:00:00').getTime() && last <= n) return new Date(last);
+  const start = checkinDayStart(day, cfg).getTime();
+  return new Date(start < n - 15 * 60000 ? start : n - cfg.every * 60000);
+}
+
+// Prefill: Launch sessions and completions in the window are picked already;
+// tasks edited in it and last check-in's tasks are offered.
+function checkinSuggestions(from, to) {
+  const f = from.getTime(), t = to.getTime();
+  const inWin = ts => { const x = new Date(ts).getTime(); return x >= f && x <= t; };
+  const pre = [], sug = [];
+  const add = (id, pick) => {
+    if (!S.tasks.some(x => x.id === id)) return;
+    if (pick && !pre.includes(id)) pre.push(id);
+    if (!sug.includes(id)) sug.push(id);
+  };
+  S.sessions.forEach(s => { if (new Date(s.ended || Date.now()).getTime() >= f && new Date(s.started).getTime() <= t) add(s.taskId, true); });
+  if (S.launch) add(S.launch.taskId, true);
+  S.tasks.forEach(x => { if (x.completedAt && inWin(x.completedAt)) add(x.id, true); });
+  S.changelog.forEach(e => { if (e.entityType === 'task' && e.action !== 'create' && inWin(e.ts)) add(e.entityId, false); });
+  const prev = [...S.checkins].reverse().find(k => k.taskIds.length);
+  const lastIds = prev ? prev.taskIds.filter(id => S.tasks.some(x => x.id === id)) : [];
+  lastIds.forEach(id => add(id, false));
+  return { pre, sug: sug.slice(0, 10), lastIds };
+}
+
+function openCheckin() {
+  if (S.launchView || S.checkinDraft) return;   // Launch owns the screen while it's up
+  const now = new Date(), from = checkinFrom(now), sg = checkinSuggestions(from, now);
+  S.checkinDraft = { step: 'log', from: from.toISOString(), slot: dueCheckinSlot(now)?.getTime() || 0,
+    taskIds: sg.pre, sug: sg.sug, lastIds: sg.lastIds, focus: 0, difficulty: 0, brk: false,
+    tags: [], note: '', more: false, logged: null };
+  document.getElementById('checkin-overlay').classList.add('open');
+  renderCheckin(); updateCheckinPill();
+}
+
+// Closing without logging is "Later": the pill keeps it waiting and it won't pop up again
+function closeCheckin() {
+  const d = S.checkinDraft;
+  document.getElementById('checkin-overlay').classList.remove('open');
+  S.checkinDraft = null;
+  if (d && d.step === 'log' && d.slot) { try { localStorage.setItem(CHECKIN_LATER_KEY, String(d.slot)); } catch(e) {} }
+  updateCheckinPill();
+}
+
+function skipCheckin() {
+  try { localStorage.setItem(CHECKIN_COVER_KEY, new Date().toISOString()); } catch(e) {}
+  S.checkinDraft = null;
+  document.getElementById('checkin-overlay').classList.remove('open');
+  updateCheckinPill();
+  showToast('Skipped. Nothing counts against you.');
+}
+
+// Pop the panel up only when it can't interrupt anything: no modal, no
+// typing, Launch not running, and not already put off with "Later"
+function maybeOpenCheckin() {
+  const slot = dueCheckinSlot();
+  if (!slot || S.launch || S.checkinDraft) return;
+  let later = 0; try { later = +localStorage.getItem(CHECKIN_LATER_KEY) || 0; } catch(e) {}
+  if (later === slot.getTime()) return;
+  if (CHECKIN_OVERLAYS.some(id => document.getElementById(id)?.classList.contains('open'))) return;
+  const a = document.activeElement;
+  if (a && (['INPUT', 'TEXTAREA', 'SELECT'].includes(a.tagName) || a.isContentEditable)) return;
+  openCheckin();
+}
+
+function renderCheckin() {
+  const d = S.checkinDraft, panel = document.getElementById('checkin-panel');
+  if (!d) return;
+  const now = new Date(), from = new Date(d.from);
+  const head = (kicker, btn) => `<div class="launch-head"><span class="launch-kicker">${kicker}</span><div class="launch-head-btns">${btn}</div></div>`;
+
+  if (d.step === 'log') {
+    // Picked ones first; a long gap can pick a lot, so the rest wait behind "+N more"
+    const all = [...new Set([...d.taskIds, ...d.sug])].map(id => S.tasks.find(t => t.id === id)).filter(Boolean);
+    const chips = d.allChips ? all : all.slice(0, 8), hidden = all.slice(chips.length);
+    const hiddenPicked = hidden.filter(t => d.taskIds.includes(t.id)).length;
+    const same = d.lastIds.length && !d.lastIds.every(id => d.taskIds.includes(id));
+    const ready = d.brk || (d.focus && d.difficulty);
+    panel.innerHTML = head('Check-in', `<button class="launch-small-btn" data-ci="later" title="Close (Esc). The pill keeps it waiting.">Later</button>`)
+      + `<div class="launch-title">How did it go since ${fmtHM(from)}?</div>`
+      + `<div class="launch-history">${fmtHM(from)} – ${fmtHM(now)} · ${fmtMins((now - from) / 1000)}</div>`
+      + `<div class="launch-field ci-tasks${d.brk ? ' ci-dim' : ''}"><label>What you worked on <span class="ci-opt">(optional)</span></label>`
+      + `<div class="ci-chips">` + chips.map(t => { const on = d.taskIds.includes(t.id);
+          return `<button class="ci-chip${on ? ' on' : ''}" data-task="${t.id}" title="${esc(t.title)}"><i class="ti ${on ? 'ti-check' : 'ti-plus'}"></i><span>${esc(t.title)}</span></button>`; }).join('')
+      + (hidden.length ? `<button class="ci-chip ci-same" data-ci="allchips"><span>+${hidden.length} more${hiddenPicked ? ` (${hiddenPicked} picked)` : ''}</span></button>` : '')
+      + (same ? `<button class="ci-chip ci-same" data-ci="same"><i class="ti ti-repeat"></i><span>Same as last time</span></button>` : '')
+      + `</div><div class="ci-search"><input type="text" id="ci-q" maxlength="200" placeholder="Find a task, or type a new one" autocomplete="off"><div class="ci-results" id="ci-results"></div></div></div>`
+      + `<div class="launch-field"><label>Focus</label><div class="ci-row"><div class="launch-boxes">`
+      + FOCUS_LEVELS.map(l => `<button data-focus="${l.v}" title="${l.hint}"${!d.brk && d.focus === l.v ? ' class="active"' : ''}><span class="ci-swatch" style="background:${l.color}"></span>${l.label}</button>`).join('')
+      + `</div><button class="launch-small-btn ci-break${d.brk ? ' active' : ''}" data-ci="break" title="Not working: lunch, errands, away from the desk"><i class="ti ti-coffee"></i> Break / away</button></div></div>`
+      + `<div class="launch-field"${d.brk ? ' style="display:none"' : ''}><label>Difficulty</label><div class="launch-boxes">`
+      + DIFF_LEVELS.map(l => `<button data-diff="${l.v}"${d.difficulty === l.v ? ' class="active"' : ''}>${l.label}</button>`).join('')
+      + `</div></div>`
+      + (d.more
+        ? `<div class="launch-field"><label>What got in the way <span class="ci-opt">(optional)</span></label><div class="ci-chips">`
+          + CHECKIN_TAGS.map(tg => `<button class="ci-chip${d.tags.includes(tg) ? ' on' : ''}" data-tag="${esc(tg)}"><span>${esc(tg)}</span></button>`).join('')
+          + `</div></div><div class="launch-field"><label for="ci-note">Note <span class="ci-opt">(optional)</span></label><input type="text" id="ci-note" maxlength="300" placeholder="Anything worth remembering about this stretch" value="${esc(d.note)}"></div>`
+        : `<button class="ci-more" data-ci="more"><i class="ti ti-plus"></i> Note, or what got in the way</button>`)
+      + `<div class="launch-footer"><button class="launch-small-btn" data-ci="skip" title="Leave this stretch unlogged">Skip this one</button>`
+      + `<div class="launch-footer-right"><span class="launch-hint" style="margin:0;align-self:center">${ready ? 'Enter to log' : d.focus && !d.brk ? 'Pick a difficulty' : 'Pick a focus level'}</span>`
+      + `<button class="btn-primary" data-ci="log"${ready ? '' : ' disabled'}>Log it</button></div></div>`;
+
+    panel.querySelectorAll('[data-task]').forEach(b => b.onclick = () => {
+      const id = +b.dataset.task;
+      d.taskIds = d.taskIds.includes(id) ? d.taskIds.filter(x => x !== id) : [...d.taskIds, id];
+      renderCheckin();
+    });
+    panel.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { d.focus = +b.dataset.focus; d.brk = false; renderCheckin(); });
+    panel.querySelectorAll('[data-diff]').forEach(b => b.onclick = () => { d.difficulty = +b.dataset.diff; renderCheckin(); });
+    panel.querySelectorAll('[data-tag]').forEach(b => b.onclick = () => {
+      const tg = b.dataset.tag; d.tags = d.tags.includes(tg) ? d.tags.filter(x => x !== tg) : [...d.tags, tg]; renderCheckin();
+    });
+    const note = panel.querySelector('#ci-note');
+    if (note) note.oninput = () => { d.note = note.value; };
+    const q = panel.querySelector('#ci-q');
+    q.oninput = () => ciSearch(q.value);
+    q.onkeydown = e => {
+      if (e.key === 'Enter') { e.preventDefault(); const first = panel.querySelector('.ci-result'); if (first) first.click(); else if (ready) submitCheckin(); }
+      else if (e.key === 'Escape') { e.preventDefault(); if (q.value) { q.value = ''; ciSearch(''); } else closeCheckin(); }
+    };
+    [note].filter(Boolean).forEach(inp => inp.onkeydown = e => {
+      if (e.key === 'Enter') { e.preventDefault(); if (ready) submitCheckin(); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeCheckin(); }
+    });
+  } else {
+    const k = S.checkins.find(x => x.id === d.logged);
+    const msg = !k.focus ? 'Logged as a break. Rest is part of the work.'
+      : k.focus === 1 ? 'Logged. Honest beats perfect, and the next hour starts clean.'
+      : CHECKIN_ACKS[Math.floor(Math.random() * CHECKIN_ACKS.length)];
+    // Look forward, not just back: one thing to start, five minutes on it
+    const opts = [];
+    const push = t => { if (t && !t.done && !opts.includes(t) && opts.length < 4) opts.push(t); };
+    k.taskIds.forEach(id => push(S.tasks.find(t => t.id === id)));
+    push(pickFrog());
+    S.tasks.filter(t => !t.done && t.due && t.due <= today() && !isSnoozed(t))
+      .sort((p, q) => (p.priority || 3) - (q.priority || 3) || p.due.localeCompare(q.due)).forEach(push);
+    panel.innerHTML = head('Logged', '')
+      + `<div class="launch-title">${msg}</div>`
+      + (S.launch
+        ? `<div class="launch-field"><label>Next</label><div class="ci-next-row"><span>Your Launch session is still running.</span><button class="launch-small-btn" data-ci="tolaunch"><i class="ti ti-player-play"></i> Back to it</button></div></div>`
+        : opts.length ? `<div class="launch-field"><label>Next: pick one thing and give it five minutes</label>`
+          + opts.map(t => `<div class="ci-next-row"><span title="${esc(t.title)}">${esc(t.title)}</span>`
+            + (stickyInfo(t) ? `<span class="sticky-badge"><i class="ti ti-anchor"></i>sticky</span>` : '')
+            + `<button class="launch-small-btn" data-next="${t.id}"><i class="ti ti-player-play"></i> Start 5 min</button></div>`).join('')
+          + `</div>` : '')
+      + `<div class="launch-footer"><span class="launch-hint" style="margin:0">Esc to close</span><div class="launch-footer-right"><button class="btn-cancel" data-ci="close">${opts.length || S.launch ? 'Not now' : 'Close'}</button></div></div>`;
+    panel.querySelectorAll('[data-next]').forEach(b => b.onclick = () => {
+      const id = +b.dataset.next;
+      k.nextTaskId = id; markUnsaved();
+      closeCheckin(); openLaunch(id);
+    });
+  }
+  panel.querySelectorAll('[data-ci]').forEach(b => b.onclick = () => checkinAction(b.dataset.ci));
+}
+
+function checkinAction(act) {
+  const d = S.checkinDraft; if (!d) return;
+  switch (act) {
+    case 'later': case 'close': closeCheckin(); break;
+    case 'skip':  skipCheckin(); break;
+    case 'log':   submitCheckin(); break;
+    case 'break': d.brk = !d.brk; renderCheckin(); break;
+    case 'more':  d.more = true; renderCheckin(); setTimeout(() => document.getElementById('ci-note')?.focus(), 30); break;
+    case 'allchips': d.allChips = true; renderCheckin(); break;
+    case 'same':  d.taskIds = [...new Set([...d.taskIds, ...d.lastIds])]; renderCheckin(); break;
+    case 'tolaunch': closeCheckin(); S.launchView = 'run'; showLaunch(); break;
+  }
+}
+
+function ciSearch(raw) {
+  const box = document.getElementById('ci-results'), d = S.checkinDraft;
+  const q = raw.trim().toLowerCase();
+  if (!q || !d) { box.innerHTML = ''; box.classList.remove('open'); return; }
+  const td = today();
+  const hits = S.tasks.filter(t => !d.taskIds.includes(t.id) && t.title.toLowerCase().includes(q)
+      && (!t.done || (t.completedAt && localDate(new Date(t.completedAt)) === td)))
+    .sort((p, r) => (p.done - r.done) || (p.title.toLowerCase().indexOf(q) - r.title.toLowerCase().indexOf(q)))
+    .slice(0, 6);
+  box.innerHTML = hits.map(t => `<div class="ci-result" data-pick="${t.id}"><span>${esc(t.title)}</span>${t.category ? `<span class="ci-result-meta">${esc(t.category)}</span>` : ''}</div>`).join('')
+    + `<div class="ci-result ci-new" data-new="1"><i class="ti ti-plus"></i><span>New task: “${esc(raw.trim())}”</span></div>`;
+  box.classList.add('open');
+  box.querySelectorAll('[data-pick]').forEach(r => r.onclick = () => { d.taskIds.unshift(+r.dataset.pick); if (!d.sug.includes(+r.dataset.pick)) d.sug.push(+r.dataset.pick); renderCheckin(); document.getElementById('ci-q')?.focus(); });
+  box.querySelector('[data-new]').onclick = () => {
+    const id = ciNewTask(raw.trim());
+    d.taskIds.unshift(id); d.sug.push(id); renderCheckin(); document.getElementById('ci-q')?.focus();
+  };
+}
+
+// Same defaults as quick-add, so it lands where a quick-added task would
+function ciNewTask(title) {
+  const task = { id: nextId(), title, priority: 3, category: S.lastCat || (S.categories[0]?.name || ''), due: today(), recur: '',
+    description: '', done: false, completedAt: '', subtasks: [], aiRank: null, aiReason: '', created: new Date().toISOString(),
+    notes: '', teamFlag: false, wikiPage: '', projectId: null, snoozedUntil: '', snoozedFrom: '', deferrals: 0, nextStep: '' };
+  S.tasks.push(task); markJustAdded(task.id);
+  logChange('task', task.id, 'create', 'Created task: "' + title + '" (from a check-in)');
+  markUnsaved(); renderSidebar();
+  return task.id;
+}
+
+function submitCheckin() {
+  const d = S.checkinDraft; if (!d || d.step !== 'log') return;
+  if (!d.brk && !(d.focus && d.difficulty)) return;
+  const k = { id: S.checkins.reduce((mx, x) => Math.max(mx, x.id), 0) + 1, started: d.from, ended: new Date().toISOString(),
+    focus: d.brk ? 0 : d.focus, difficulty: d.brk ? 0 : d.difficulty, taskIds: d.brk ? [] : [...d.taskIds],
+    tags: d.more ? d.tags.join(', ') : '', note: d.more ? d.note.trim() : '', nextTaskId: null };
+  S.checkins.push(k);
+  try { localStorage.setItem(CHECKIN_COVER_KEY, k.ended); } catch(e) {}
+  markUnsaved();
+  d.step = 'next'; d.logged = k.id;
+  renderCheckin(); updateCheckinPill();
+  if (S.view === 'dashboard') renderContent();
+}
+
+// The pill and a dot in the tab title wait while a check-in is due. Launch owns
+// the title during a session, so it's left alone then.
+function updateCheckinPill() {
+  const pill = document.getElementById('checkin-pill');
+  const due = dueCheckinSlot();
+  if (due && !S.checkinDraft) {
+    pill.innerHTML = `<i class="ti ti-clock-check"></i><span class="pill-time">Check in</span><span class="pill-title">since ${fmtHM(checkinFrom())}</span>`;
+    pill.classList.add('show');
+  } else pill.classList.remove('show');
+  if (!S.launch) document.title = due ? '● Check in · ' + BASE_TITLE : BASE_TITLE;
+}
+
+function checkinTick() {
+  const slot = dueCheckinSlot(), ms = slot ? slot.getTime() : 0;
+  if (ms && ms !== _ciAnnounced) {
+    const boot = _ciAnnounced === null;   // already due when Focal opened: show it, don't ping
+    _ciAnnounced = ms;
+    if (!boot && !S.launch) {
+      if (prefOn('focal_checkin_chime')) launchChime([[587, 0], [784, 0.22]]);
+      if (document.visibilityState === 'visible') maybeOpenCheckin();
+    }
+  } else if (!ms) _ciAnnounced = 0;
+  updateCheckinPill();
+}
+
+// Coming back to the tab is the natural moment to answer one that came due meanwhile
+function checkinOnReturn() { if (document.visibilityState === 'visible') { checkinTick(); maybeOpenCheckin(); } }
+
+// After a Launch session ends, a check-in that came due during it is next
+function checkinAfterLaunch() { setTimeout(() => { if (!S.launch) { checkinTick(); maybeOpenCheckin(); } }, 1500); }
+
+function checkinBoot() {
+  checkinTick();
+  clearInterval(_ciTick); _ciTick = setInterval(checkinTick, 15000);
 }
 
 // ── Follow-ups ──────────────────────────────────────────────────────────────
@@ -6388,6 +7078,18 @@ function openHelp() {
         <li><b>Esc</b> hides a running session; the pill in the bottom-left corner brings it back. A reload doesn't lose the clock.</li>
       </ul>
       <p>A session counts once it runs a minute (or ends in Done).</p>`),
+    sec('ti-clock-check', 'Hourly check-ins', `
+      <p>${(() => { const c = checkinCfg(), sl = checkinSlots(today(), { ...c, days: [0,1,2,3,4,5,6] });
+        return c.on && sl.length ? `On your schedule (${fmtHM(sl[0])} to ${fmtHM(sl[sl.length - 1])}, every ${c.every} min), a dot appears in the tab title, a soft chime plays, and the check-in opens the next time you look at Focal.` : 'Turn them on under Settings → Hourly check-in and pick your hours.'; })()} It takes a few seconds:</p>
+      <ul>
+        <li><b>What you worked on</b>: tasks from a Launch session or finished in that stretch are already picked. Tap to add others, <b>Same as last time</b>, or type to find or add a task. Optional.</li>
+        <li><b>Focus</b>: Drifted, Light, Steady or Deep. <b>Break / away</b> is separate. Lunch isn't low effort.</li>
+        <li><b>Difficulty</b>: Easy, Moderate, Hard or Very hard, rated apart from focus, so a hard, focused hour and an easy one don't look the same.</li>
+        <li>Then <b>Next</b>: pick one thing and start five minutes on it, or close.</li>
+      </ul>
+      <p>Missed a few? The next one covers the whole gap. <b>Later</b> (Esc) leaves the pill in the corner. <b>Skip this one</b> leaves the stretch unlogged. Neither counts against you. During a Launch session the check-in waits until the session ends.</p>
+      <p>The dashboard's <b>Hours</b> modules show focused hours (Steady or Deep) today and this week against <b>your own typical</b>, a timeline of each day, and the tasks your hours moved forward, finished or not.</p>
+      <div class="help-why">Completions don't measure effort, and a hard day can end with nothing ticked off. This is the record of where the hours went. It rewards checking in, never the numbers, because an honest "Drifted" is worth more than a flattering "Deep".</div>`),
     sec('ti-circle-dashed', 'The three rings', `
       <ul>
         <li><span class="help-ring" style="background:${RING_COLORS.launch}"></span><b>Launch</b> — start one Launch session today, or finish a sticky task.</li>
@@ -6416,7 +7118,7 @@ function openHelp() {
     sec('ti-chart-bar', 'Dashboard', `
       <p>The <b>Launch</b> row shows sessions, time spent in Launch, sticky tasks cleared, and <b>planned → actual</b> minutes — a check on whether your timeboxes match how you actually work.</p>`),
     sec('ti-adjustments', 'Settings', `
-      <p>Celebrations, the Launch timer chime and follow-up prompts can each be switched off under Settings → General. Off means off — nothing nags.</p>`),
+      <p>Celebrations, the Launch timer chime and follow-up prompts can each be switched off under Settings → General. Check-ins have their own section: hours, interval, days and chime. Off means off — nothing nags.</p>`),
   ].join('');
   document.getElementById('help-overlay').classList.add('open');
   document.getElementById('help-body').scrollTop = 0;
@@ -7761,6 +8463,18 @@ function setupEvents() {
   const pill=document.getElementById('launch-pill');
   pill.addEventListener('click', ()=>{ S.launchView='run'; showLaunch(); });
   pill.addEventListener('keydown', e=>{ if (e.key==='Enter'||e.key===' ') { e.preventDefault(); pill.click(); } });
+  // Check-ins — the pill opens a due one; coming back to the tab offers it; another
+  // tab in this browser answering or skipping clears it here too
+  const ciPill=document.getElementById('checkin-pill');
+  ciPill.addEventListener('click', openCheckin);
+  ciPill.addEventListener('keydown', e=>{ if (e.key==='Enter'||e.key===' ') { e.preventDefault(); openCheckin(); } });
+  // No click-outside-to-close: a stray click shouldn't throw away a half-filled check-in
+  document.getElementById('checkin-overlay').addEventListener('click', e=>{
+    if (!e.target.closest('.ci-search')) document.getElementById('ci-results')?.classList.remove('open');
+  });
+  document.addEventListener('visibilitychange', checkinOnReturn);
+  window.addEventListener('focus', checkinOnReturn);
+  window.addEventListener('storage', e=>{ if (e.key===CHECKIN_COVER_KEY) checkinTick(); });
   // Keyboard shortcuts
   document.addEventListener('keydown',e=>{
     if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
@@ -7771,6 +8485,12 @@ function setupEvents() {
         e.preventDefault();
         if (S.launchView==='park') launchAction('back'); else hideLaunch();
       }
+      return;
+    }
+    // Same for a check-in: Esc is "Later", Enter logs it once it's filled in
+    if (document.getElementById('checkin-overlay').classList.contains('open')) {
+      if (e.key==='Escape') { e.preventDefault(); closeCheckin(); }
+      else if (e.key==='Enter' && e.target.tagName!=='BUTTON' && S.checkinDraft?.step==='log') { e.preventDefault(); submitCheckin(); }
       return;
     }
     if ((e.key==='n'||e.key==='N') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openModal(null); }
