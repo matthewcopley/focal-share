@@ -443,6 +443,12 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 /* ── Dashboard ── */
 .dash-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
 .dash-title{font-size:11px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.12em}
+.dash-tabs{display:flex;align-items:center;gap:18px;flex-wrap:wrap;min-width:0}
+.dash-tab{background:none;border:none;border-bottom:1px solid transparent;padding:3px 0;cursor:pointer;font-family:inherit;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:color .1s,border-color .1s}
+.dash-tab:hover{color:var(--text)}
+.dash-tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.dash-tab-add{background:none;border:none;padding:2px;cursor:pointer;color:var(--text-subtle);display:flex;align-items:center;font-size:14px;transition:color .1s}
+.dash-tab-add:hover,.dash-tab-add:focus-visible{color:var(--accent)}
 .dash-range-btns{display:flex;gap:0;background:var(--bg);border:1px solid var(--border);padding:0}
 .dash-range-btn{font-size:10px;font-weight:400;padding:4px 12px;border:none;border-right:1px solid var(--border);background:none;color:var(--text-dim);cursor:pointer;font-family:inherit;letter-spacing:0.06em;text-transform:uppercase;transition:background .1s,color .1s}
 .dash-range-btn:last-child{border-right:none}
@@ -544,6 +550,12 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .dash-manager-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
 .dash-manager-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
 .dash-manager-hint{flex:1;min-width:200px;font-size:11px;color:var(--text-muted)}
+.dash-manager-view{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+.dash-manager-view input{flex:1;min-width:160px;max-width:320px;padding:5px 9px;border:1px solid var(--border-mid);background:var(--input-bg);color:var(--text);font-family:inherit;font-size:13px;outline:none}
+.dash-manager-view input:focus{border-color:var(--accent-dim)}
+.dash-manager-view .launch-small-btn:disabled{opacity:.3;cursor:default}
+.dash-manager-view .launch-small-btn i{font-size:13px;vertical-align:-2px}
+.dash-manager-view .launch-small-btn.danger:hover{color:var(--p1);border-color:var(--p1)}
 .dash-manager-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
 .dash-manager-item{display:flex;align-items:center;gap:10px;text-align:left;background:var(--bg);border:1px solid var(--border);padding:8px 10px;cursor:pointer;font-family:inherit;color:var(--text-dim);transition:border-color .1s,color .1s}
 .dash-manager-item:hover{border-color:var(--border-mid);color:var(--text)}
@@ -1446,6 +1458,7 @@ const S = {
   usingLauncher: false,
   dashboardDays: 7,
   dashEdit: false,       // dashboard Customize mode
+  dashBoard: (() => { try { return localStorage.getItem('focal_dash_board') || ''; } catch(e) { return ''; } })(),   // open dashboard view's id (per-browser)
   wikiPages: [],
   changelog: [],
   sessions: [],          // Launch sessions — permanent, unlike the capped changelog
@@ -2773,8 +2786,11 @@ function ftTier(score) {
 }
 // ── Dashboard modules ───────────────────────────────────────────────────────
 // The dashboard is a 12-column grid of modules. Which ones show, in what order
-// and how wide is stored in focal.db (prefs row DASH_PREF: {mods:[{id, span}],
-// seen:[ids]}), so the layout is the same on every device.
+// and how wide is stored in focal.db (prefs row DASH_PREF), so the layout is the
+// same on every device. There can be several named views, each its own layout,
+// shown as tabs: {boards:[{id, name, mods:[{id, span}]}], seen:[ids]}. The
+// older single-layout shape {mods, seen} reads as one view called Progress.
+// Which view is open is per-browser (S.dashBoard, localStorage focal_dash_board).
 // Customize switches to edit mode: drag a module by its grip to move it, drag
 // its right edge to resize (snaps to columns), × removes it, and the manager
 // panel adds it back. Each module renders into its body only *after* it's in
@@ -2814,21 +2830,44 @@ function dashLayoutRaw() {
   }
   return raw;
 }
-function dashLayout() {
+const DASH_DEFAULT_NAME = 'Progress';
+const dashDefaultMods = () => DASH_MODULES.filter(m => m.show).map(m => ({ id: m.id, span: m.span }));
+function dashCleanMods(list) {
+  const ids = new Set();
+  return (Array.isArray(list) ? list : []).filter(x => x && DASH_BY_ID.has(x.id) && !ids.has(x.id) && ids.add(x.id))
+    .map(x => { const d = DASH_BY_ID.get(x.id); return { id: x.id, span: Math.max(d.min, Math.min(DASH_COLS, parseInt(x.span, 10) || d.span)) }; });
+}
+function dashBoards() {
   let saved = null;
   try { saved = JSON.parse(dashLayoutRaw() || 'null'); } catch(e) {}
-  if (!saved || !Array.isArray(saved.mods)) return DASH_MODULES.filter(m => m.show).map(m => ({ id: m.id, span: m.span }));
-  const seen = new Set(saved.seen || []);
+  if (!saved) return [{ id: 'main', name: DASH_DEFAULT_NAME, mods: dashDefaultMods() }];
+  const raw = Array.isArray(saved.boards) ? saved.boards : [{ id: 'main', name: DASH_DEFAULT_NAME, mods: saved.mods }];
   const ids = new Set();
-  const mods = saved.mods.filter(x => x && DASH_BY_ID.has(x.id) && !ids.has(x.id) && ids.add(x.id))
-    .map(x => { const d = DASH_BY_ID.get(x.id); return { id: x.id, span: Math.max(d.min, Math.min(DASH_COLS, parseInt(x.span, 10) || d.span)) }; });
+  const boards = raw.filter(b => b && b.id && !ids.has(String(b.id)) && ids.add(String(b.id)))
+    .map(b => ({ id: String(b.id), name: String(b.name || '').trim() || 'Untitled', mods: dashCleanMods(b.mods) }));
+  if (!boards.length) return [{ id: 'main', name: DASH_DEFAULT_NAME, mods: dashDefaultMods() }];
   // A module added to Focal after this layout was saved shows up once, at the
-  // end; one the user removed stays removed.
-  DASH_MODULES.forEach(m => { if (m.show && !seen.has(m.id) && !mods.some(x => x.id === m.id)) mods.push({ id: m.id, span: m.span }); });
-  return mods;
+  // end of the first view; one the user removed stays removed.
+  const seen = new Set(saved.seen || []);
+  DASH_MODULES.forEach(m => { if (m.show && !seen.has(m.id) && !boards[0].mods.some(x => x.id === m.id)) boards[0].mods.push({ id: m.id, span: m.span }); });
+  return boards;
 }
+function saveDashBoards(boards) {
+  setPref(DASH_PREF, JSON.stringify({ boards, seen: DASH_MODULES.map(m => m.id) }));
+}
+// The open view: the remembered one if it still exists, else the first
+function dashBoard(boards) {
+  return boards.find(b => b.id === S.dashBoard) || boards[0];
+}
+function setDashBoard(id) {
+  S.dashBoard = id;
+  try { localStorage.setItem('focal_dash_board', id); } catch(e) {}
+}
+// Every edit in the grid saves the open view's modules back into the full set
 function saveDashLayout(mods) {
-  setPref(DASH_PREF, JSON.stringify({ mods, seen: DASH_MODULES.map(m => m.id) }));
+  const boards = dashBoards();
+  dashBoard(boards).mods = mods;
+  saveDashBoards(boards);
 }
 const dashSpanLabel = s => s === DASH_COLS ? 'full' : ({ 3:'¼', 4:'⅓', 6:'½', 8:'⅔', 9:'¾' })[s] || `${s}/12`;
 
@@ -2868,13 +2907,32 @@ function renderDashboard(c) {
   const keep = c.scrollTop;   // range buttons and layout edits re-render; don't jump to the top
   c.innerHTML = '';
   const days = S.dashboardDays, editing = !!S.dashEdit;
-  const layout = dashLayout();
+  const boards = dashBoards(), board = dashBoard(boards), layout = board.mods;
   const x = dashCtx(days);
 
-  // ── header ───────────────────────────────────────────────────────────────
+  // ── header: one tab per view, then + for a new one ───────────────────────
   const hdr = document.createElement('div');
   hdr.className = 'dash-header';
-  hdr.innerHTML = '<div class="dash-title">Progress</div>';
+  const tabs = document.createElement('div');
+  tabs.className = 'dash-tabs';
+  boards.forEach(b => {
+    const t = document.createElement('button');
+    t.className = 'dash-title dash-tab' + (b === board && boards.length > 1 ? ' active' : '');
+    t.dataset.id = b.id;
+    t.textContent = b.name;
+    t.title = b === board ? 'Double-click to rename' : 'Open this view';
+    t.onclick = () => { if (b === board) return; setDashBoard(b.id); renderDashboard(c); c.scrollTop = 0; };
+    t.ondblclick = () => { setDashBoard(b.id); S.dashEdit = true; renderDashboard(c); c.querySelector('.dash-manager-view input')?.select(); };
+    tabs.appendChild(t);
+  });
+  const add = document.createElement('button');
+  add.className = 'dash-tab-add';
+  add.innerHTML = '<i class="ti ti-plus"></i>';
+  add.title = 'New dashboard view';
+  add.setAttribute('aria-label', 'New dashboard view');
+  add.onclick = () => addDashBoard(c);
+  tabs.appendChild(add);
+  hdr.appendChild(tabs);
   const right = document.createElement('div');
   right.className = 'dash-header-right';
   const rangeBtns = document.createElement('div');
@@ -2895,7 +2953,7 @@ function renderDashboard(c) {
   right.appendChild(custom);
   hdr.appendChild(right);
   c.appendChild(hdr);
-  if (editing) c.appendChild(mkDashManager(c, layout));
+  if (editing) c.appendChild(mkDashManager(c, layout, boards, board));
   if (!editing) { const fresh = mkFreshStartBanner(); if (fresh) c.appendChild(fresh); }
 
   // ── modules ──────────────────────────────────────────────────────────────
@@ -2903,7 +2961,7 @@ function renderDashboard(c) {
   grid.className = 'dash-grid' + (editing ? ' dash-editing' : '');
   c.appendChild(grid);
   if (!layout.length) {
-    const empty = mkEmpty('ti-layout-grid-add', 'No modules on the dashboard');
+    const empty = mkEmpty('ti-layout-grid-add', editing ? 'Pick modules for this view above' : 'No modules on this view');
     if (!editing) {
       const b = document.createElement('button'); b.className = 'icon-btn'; b.style.margin = '12px auto 0';
       b.innerHTML = '<i class="ti ti-layout-grid-add"></i>Add some';
@@ -3002,13 +3060,64 @@ function rerenderDash(c, flashId) {
   });
 }
 
-function mkDashManager(c, layout) {
+// A new view starts empty (or as a copy of `from`), opens in Customize with
+// its name selected, so the next keystroke titles it.
+function addDashBoard(c, from) {
+  const boards = dashBoards();
+  const names = new Set(boards.map(b => b.name.toLowerCase()));
+  const base = from ? `${from.name} copy` : 'New view';
+  let name = base;
+  for (let n = 2; names.has(name.toLowerCase()); n++) name = `${base} ${n}`;
+  const id = 'v' + Date.now().toString(36);
+  const at = from ? boards.findIndex(b => b.id === from.id) + 1 : boards.length;
+  boards.splice(at, 0, { id, name, mods: from ? from.mods.map(m => ({ ...m })) : [] });
+  saveDashBoards(boards); setDashBoard(id);
+  S.dashEdit = true; renderDashboard(c); c.scrollTop = 0;
+  const inp = c.querySelector('.dash-manager-view input');
+  if (inp) { inp.focus(); inp.select(); }
+}
+
+function mkDashManager(c, layout, boards, board) {
   const on = new Set(layout.map(m => m.id));
   const p = document.createElement('div');
   p.className = 'dash-manager';
-  p.innerHTML = `<div class="dash-manager-head"><span class="dash-manager-title">Modules</span>`
+  const idx = boards.indexOf(board), only = boards.length === 1;
+  p.innerHTML = `<div class="dash-manager-view"><span class="dash-manager-title">View</span>`
+    + `<input type="text" maxlength="40" aria-label="View name" placeholder="Name this view">`
+    + `<button class="launch-small-btn" data-act="left" title="Move this tab left"${idx === 0 ? ' disabled' : ''}><i class="ti ti-chevron-left"></i></button>`
+    + `<button class="launch-small-btn" data-act="right" title="Move this tab right"${idx === boards.length - 1 ? ' disabled' : ''}><i class="ti ti-chevron-right"></i></button>`
+    + `<button class="launch-small-btn" data-act="dup" title="A new view with this one’s modules">Duplicate</button>`
+    + `<button class="launch-small-btn danger" data-act="del" title="${only ? 'The dashboard needs at least one view' : 'Delete this view'}"${only ? ' disabled' : ''}>Delete view</button></div>`
+    + `<div class="dash-manager-head"><span class="dash-manager-title">Modules</span>`
     + `<span class="dash-manager-hint">Click to add or remove · drag <i class="ti ti-grip-vertical"></i> to move · drag a module’s right edge to resize</span>`
-    + `<button class="launch-small-btn" title="Back to the default modules, order and sizes">Reset layout</button></div><div class="dash-manager-list"></div>`;
+    + `<button class="launch-small-btn" data-act="reset" title="Back to the default modules, order and sizes">Reset layout</button></div><div class="dash-manager-list"></div>`;
+
+  // Rename as you type; the tab follows. Clearing the box puts the old name back.
+  const inp = p.querySelector('.dash-manager-view input');
+  inp.value = board.name;
+  const tab = () => c.querySelector(`.dash-tab[data-id="${board.id}"]`);
+  const rename = name => { const all = dashBoards(), b = all.find(v => v.id === board.id); if (!b) return; b.name = board.name = name; saveDashBoards(all); };
+  inp.oninput = () => {
+    const v = inp.value.trim();
+    if (tab()) tab().textContent = v || board.name;
+    if (v) rename(v);
+  };
+  inp.onchange = () => { if (!inp.value.trim()) { inp.value = board.name; if (tab()) tab().textContent = board.name; } };
+  inp.onkeydown = e => { if (e.key === 'Enter') inp.blur(); };
+  const act = a => p.querySelector(`[data-act="${a}"]`);
+  const move = step => { const j = idx + step; [boards[idx], boards[j]] = [boards[j], boards[idx]]; saveDashBoards(boards); renderDashboard(c); };
+  act('left').onclick = () => { move(-1); c.querySelector('[data-act="left"]:not(:disabled)')?.focus(); };
+  act('right').onclick = () => { move(1); c.querySelector('[data-act="right"]:not(:disabled)')?.focus(); };
+  act('dup').onclick = () => addDashBoard(c, board);
+  act('del').onclick = () => {
+    if (only) return;
+    const prev = getPref(DASH_PREF);
+    boards.splice(idx, 1);
+    saveDashBoards(boards); setDashBoard(boards[Math.min(idx, boards.length - 1)].id);
+    renderDashboard(c);
+    showToast(`Deleted the “${board.name}” view.`, { label: 'Undo', action: () => { setPref(DASH_PREF, prev); setDashBoard(board.id); renderDashboard(c); } });
+  };
+
   const list = p.querySelector('.dash-manager-list');
   DASH_MODULES.forEach(def => {
     const isOn = on.has(def.id);
@@ -3023,10 +3132,10 @@ function mkDashManager(c, layout) {
     };
     list.appendChild(b);
   });
-  p.querySelector('.launch-small-btn').onclick = () => {
-    const prev = getPref(DASH_PREF);
-    if (prev === null) return;
-    setPref(DASH_PREF, null); rerenderDash(c);
+  act('reset').onclick = () => {
+    const prev = getPref(DASH_PREF), def = dashDefaultMods();
+    if (JSON.stringify(layout) === JSON.stringify(def)) return;
+    saveDashLayout(def); rerenderDash(c);
     showToast('Layout reset to the default.', { label: 'Undo', action: () => { setPref(DASH_PREF, prev); rerenderDash(c); } });
   };
   return p;
