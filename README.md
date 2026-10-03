@@ -81,6 +81,16 @@ Every read takes `--json`. `--db FILE` reads a copy of the database (`.db` or `.
 
 Changes to existing tasks (`done`, `edit`, `snooze`…) are applied by an open Focal tab, using the same code as the buttons, so a repeating task still spawns its next occurrence and the changelog records the change (tagged `via CLI`, or `--source NAME`). The command waits for the tab to apply the change and prints the result. If no Focal tab is open, the change waits for the next one, the command exits with code 4, and `focal op <id>` checks on it later. A change more than a day old is refused rather than applied stale.
 
+### Using it from Claude Code
+
+[`skills/focal/SKILL.md`](skills/focal/SKILL.md) is a Claude Code skill that teaches Claude to use `focal`, so you can open any Claude Code session and ask "what's overdue?" or "snooze the dentist task to Friday". Link it into your user skills:
+
+```bash
+mkdir -p ~/.claude/skills && ln -s "$PWD/skills/focal" ~/.claude/skills/focal
+```
+
+To let Claude run the read-only commands without asking each time, add them to `permissions.allow` in `~/.claude/settings.json`: `"Bash(focal)"`, `"Bash(focal ls)"`, `"Bash(focal ls *)"`, `"Bash(focal show *)"`, `"Bash(focal search *)"`, `"Bash(focal projects)"`, `"Bash(focal projects *)"`, `"Bash(focal project *)"`, `"Bash(focal ideas)"`, `"Bash(focal ideas *)"`, `"Bash(focal cats)"`, `"Bash(focal cats *)"`, `"Bash(focal op *)"`. Commands that change tasks will still ask. Don't allow `focal --db *`: `--db` only redirects reads, so it would let changes through too.
+
 ## Security notes
 
 - Both local servers only accept browser requests originating from `http://localhost:8080`, so arbitrary websites can't reach your data via localhost fetches.

@@ -215,7 +215,7 @@ def view(f, name, a):
     elif name == 'all':
         out = pending
     elif name == 'done':
-        since = parse_day(a.since) if a.since else td
+        since = parse_day(a.since, past=True) if a.since else td
         out = [t for t in f.tasks if t['done'] and (f.done_day(t) or '') >= since]
         return sorted(out, key=lambda t: f.done_day(t) or '', reverse=True)
     elif name == 'recent':
@@ -444,8 +444,9 @@ def parse_priority(v):
     die(f'priority must be 1–4 or one of {", ".join(PRIORITY_WORDS)}')
 
 
-def parse_day(v):
-    """YYYY-MM-DD, today, tomorrow, yesterday, +3 / +3d / +2w, or a weekday (the next one)."""
+def parse_day(v, past=False):
+    """YYYY-MM-DD, today, tomorrow, yesterday, +3 / +3d / +2w, or a weekday: the next one,
+    or with past=True (for --since) the most recent one, today included."""
     s, d0 = v.strip().lower(), date.today()
     if re.fullmatch(r'\d{4}-\d{2}-\d{2}', s):
         try:
@@ -458,6 +459,8 @@ def parse_day(v):
         n = int(s.rstrip('dw')) * (7 if s.endswith('w') else 1)
         return (d0 + timedelta(days=n)).isoformat()
     elif s[:3] in WEEKDAYS:
+        if past:
+            return (d0 - timedelta(days=(d0.weekday() - WEEKDAYS.index(s[:3])) % 7)).isoformat()
         ahead = (WEEKDAYS.index(s[:3]) - d0.weekday() - 1) % 7 + 1
         return (d0 + timedelta(days=ahead)).isoformat()
     die(f'bad date "{v}" (try 2026-10-15, tomorrow, +3d, fri)')
@@ -635,7 +638,7 @@ def main(argv=None):
     sp = cmd('ls', cmd_ls, 'list tasks in a view (default: focus)', filters=True)
     sp.add_argument('view', nargs='?', choices=VIEWS, metavar='VIEW', help=' | '.join(VIEWS))
     sp.add_argument('--days', type=int, help='upcoming: look N days ahead (14); recent: N days back (7)')
-    sp.add_argument('--since', help='done: completed on or after this day (default today)')
+    sp.add_argument('--since', help='done: completed on or after this day (default today; mon = this week\'s Monday)')
 
     cmd('show', cmd_show, 'one task in full').add_argument('id', type=int)
 
