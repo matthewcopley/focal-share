@@ -35,11 +35,12 @@ On macOS you can instead double-click `focal.command`, which starts the server a
 
 - Everything is stored in `focal.db` (SQLite) next to `focal_launcher.py`. Back it up by copying the file.
 - The app auto-saves 2 seconds after any change and keeps its own rotating backups (last 7 snapshots, downloadable from Settings).
+- Focal can be open in several tabs or on several devices at once. Each save names the version of the database it started from, and if anything else has saved since, the app merges the two field by field instead of overwriting, so changes on both sides survive. Open tabs also pick up changes made elsewhere within a few seconds. After updating Focal, reload any tabs that were already open: a tab running the old code can't save until it's reloaded.
 - `focal.db` is gitignored — never commit it if you fork this repo.
 
 ## Optional: task handoff from scripts/agents
 
-External tools should **not** write `focal.db` directly (the app's auto-save would clobber their rows). Instead, drop a JSON file into `.focal_inbox/` next to the database:
+External tools should **not** add tasks by writing `focal.db` directly: a new task needs the app's own bookkeeping (its id, the changelog entry, category matching). Instead, drop a JSON file into `.focal_inbox/` next to the database:
 
 ```json
 { "title": "Follow up with vendor", "priority": 2, "category": "Admin", "due": "2026-09-01" }

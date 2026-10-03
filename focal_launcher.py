@@ -11,6 +11,7 @@ Usage:
 from flask import Flask, send_from_directory, jsonify, request, Response
 from pathlib import Path
 from datetime import datetime, timezone
+import hashlib
 import sqlite3
 import threading
 import time
@@ -41,6 +42,8 @@ INBOX_DIR = FOCAL_DIR / '.focal_inbox'
 INBOX_FLUSH_GRACE = 90          # seconds with no Focal poll before the launcher writes to disk
 _db_lock = threading.Lock()
 _last_pending_poll = 0.0        # updated on every GET /pending-tasks (Focal liveness signal)
+LEASE_SECONDS = 60
+_leases = {}                    # inbox file name -> (tab id, expiry): who is adding it
 
 
 def _read_inbox():
@@ -111,13 +114,34 @@ DB_PATH = FOCAL_DIR / 'focal.db'
 # ---------------------------------------------------------------------------
 # Database read/write endpoints — lets the browser save focal.db without FSAA
 # ---------------------------------------------------------------------------
+# Versioned saves. Every save is a whole-database export from one tab, so without a check
+# the last writer wins: a stale tab, a second device or anything else writing focal.db
+# (the inbox flusher) silently overwrites newer data. The version is a hash of the file's
+# contents, so any writer changes it. GET /db reports it, POST /db must name the
+# version it started from (X-Focal-Base), and a mismatch is a 409. The tab then fetches
+# the current file, merges it with its own changes row by row (mergeDB() in index.html)
+# and saves again. "force" skips the check; the app sends it only right after the user
+# explicitly replaced their data (Open database, Start fresh, CSV import).
+#
+# A tab loaded before versioning sends no X-Focal-Base and is refused: its saves would
+# overwrite whatever changed since it loaded. It shows "save failed" and downloads the
+# file instead, which is the cue to reload it.
+def _version(data):
+    return hashlib.sha256(data).hexdigest()[:16] if data else ''
+
+
+def _current_version():
+    return _version(DB_PATH.read_bytes()) if DB_PATH.exists() else ''
+
+
 @app.route('/db', methods=['GET'])
 def get_db():
     if not DB_PATH.exists():
         return Response('', status=404)
     data = DB_PATH.read_bytes()
     return Response(data, mimetype='application/x-sqlite3',
-                    headers={'Content-Disposition': 'inline; filename="focal.db"'})
+                    headers={'Content-Disposition': 'inline; filename="focal.db"',
+                             'X-Focal-Version': _version(data), 'Cache-Control': 'no-store'})
 
 
 @app.route('/db', methods=['POST', 'OPTIONS'])
@@ -129,14 +153,21 @@ def post_db():
         return jsonify(ok=False, msg='empty body'), 400
     if not data.startswith(b'SQLite format 3\x00'):
         return jsonify(ok=False, msg='not a SQLite database'), 400
-    # Atomic write — a crash mid-write must not corrupt the live DB. The lock keeps this
-    # from racing the inbox flusher, which may also write focal.db.
+    base = request.headers.get('X-Focal-Base')
+    if base is None:
+        print('[launcher] refused a save from a tab without versioning (reload it)')
+        return jsonify(ok=False, conflict=True, msg='reload this tab'), 409
+    # Atomic write — a crash mid-write must not corrupt the live DB. The lock makes the
+    # version check and the write one step, and keeps this from racing the inbox flusher.
     with _db_lock:
+        current = _current_version()
+        if base != 'force' and base != current:
+            return jsonify(ok=False, conflict=True, version=current), 409
         tmp = DB_PATH.with_suffix('.db.tmp')
         tmp.write_bytes(data)
         os.replace(tmp, DB_PATH)
-    print(f'[launcher] focal.db saved ({len(data):,} bytes)')
-    return jsonify(ok=True, size=len(data))
+    print(f'[launcher] focal.db saved ({len(data):,} bytes)' + (' [forced]' if base == 'force' else ''))
+    return jsonify(ok=True, size=len(data), version=_version(data))
 
 
 # ---------------------------------------------------------------------------
@@ -202,15 +233,31 @@ def get_image(name):
 @app.route('/pending-tasks', methods=['GET'])
 def pending_tasks():
     """Return queued tasks for Focal to drain. Also the Focal-liveness heartbeat: while
-    this is being polled, the launcher leaves focal.db to Focal and never flushes itself."""
+    this is being polled, the launcher leaves focal.db to Focal and never flushes itself.
+    db_version lets an open tab notice that focal.db changed under it and pull it in.
+
+    A tab from before versioned saves sends no X-Focal-Client. It gets an empty list and
+    doesn't count as alive: its saves are refused (see POST /db), so a task it drained
+    would be acked without ever reaching focal.db. The flusher or a current tab takes it."""
+    if request.headers.get('X-Focal-Client') is None:
+        return jsonify(tasks=[])
     global _last_pending_poll
-    _last_pending_poll = time.time()
+    _last_pending_poll = now = time.time()
+    # Each task to add goes to one tab at a time. Two tabs draining the same file would
+    # both add it, and since saves now merge instead of overwrite, both copies would
+    # stay. The lease lapses if that tab never acks (closed mid-drain, save failed).
+    tab = request.headers.get('X-Focal-Tab', '')
     tasks = []
     for f, d in _read_inbox():
+        if not d.get('review'):
+            holder, until = _leases.get(f.name, ('', 0))
+            if holder and holder != tab and until > now:
+                continue
+            _leases[f.name] = (tab, now + LEASE_SECONDS)
         item = dict(d)
         item['queue_id'] = f.name        # Focal echoes this back to ack (delete) the file
         tasks.append(item)
-    return jsonify(tasks=tasks)
+    return jsonify(tasks=tasks, db_version=_current_version())
 
 
 _DUE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
@@ -293,6 +340,7 @@ def ack_pending():
         if not isinstance(name, str) or '/' in name or '\\' in name or not name.endswith('.json'):
             continue
         p = INBOX_DIR / name
+        _leases.pop(name, None)
         try:
             if p.exists():
                 p.unlink()

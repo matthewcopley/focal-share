@@ -1323,6 +1323,7 @@ const S = {
   db: null,
   dbHandle: null,
   unsaved: false,
+  dbVersion: "",          // launcher version of focal.db this tab last synced (X-Focal-Version)
   showAllFocus: false,
   doneFilter: 'today',   // 'today'|'yesterday'|'week'|'month'|'all'|'custom'
   doneFrom: '',          // custom completed-on range (inclusive), YYYY-MM-DD
@@ -1656,92 +1657,139 @@ function downloadBackup(ts) {
 // ─────────────────────────────────────────────
 // DB CORE  (sql.js)
 // ─────────────────────────────────────────────
-function dbLoadAll() {
-  const taskRes = S.db.exec('SELECT * FROM tasks ORDER BY id');
-  S.tasks = taskRes.length ? taskRes[0].values.map(row => {
-    const o = {}; taskRes[0].columns.forEach((c,i) => o[c]=row[i]);
-    let subs=[]; try { subs=JSON.parse(o.subtasks||'[]'); } catch(e){}
-    return { id:o.id, title:o.title||'', priority:o.priority||3, category:o.category||'',
-      due:o.due||'', recur:o.recur||'', description:o.description||'', done:o.done===1,
-      subtasks:subs, aiRank:o.aiRank!=null?o.aiRank:null, aiReason:o.aiReason||'',
-      created:o.created||new Date().toISOString(), notes:o.notes||'',
-      projectId:o.projectId!=null?o.projectId:null,
-      teamFlag:o.teamFlag===1, completedAt:o.completedAt||'',
-      snoozedUntil:o.snoozedUntil||'', snoozedFrom:o.snoozedFrom||'',
-      deferrals:toInt(o.deferrals, 0), nextStep:o.nextStep||'' };
-  }) : [];
-
-  const projRes = S.db.exec('SELECT * FROM projects ORDER BY id');
-  S.projects = projRes.length ? projRes[0].values.map(row => {
-    const o = {}; projRes[0].columns.forEach((c,i) => o[c]=row[i]);
-    let noteList=[]; try { noteList=JSON.parse(o.noteList||'[]'); } catch(e) {}
-    if (!Array.isArray(noteList)) noteList=[];
-    return { id:o.id, title:o.title||'', status:o.status||'not-started',
-      progress:o.progress||0, progressManual:o.progressManual===1,
-      startDate:o.startDate||'', dueDate:o.dueDate||'', type:o.type||'client',
-      jobNumber:o.jobNumber||'', notes:o.notes||'', created:o.created||new Date().toISOString(),
-      noteList };
-  }) : [];
-
-  const catRes = S.db.exec('SELECT * FROM categories ORDER BY id');
-  S.categories = catRes.length ? catRes[0].values.map(row => {
-    const o = {}; catRes[0].columns.forEach((c,i) => o[c]=row[i]);
-    return { id:o.id, name:o.name, color:o.color };
-  }) : JSON.parse(JSON.stringify(DEFAULT_CATS));
-
-  const ideaRes = S.db.exec('SELECT * FROM ideas ORDER BY id');
-  S.ideas = ideaRes.length ? ideaRes[0].values.map(row => {
-    const o = {}; ideaRes[0].columns.forEach((c,i) => o[c]=row[i]);
-    return { id:o.id, title:o.title||'', description:o.description||'',
+// Every table, in one place: how a DB row becomes the object kept in S (from), and back
+// (to, the values in `cols` order that dbSaveAll writes). to(from(row)) is a row's
+// canonical form, which is what mergeDB() compares. key identifies a row across copies
+// of the database; rows() is what gets saved; order is how dbLoadAll sorts.
+const DB_TABLES = [
+  { name:'tasks', key:'id', order:'id',
+    cols:['id','title','priority','category','due','recur','description','done','subtasks','aiRank','aiReason','created','notes','projectId','teamFlag','completedAt','snoozedUntil','snoozedFrom','deferrals','nextStep'],
+    rows: () => S.tasks, set: v => { S.tasks = v; },
+    from: o => {
+      let subs=[]; try { subs=JSON.parse(o.subtasks||'[]'); } catch(e){}
+      return { id:o.id, title:o.title||'', priority:o.priority||3, category:o.category||'',
+        due:o.due||'', recur:o.recur||'', description:o.description||'', done:o.done===1,
+        subtasks:subs, aiRank:o.aiRank!=null?o.aiRank:null, aiReason:o.aiReason||'',
+        created:o.created||new Date().toISOString(), notes:o.notes||'',
+        projectId:o.projectId!=null?o.projectId:null,
+        teamFlag:o.teamFlag===1, completedAt:o.completedAt||'',
+        snoozedUntil:o.snoozedUntil||'', snoozedFrom:o.snoozedFrom||'',
+        deferrals:toInt(o.deferrals, 0), nextStep:o.nextStep||'' };
+    },
+    to: t => [
+      toInt(t.id, 0), String(t.title || ''), toInt(t.priority, 3), String(t.category || ''),
+      String(t.due || ''), String(t.recur || ''), String(t.description || ''), t.done ? 1 : 0,
+      JSON.stringify(t.subtasks || []), toIntOrNull(t.aiRank), String(t.aiReason || ''),
+      String(t.created || new Date().toISOString()), String(t.notes || ''), toIntOrNull(t.projectId),
+      t.teamFlag ? 1 : 0, String(t.completedAt || ''), String(t.snoozedUntil || ''),
+      String(t.snoozedFrom || ''), toInt(t.deferrals, 0), String(t.nextStep || ''),
+    ] },
+  { name:'projects', key:'id', order:'id',
+    cols:['id','title','status','progress','progressManual','startDate','dueDate','type','jobNumber','notes','created','noteList'],
+    rows: () => S.projects, set: v => { S.projects = v; },
+    from: o => {
+      let noteList=[]; try { noteList=JSON.parse(o.noteList||'[]'); } catch(e) {}
+      if (!Array.isArray(noteList)) noteList=[];
+      return { id:o.id, title:o.title||'', status:o.status||'not-started',
+        progress:o.progress||0, progressManual:o.progressManual===1,
+        startDate:o.startDate||'', dueDate:o.dueDate||'', type:o.type||'client',
+        jobNumber:o.jobNumber||'', notes:o.notes||'', created:o.created||new Date().toISOString(),
+        noteList };
+    },
+    to: p => [
+      toInt(p.id, 0), String(p.title || ''), String(p.status || 'not-started'), toInt(p.progress, 0),
+      p.progressManual ? 1 : 0, String(p.startDate || ''), String(p.dueDate || ''),
+      String(p.type || 'client'), String(p.jobNumber || ''), String(p.notes || ''),
+      String(p.created || new Date().toISOString()),
+      JSON.stringify(Array.isArray(p.noteList) ? p.noteList : []),
+    ] },
+  // Keyed by name: ids are reassigned on every save (the insert leaves them out), and
+  // tasks refer to a category by name anyway.
+  { name:'categories', key:'name', order:'id', cols:['name','color'],
+    rows: () => {
+      const seen = new Set();
+      return S.categories.filter(c => {
+        const n = String(c.name || '').trim();
+        if (!n || seen.has(n)) return false;
+        seen.add(n); return true;
+      });
+    },
+    set: v => { S.categories = v; },
+    from: o => ({ id:o.id, name:o.name, color:o.color }),
+    to: c => [String(c.name || '').trim(), String(c.color || '#888780')] },
+  { name:'ideas', key:'id', order:'id',
+    cols:['id','title','description','status','created','updated','notes'],
+    rows: () => S.ideas, set: v => { S.ideas = v; },
+    from: o => ({ id:o.id, title:o.title||'', description:o.description||'',
       status:o.status||'inbox', created:o.created||new Date().toISOString(),
-      updated:o.updated||'', notes:o.notes||'' };
-  }) : [];
-
-  const linkRes = S.db.exec('SELECT * FROM links ORDER BY id');
-  S.links = linkRes.length ? linkRes[0].values.map(row => {
-    const o = {}; linkRes[0].columns.forEach((c,i) => o[c]=row[i]);
-    return { id:o.id, fromType:o.fromType, fromId:o.fromId,
-      toType:o.toType, toId:o.toId, label:o.label||'', created:o.created||'' };
-  }) : [];
-
-  const sucRes = S.db.exec('SELECT * FROM successes ORDER BY id');
-  S.successes = sucRes.length ? sucRes[0].values.map(row => {
-    const o = {}; sucRes[0].columns.forEach((c,i) => o[c]=row[i]);
-    return { id:o.id, title:o.title||'', startDate:o.startDate||'', endDate:o.endDate||'',
+      updated:o.updated||'', notes:o.notes||'' }),
+    to: i => [toInt(i.id,0), String(i.title||''), String(i.description||''),
+      String(i.status||'inbox'), String(i.created||''), String(i.updated||''), String(i.notes||'')] },
+  { name:'links', key:'id', order:'id',
+    cols:['id','fromType','fromId','toType','toId','label','created'],
+    rows: () => S.links, set: v => { S.links = v; },
+    from: o => ({ id:o.id, fromType:o.fromType, fromId:o.fromId,
+      toType:o.toType, toId:o.toId, label:o.label||'', created:o.created||'' }),
+    to: l => [toInt(l.id,0), String(l.fromType), toInt(l.fromId,0),
+      String(l.toType), toInt(l.toId,0), String(l.label||''), String(l.created||'')] },
+  { name:'successes', key:'id', order:'id',
+    cols:['id','title','startDate','endDate','reviewYear','impactType','impactLevel','skills','areaBenefit','savedAmount','status','notes','projectId','created'],
+    rows: () => S.successes, set: v => { S.successes = v; },
+    from: o => ({ id:o.id, title:o.title||'', startDate:o.startDate||'', endDate:o.endDate||'',
       reviewYear:o.reviewYear||null, impactType:o.impactType||'', impactLevel:o.impactLevel||'medium',
       skills:o.skills||'', areaBenefit:o.areaBenefit||'',
       savedAmount:o.savedAmount!=null?o.savedAmount:null,
       status:o.status||'active', notes:o.notes||'',
-      projectId:o.projectId!=null?o.projectId:null, created:o.created||new Date().toISOString() };
-  }) : [];
-
-  const clRes = S.db.exec('SELECT * FROM changelog ORDER BY id DESC');
-  S.changelog = clRes.length ? clRes[0].values.map(row => {
-    const o = {}; clRes[0].columns.forEach((c,i) => o[c]=row[i]);
-    return { id:o.id, ts:o.ts||'', entityType:o.entityType||'', entityId:o.entityId??null, action:o.action||'', description:o.description||'' };
-  }) : [];
-
-  const sesRes = S.db.exec('SELECT * FROM sessions ORDER BY id');
-  S.sessions = sesRes.length ? sesRes[0].values.map(row => {
-    const o = {}; sesRes[0].columns.forEach((c,i) => o[c]=row[i]);
-    return { id:o.id, taskId:o.taskId??null, started:o.started||'', ended:o.ended||'',
+      projectId:o.projectId!=null?o.projectId:null, created:o.created||new Date().toISOString() }),
+    to: s => [toInt(s.id,0), String(s.title||''), String(s.startDate||''), String(s.endDate||''),
+      toIntOrNull(s.reviewYear), String(s.impactType||''), String(s.impactLevel||'medium'),
+      String(s.skills||''), String(s.areaBenefit||''),
+      s.savedAmount!=null ? parseFloat(s.savedAmount)||null : null,
+      String(s.status||'active'), String(s.notes||''),
+      toIntOrNull(s.projectId), String(s.created||new Date().toISOString())] },
+  { name:'changelog', key:'id', order:'id DESC',
+    cols:['id','ts','entityType','entityId','action','description'],
+    rows: () => capChangelog(S.changelog), set: v => { S.changelog = v; },
+    from: o => ({ id:o.id, ts:o.ts||'', entityType:o.entityType||'', entityId:o.entityId??null, action:o.action||'', description:o.description||'' }),
+    to: cl => [toInt(cl.id,0), String(cl.ts||''), String(cl.entityType||''), cl.entityId!=null?cl.entityId:null, String(cl.action||''), String(cl.description||'')] },
+  { name:'sessions', key:'id', order:'id',
+    cols:['id','taskId','started','ended','plannedMin','outcome','step','plan','sticky'],
+    rows: () => S.sessions, set: v => { S.sessions = v; },
+    from: o => ({ id:o.id, taskId:o.taskId??null, started:o.started||'', ended:o.ended||'',
       plannedMin:toInt(o.plannedMin, 5), outcome:o.outcome||'', step:o.step||'',
-      plan:o.plan||'', sticky:o.sticky===1 };
-  }) : [];
+      plan:o.plan||'', sticky:o.sticky===1 }),
+    to: s => [toInt(s.id,0), toIntOrNull(s.taskId), String(s.started||''), String(s.ended||''),
+      toInt(s.plannedMin,5), String(s.outcome||''), String(s.step||''), String(s.plan||''), s.sticky ? 1 : 0] },
+  { name:'checkins', key:'id', order:'id',
+    cols:['id','started','ended','focus','difficulty','taskIds','tags','note','nextTaskId'],
+    rows: () => S.checkins, set: v => { S.checkins = v; },
+    from: o => {
+      let ids=[]; try { ids=JSON.parse(o.taskIds||'[]'); } catch(e) {}
+      return { id:o.id, started:o.started||'', ended:o.ended||'',
+        focus:toInt(o.focus, 0), difficulty:toInt(o.difficulty, 0),
+        taskIds:Array.isArray(ids) ? ids.map(n => toInt(n, 0)).filter(Boolean) : [],
+        tags:o.tags||'', note:o.note||'', nextTaskId:o.nextTaskId??null };
+    },
+    to: k => [toInt(k.id,0), String(k.started||''), String(k.ended||''), toInt(k.focus,0), toInt(k.difficulty,0),
+      JSON.stringify(k.taskIds || []), String(k.tags||''), String(k.note||''), toIntOrNull(k.nextTaskId)] },
+  { name:'prefs', key:'key', order:'key', cols:['key','value'],
+    rows: () => Object.entries(S.prefs).map(([key, value]) => ({ key, value })),
+    set: v => { S.prefs = Object.fromEntries(v.map(p => [p.key, p.value])); },
+    from: o => ({ key:o.key, value:o.value ?? '' }),
+    to: p => [String(p.key), String(p.value)] },
+];
 
-  const ciRes = S.db.exec('SELECT * FROM checkins ORDER BY id');
-  S.checkins = ciRes.length ? ciRes[0].values.map(row => {
-    const o = {}; ciRes[0].columns.forEach((c,i) => o[c]=row[i]);
-    let ids=[]; try { ids=JSON.parse(o.taskIds||'[]'); } catch(e) {}
-    return { id:o.id, started:o.started||'', ended:o.ended||'',
-      focus:toInt(o.focus, 0), difficulty:toInt(o.difficulty, 0),
-      taskIds:Array.isArray(ids) ? ids.map(n => toInt(n, 0)).filter(Boolean) : [],
-      tags:o.tags||'', note:o.note||'', nextTaskId:o.nextTaskId??null };
-  }) : [];
+// The objects for table T in database db, in T.order.
+function readTable(db, T) {
+  const res = db.exec(`SELECT * FROM ${T.name} ORDER BY ${T.order}`);
+  if (!res.length) return [];
+  const { columns, values } = res[0];
+  return values.map(row => { const o = {}; columns.forEach((c,i) => o[c]=row[i]); return T.from(o); });
+}
 
-  const prefRes = S.db.exec('SELECT key, value FROM prefs');
-  S.prefs = {};
-  if (prefRes.length) prefRes[0].values.forEach(([k, v]) => { S.prefs[k] = v ?? ''; });
+function dbLoadAll() {
+  for (const T of DB_TABLES) T.set(readTable(S.db, T));
+  if (!S.categories.length) S.categories = JSON.parse(JSON.stringify(DEFAULT_CATS));
 
   // Backfill complete entries for tasks/subtasks that predate logging
   backfillCompletions();
@@ -1767,123 +1815,173 @@ function toIntOrNull(v) { if (v == null || v === '') return null; const n = pars
 function dbSaveAll() {
   S.db.run('BEGIN TRANSACTION');
   try {
-    S.db.run('DELETE FROM tasks');
-    const tSt = S.db.prepare('INSERT INTO tasks (id,title,priority,category,due,recur,description,done,subtasks,aiRank,aiReason,created,notes,projectId,teamFlag,completedAt,snoozedUntil,snoozedFrom,deferrals,nextStep) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-    for (const t of S.tasks) {
-      tSt.run([
-        toInt(t.id, 0),
-        String(t.title || ''),
-        toInt(t.priority, 3),
-        String(t.category || ''),
-        String(t.due || ''),
-        String(t.recur || ''),
-        String(t.description || ''),
-        t.done ? 1 : 0,
-        JSON.stringify(t.subtasks || []),
-        toIntOrNull(t.aiRank),
-        String(t.aiReason || ''),
-        String(t.created || new Date().toISOString()),
-        String(t.notes || ''),
-        toIntOrNull(t.projectId),
-        t.teamFlag ? 1 : 0,
-        String(t.completedAt || ''),
-        String(t.snoozedUntil || ''),
-        String(t.snoozedFrom || ''),
-        toInt(t.deferrals, 0),
-        String(t.nextStep || ''),
-      ]);
+    for (const T of DB_TABLES) {
+      S.db.run(`DELETE FROM ${T.name}`);
+      const st = S.db.prepare(`INSERT INTO ${T.name} (${T.cols.join(',')}) VALUES (${T.cols.map(() => '?').join(',')})`);
+      for (const x of T.rows()) st.run(T.to(x));
+      st.free();
     }
-    tSt.free();
-
-    S.db.run('DELETE FROM projects');
-    const pSt = S.db.prepare('INSERT INTO projects (id,title,status,progress,progressManual,startDate,dueDate,type,jobNumber,notes,created,noteList) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
-    for (const p of S.projects) {
-      pSt.run([
-        toInt(p.id, 0),
-        String(p.title || ''),
-        String(p.status || 'not-started'),
-        toInt(p.progress, 0),
-        p.progressManual ? 1 : 0,
-        String(p.startDate || ''),
-        String(p.dueDate || ''),
-        String(p.type || 'client'),
-        String(p.jobNumber || ''),
-        String(p.notes || ''),
-        String(p.created || new Date().toISOString()),
-        JSON.stringify(Array.isArray(p.noteList) ? p.noteList : []),
-      ]);
-    }
-    pSt.free();
-
-    S.db.run('DELETE FROM categories');
-    const cSt = S.db.prepare('INSERT INTO categories (name,color) VALUES (?,?)');
-    const seenNames = new Set();
-    for (const c of S.categories) {
-      const name = String(c.name || '').trim();
-      if (!name || seenNames.has(name)) continue;
-      seenNames.add(name);
-      cSt.run([name, String(c.color || '#888780')]);
-    }
-    cSt.free();
-
-    S.db.run('DELETE FROM ideas');
-    const iSt = S.db.prepare('INSERT INTO ideas (id,title,description,status,created,updated,notes) VALUES (?,?,?,?,?,?,?)');
-    for (const idea of S.ideas) {
-      iSt.run([toInt(idea.id,0), String(idea.title||''), String(idea.description||''),
-        String(idea.status||'inbox'), String(idea.created||''), String(idea.updated||''), String(idea.notes||'')]);
-    }
-    iSt.free();
-
-    S.db.run('DELETE FROM links');
-    const lSt = S.db.prepare('INSERT INTO links (id,fromType,fromId,toType,toId,label,created) VALUES (?,?,?,?,?,?,?)');
-    for (const l of S.links) {
-      lSt.run([toInt(l.id,0), String(l.fromType), toInt(l.fromId,0),
-        String(l.toType), toInt(l.toId,0), String(l.label||''), String(l.created||'')]);
-    }
-    lSt.free();
-
-    S.db.run('DELETE FROM successes');
-    const sucSt = S.db.prepare('INSERT INTO successes (id,title,startDate,endDate,reviewYear,impactType,impactLevel,skills,areaBenefit,savedAmount,status,notes,projectId,created) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
-    for (const s of S.successes) {
-      sucSt.run([toInt(s.id,0), String(s.title||''), String(s.startDate||''), String(s.endDate||''),
-        toIntOrNull(s.reviewYear), String(s.impactType||''), String(s.impactLevel||'medium'),
-        String(s.skills||''), String(s.areaBenefit||''),
-        s.savedAmount!=null ? parseFloat(s.savedAmount)||null : null,
-        String(s.status||'active'), String(s.notes||''),
-        toIntOrNull(s.projectId), String(s.created||new Date().toISOString())]);
-    }
-    sucSt.free();
-
-    S.db.run('DELETE FROM changelog');
-    const clSt = S.db.prepare('INSERT INTO changelog (id,ts,entityType,entityId,action,description) VALUES (?,?,?,?,?,?)');
-    for (const cl of capChangelog(S.changelog)) {
-      clSt.run([toInt(cl.id,0), String(cl.ts||''), String(cl.entityType||''), cl.entityId!=null?cl.entityId:null, String(cl.action||''), String(cl.description||'')]);
-    }
-    clSt.free();
-
-    S.db.run('DELETE FROM sessions');
-    const seSt = S.db.prepare('INSERT INTO sessions (id,taskId,started,ended,plannedMin,outcome,step,plan,sticky) VALUES (?,?,?,?,?,?,?,?,?)');
-    for (const s of S.sessions) {
-      seSt.run([toInt(s.id,0), toIntOrNull(s.taskId), String(s.started||''), String(s.ended||''),
-        toInt(s.plannedMin,5), String(s.outcome||''), String(s.step||''), String(s.plan||''), s.sticky ? 1 : 0]);
-    }
-    seSt.free();
-
-    S.db.run('DELETE FROM checkins');
-    const ciSt = S.db.prepare('INSERT INTO checkins (id,started,ended,focus,difficulty,taskIds,tags,note,nextTaskId) VALUES (?,?,?,?,?,?,?,?,?)');
-    for (const k of S.checkins) {
-      ciSt.run([toInt(k.id,0), String(k.started||''), String(k.ended||''), toInt(k.focus,0), toInt(k.difficulty,0),
-        JSON.stringify(k.taskIds || []), String(k.tags||''), String(k.note||''), toIntOrNull(k.nextTaskId)]);
-    }
-    ciSt.free();
-
-    S.db.run('DELETE FROM prefs');
-    const prSt = S.db.prepare('INSERT INTO prefs (key,value) VALUES (?,?)');
-    for (const [k, v] of Object.entries(S.prefs)) prSt.run([String(k), String(v)]);
-    prSt.free();
-
     S.db.run('COMMIT');
   } catch(e) { S.db.run('ROLLBACK'); console.error('dbSaveAll failed:',e); throw e; }
+}
+
+// ─────────────────────────────────────────────
+// MERGE — combine this tab's changes with whatever else changed focal.db
+// ─────────────────────────────────────────────
+// Every save is the whole database, so the launcher only accepts one that names the
+// version it started from (see POST /db). On a 409 the tab pulls the current file and
+// three-way merges it, field by field, against _base: the canonical rows as of the last
+// time this tab and the server agreed. A field only this tab changed keeps its value; a
+// field only the server changed takes theirs; a field both changed keeps this tab's.
+// Deletes win unless the other side edited the row since, in which case the edit stays.
+
+// {table name: Map(key → canonical row)}, from S or from another copy of the database.
+function snapshotRows() {
+  const out = {};
+  for (const T of DB_TABLES) {
+    const ki = T.cols.indexOf(T.key), m = new Map();
+    for (const x of T.rows()) { const r = T.to(x); m.set(r[ki], r); }
+    out[T.name] = m;
+  }
+  return out;
+}
+function readRows(db) {
+  const out = {};
+  for (const T of DB_TABLES) {
+    const ki = T.cols.indexOf(T.key), m = new Map();
+    for (const x of readTable(db, T)) { const r = T.to(x); m.set(r[ki], r); }
+    out[T.name] = m;
+  }
+  return out;
+}
+
+// Columns that hold another row's id, so a row that has to move to a new id takes
+// its references with it. [column, table] or [column, null, type column].
+const REF_TABLE = { task:'tasks', project:'projects', idea:'ideas', success:'successes' };
+const DB_REFS = {
+  tasks:     [['projectId', 'projects']],
+  successes: [['projectId', 'projects']],
+  sessions:  [['taskId', 'tasks']],
+  checkins:  [['nextTaskId', 'tasks'], ['taskIds', 'tasks']],   // taskIds is a JSON array
+  links:     [['fromId', null, 'fromType'], ['toId', null, 'toType']],
+  changelog: [['entityId', null, 'entityType']],
+};
+
+const _same = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
+
+function mergeDB(base, mine, theirs) {
+  // 1. A row both sides created under the same id (two tabs adding a task, or two
+  //    changelog entries, at once): theirs keeps the id, ours moves to a free one.
+  const remap = {};
+  for (const T of DB_TABLES) {
+    if (T.key !== 'id') continue;
+    const b = base[T.name], m = mine[T.name], t = theirs[T.name];
+    let next = Math.max(0, ...b.keys(), ...m.keys(), ...t.keys()) + 1;
+    for (const [k, row] of m) {
+      if (!b.has(k) && t.has(k) && !_same(row, t.get(k))) (remap[T.name] ||= new Map()).set(k, next++);
+    }
+  }
+  // 2. Rewrite our rows under the new ids, references included.
+  const moved = (table, id) => remap[table]?.get(id) ?? id;
+  const ours = {};
+  for (const T of DB_TABLES) {
+    const ki = T.cols.indexOf(T.key), refs = DB_REFS[T.name] || [], out = new Map();
+    for (let [k, row] of mine[T.name]) {
+      if (remap[T.name]?.has(k) || refs.length) {
+        row = row.slice();
+        row[ki] = moved(T.name, row[ki]);
+        for (const [col, table, typeCol] of refs) {
+          const i = T.cols.indexOf(col);
+          const tbl = table || REF_TABLE[row[T.cols.indexOf(typeCol)]];
+          if (!tbl || !remap[tbl] || row[i] == null) continue;
+          if (col === 'taskIds') {
+            try { row[i] = JSON.stringify(JSON.parse(row[i]).map(id => moved(tbl, id))); } catch(e) {}
+          } else row[i] = moved(tbl, row[i]);
+        }
+      }
+      out.set(row[ki], row);
+    }
+    ours[T.name] = out;
+  }
+  // 3. Three-way merge, row by row and then field by field.
+  const tables = {};
+  let mineChanged = 0, theirsChanged = 0, conflicts = 0;
+  for (const T of DB_TABLES) {
+    const b = base[T.name], m = ours[T.name], t = theirs[T.name], out = new Map();
+    for (const k of new Set([...b.keys(), ...m.keys(), ...t.keys()])) {
+      const br = b.get(k), mr = m.get(k), tr = t.get(k);
+      const mc = !_same(mr, br), tc = !_same(tr, br);
+      if (mc) mineChanged++;
+      if (tc) theirsChanged++;
+      let row;
+      if (!mc) row = tr;                  // only they changed it (or nobody did)
+      else if (!tc) row = mr;             // only we did
+      else if (!mr) row = tr;             // we deleted it, they edited it: keep the edit
+      else if (!tr) row = mr;             // they deleted it, we edited it: keep ours
+      else if (!br) row = mr;             // both added this key (a pref, a category)
+      else row = mr.map((v, i) => {
+        if (_same(v, br[i])) return tr[i];
+        if (!_same(tr[i], br[i]) && !_same(v, tr[i])) conflicts++;
+        return v;
+      });
+      if (row) out.set(k, row);
+    }
+    tables[T.name] = out;
+  }
+  return { tables, remap, mineChanged, theirsChanged, conflicts };
+}
+
+// Make S match the merged rows. Objects are updated in place, never swapped for new ones,
+// because open modals and inline editors hold references to them: a replaced object
+// would quietly swallow the next edit.
+function applyMerged({ tables, remap }) {
+  for (const T of DB_TABLES) {
+    const ki = T.cols.indexOf(T.key), live = new Map(), pos = new Map();
+    T.rows().forEach((x, i) => {
+      const k = T.to(x)[ki], k2 = remap[T.name]?.get(k) ?? k;
+      live.set(k2, x); pos.set(k2, i);
+    });
+    const list = [];
+    for (const [k, row] of tables[T.name]) {
+      const o = {}; T.cols.forEach((c, i) => o[c] = row[i]);
+      const fresh = T.from(o), cur = live.get(k);
+      if (!cur) { list.push(fresh); continue; }
+      for (const prop of Object.keys(fresh)) {
+        if (fresh[prop] !== undefined && !_same(cur[prop], fresh[prop])) cur[prop] = fresh[prop];
+      }
+      list.push(cur);
+    }
+    if (T.name === 'categories') {
+      list.sort((a, b) => (pos.get(a.name) ?? 1e9) - (pos.get(b.name) ?? 1e9));
+      let next = Math.max(0, ...list.map(c => c.id || 0)) + 1;
+      for (const c of list) if (c.id == null) c.id = next++;
+    } else if (T.key === 'id') {
+      list.sort(T.order === 'id DESC' ? (a, b) => b.id - a.id : (a, b) => a.id - b.id);
+    }
+    T.set(list);
+  }
+  _clIdCounter = null;    // next changelog id must clear the rows that just arrived
+  remapLive(remap);
+}
+
+// In-memory state that names a row by id, for the rare row that had to move.
+function remapLive(remap) {
+  const mv = (m, id) => (m && m.has(id)) ? m.get(id) : id;
+  const t = remap.tasks, p = remap.projects, i = remap.ideas;
+  if (t) {
+    S.expandedId = mv(t, S.expandedId);
+    for (const [id, e] of [...S.pendingDone]) {
+      if (e.spawnId != null) e.spawnId = mv(t, e.spawnId);
+      if (mv(t, id) !== id) { S.pendingDone.delete(id); S.pendingDone.set(mv(t, id), e); }
+    }
+    for (const [id, ts] of [..._justAdded]) if (mv(t, id) !== id) { _justAdded.delete(id); _justAdded.set(mv(t, id), ts); }
+    for (const id of [..._justCompleted]) if (mv(t, id) !== id) { _justCompleted.delete(id); _justCompleted.add(mv(t, id)); }
+    if (S.launch && t.has(S.launch.taskId)) { S.launch.taskId = t.get(S.launch.taskId); saveLaunchLocal(); }
+  }
+  if (i) S.expandedIdeaId = mv(i, S.expandedIdeaId);
+  const [kind, id] = String(S.view).split(':');
+  if (id && kind === 'project' && p?.has(+id)) S.view = 'project:' + p.get(+id);
+  if (id && kind === 'idea' && i?.has(+id)) S.view = 'idea:' + i.get(+id);
 }
 
 // Set by migrateDB() when this open is the one that adds tasks.deferrals, so
@@ -1891,9 +1989,9 @@ function dbSaveAll() {
 // DB that's opened again before its first save just gets the same numbers.
 let _deferralsAdded = false;
 
-function migrateDB() {
-  try {
-    const cols = S.db.exec('PRAGMA table_info(tasks)')[0]?.values.map(r => r[1]) || [];
+function migrateDB(db = S.db) {
+  if (db === S.db) try {
+    const cols = db.exec('PRAGMA table_info(tasks)')[0]?.values.map(r => r[1]) || [];
     _deferralsAdded = !cols.includes('deferrals');
   } catch(e) { _deferralsAdded = false; }
   // Add columns that were introduced after initial schema — safe to run on every open
@@ -1912,7 +2010,7 @@ function migrateDB() {
     "DROP TABLE IF EXISTS contracts",
   ];
   for (const sql of migrations) {
-    try { S.db.run(sql); } catch(e) { /* column already exists — ignore */ }
+    try { db.run(sql); } catch(e) { /* column already exists — ignore */ }
   }
 }
 
@@ -1932,40 +2030,132 @@ async function initDB(source) {
   dbLoadAll();
 }
 
-async function saveDB() {
-  if (!S.db) return;
-  try { dbSaveAll(); } catch(e) { showToast('DB write error: '+e.message); return; }
-  const data = S.db.export();
+// Saves and syncs run one at a time, in order: each one reads and replaces S and _base.
+// Resolves true once this tab's changes are on disk.
+let _saveChain = Promise.resolve();
+function saveDB() {
+  const p = _saveChain.then(_saveDB);
+  _saveChain = p.catch(() => {});
+  return p;
+}
 
+async function _saveDB() {
+  if (!S.db) return false;
   // Launcher path — POST binary directly to focal_launcher.py, no file pickers
-  if (S.usingLauncher) {
-    try {
-      const r = await fetch('/db', {method:'POST', headers:{'Content-Type':'application/octet-stream'}, body:data});
-      if (r.ok) { markSaved(); autoBackup(); return; }
-      showToast('Launcher save failed — falling back to file download');
-    } catch(e) {
-      showToast('Launcher save error — falling back to file download');
-    }
-    // Fallthrough to download if launcher POST fails
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/x-sqlite3'})); a.download='focal.db'; a.click();
-    markSaved(); return;
-  }
+  if (S.usingLauncher) return pushDB();
 
+  try { dbSaveAll(); } catch(e) { showToast('DB write error: '+e.message); return false; }
+  const data = S.db.export();
   // FSAA path (non-launcher usage)
   if (!HAS_FSA) {
     const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/x-sqlite3'})); a.download='focal.db'; a.click();
-    markSaved(); return;
+    markSaved(); return true;
   }
   if (!S.dbHandle) {
     try {
       S.dbHandle = await window.showSaveFilePicker({suggestedName:'focal.db',types:[{description:'SQLite Database',accept:{'application/x-sqlite3':['.db']}}]});
       await idbPutDB(S.dbHandle);
-    } catch(e){ if(e.name!='AbortError') console.error(e); return; }
+    } catch(e){ if(e.name!='AbortError') console.error(e); return false; }
   }
   try {
     const w = await S.dbHandle.createWritable(); await w.write(data); await w.close(); markSaved();
     autoBackup();
-  } catch(e){ showToast('Save failed: '+e.message); }
+    return true;
+  } catch(e){ showToast('Save failed: '+e.message); return false; }
+}
+
+let _base = null;          // canonical rows as of the last sync with the launcher (mergeDB's base)
+let _editSeq = 0;          // bumped by markUnsaved, so a save can tell if edits landed mid-flight
+let _forcePush = false;    // the next save replaces the launcher's copy outright
+let _saveFailing = false;
+
+// Save to the launcher, naming the version this tab last synced. If something else has
+// written focal.db since (409), pull it, merge, and try again.
+async function pushDB() {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const seq = _editSeq;
+    try { dbSaveAll(); } catch(e) { showToast('DB write error: '+e.message); return false; }
+    const data = S.db.export(), snap = snapshotRows();
+    let r;
+    try {
+      r = await fetch('/db', {method:'POST', body:data, headers:{'Content-Type':'application/octet-stream',
+        'X-Focal-Base': _forcePush ? 'force' : (S.dbVersion || '')}});
+    } catch(e) { return saveFailed("Can't reach the Focal server"); }
+    if (r.ok) {
+      const j = await r.json().catch(() => ({}));
+      S.dbVersion = j.version || ''; _base = snap; _forcePush = false;
+      if (_saveFailing) { _saveFailing = false; showToast('Saved'); }
+      if (seq === _editSeq) markSaved();     // otherwise newer edits are still pending
+      autoBackup();
+      return true;
+    }
+    if (r.status !== 409) return saveFailed('Save failed (' + r.status + ')');
+    if (!(await pullDB())) return saveFailed("Couldn't merge with the saved copy");
+  }
+  return saveFailed('Save kept conflicting');
+}
+
+// Keep the changes and try again shortly, rather than the old download-a-copy fallback:
+// a download marked the tab saved while the launcher never got the data.
+function saveFailed(msg) {
+  if (!_saveFailing) showToast(msg + ' — your changes are kept, retrying', {duration: 5000});
+  _saveFailing = true;
+  const el = document.getElementById('save-status');
+  el.textContent = 'Not saved — retrying'; el.className = 'unsaved';
+  if (S.saveTimer) clearTimeout(S.saveTimer);
+  S.saveTimer = setTimeout(saveDB, 15000);
+  return false;
+}
+
+// Fetch the launcher's copy and merge it into S. Resolves false if it couldn't.
+async function pullDB() {
+  let buf, version;
+  try {
+    const r = await fetch('/db', {cache: 'no-store'});
+    if (!r.ok) return false;
+    version = r.headers.get('X-Focal-Version') || '';
+    buf = await r.arrayBuffer();
+  } catch(e) { return false; }
+  const SQL = await SQL_READY;
+  let theirs;
+  const db = new SQL.Database(new Uint8Array(buf));
+  try { db.run(DB_SCHEMA); migrateDB(db); theirs = readRows(db); }
+  catch(e) { console.error('[focal] could not read the saved copy:', e); return false; }
+  finally { db.close(); }
+  // Nothing async from here on: our rows are read, merged and replaced in one step, so an
+  // edit can't land in between and be lost.
+  const res = mergeDB(_base, snapshotRows(), theirs);
+  applyMerged(res);
+  _base = theirs; S.dbVersion = version;
+  if (res.theirsChanged) {
+    console.info(`[focal] merged ${res.theirsChanged} row change(s) from the saved copy` +
+      (res.conflicts ? `, ${res.conflicts} field(s) changed on both sides kept this tab's value` : ''));
+    rerenderAfterSync();
+  }
+  return true;
+}
+
+// The poll saw focal.db change under us: pull it in (or, with edits pending, save, which
+// pulls and merges on the way).
+let _syncQueued = false;
+function syncFromServer() {
+  if (_syncQueued) return;
+  _syncQueued = true;
+  _saveChain = _saveChain.then(() => { _syncQueued = false; return S.unsaved ? pushDB() : pullDB(); })
+    .catch(e => console.error('[focal] sync failed:', e));
+}
+
+// Don't redraw under someone typing: the field would lose focus and caret. The next poll
+// (or any action that renders) catches the view up.
+let _staleView = false;
+function typingNow() {
+  const a = document.activeElement;
+  return !!a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+}
+function rerenderAfterSync() {
+  if (typingNow()) { _staleView = true; return; }
+  _staleView = false;
+  render();
 }
 
 // ─────────────────────────────────────────────
@@ -2010,15 +2200,23 @@ async function ackQueued(ids) {
   } catch(e) { return false; }
 }
 
+// Identifies this tab to the launcher, which leases each queued task to one tab at a time.
+const TAB_ID = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
 async function drainPendingTasks() {
   if (!S.usingLauncher || !S.db || _draining) return;
   _draining = true;
   try {
     let list;
     try {
-      const r = await fetch('/pending-tasks');
+      // X-Focal-Client marks this as a tab with versioned saves; the launcher hands
+      // queued tasks only to those (see GET /pending-tasks).
+      const r = await fetch('/pending-tasks', {headers: {'X-Focal-Client': '2', 'X-Focal-Tab': TAB_ID}});
       if (!r.ok) return;
-      list = (await r.json()).tasks || [];
+      const j = await r.json();
+      list = j.tasks || [];
+      if (j.db_version != null && j.db_version !== S.dbVersion) syncFromServer();
+      else if (_staleView && !typingNow()) rerenderAfterSync();
     } catch(e) { return; }
 
     syncReview(list.filter(q => q.review));
@@ -2034,9 +2232,7 @@ async function drainPendingTasks() {
       S.tasks.push(t); added.push(t); markJustAdded(t.id);
     }
     render();
-    try {
-      await saveDB();                       // persist BEFORE acking
-    } catch(e) {
+    if (!(await saveDB())) {                // persist BEFORE acking
       for (const t of added) { const i = S.tasks.indexOf(t); if (i >= 0) S.tasks.splice(i, 1); }
       render();
       return;                               // leave files queued; retry next cycle
@@ -2207,7 +2403,7 @@ function markSaved() {
   el.textContent='All saved'; el.className='';
 }
 function markUnsaved() {
-  S.unsaved=true;
+  S.unsaved=true; _editSeq++;
   const el=document.getElementById('save-status');
   el.textContent='Unsaved changes'; el.className='unsaved';
   if (S.saveTimer) clearTimeout(S.saveTimer);
@@ -4901,7 +5097,7 @@ async function renderSettings(c) {
     { icon: 'ti-device-floppy', label: 'Save database', desc: S.dbHandle ? `Saved to: ${S.dbHandle.name}` : 'No file linked — will prompt', fn: saveDB },
     { icon: 'ti-file-export', label: 'Export .db copy', desc: 'Download a copy without linking', fn: exportDB },
     { icon: 'ti-file-import', label: 'Import from CSV (legacy)', desc: 'One-time migration from old CSV format', fn: importFromCSV },
-    { icon: 'ti-refresh', label: 'Start fresh', desc: 'Clear all data and start over', fn: () => { if(confirm('Clear all data and start fresh? This cannot be undone.')) { S.db=new (S.db.constructor)(); S.db.run(DB_SCHEMA); migrateDB(); dbLoadAll(); S.pendingDone.clear(); S.expandedId=null; markUnsaved(); setView('dashboard'); } } },
+    { icon: 'ti-refresh', label: 'Start fresh', desc: 'Clear all data and start over', fn: () => { if(confirm('Clear all data and start fresh? This cannot be undone.')) { S.db=new (S.db.constructor)(); S.db.run(DB_SCHEMA); migrateDB(); dbLoadAll(); S.pendingDone.clear(); S.expandedId=null; _forcePush=true; markUnsaved(); setView('dashboard'); } } },
   ];
   for (const act of fileActions) {
     const row = document.createElement('div');
@@ -7630,7 +7826,9 @@ async function init() {
     const res = await fetch('/db', {signal: ctrl.signal});
     clearTimeout(headerTimer);
     if (res.ok) {
+      S.dbVersion = res.headers.get('X-Focal-Version') || '';
       await _bootFromBytes(await res.arrayBuffer());
+      _base = readRows(S.db);     // the launcher's copy, before this tab changes anything
       S.usingLauncher = true;
       markSaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true);
       // Pull any tasks external agents queued while Focal was closed, then keep
@@ -7681,6 +7879,7 @@ async function importFromCSV() {
   try { const raw=localStorage.getItem('focal_cats'); if (raw) { const cats=JSON.parse(raw); if (cats.length) S.categories=cats; } } catch(e){}
   if (!S.categories.length) S.categories=JSON.parse(JSON.stringify(DEFAULT_CATS));
 
+  _forcePush = true;
   markUnsaved();
   showToast('CSV imported — use File › Save Database to create your .db file');
 }
@@ -7724,6 +7923,9 @@ function setupEvents() {
     // Do NOT call setupEvents() here — listeners are already attached and
     // re-attaching duplicates every handler (double task creation, etc.)
     await initDB(f); markSaved(); ruleRank(); render();
+    // With the launcher, opening a file means "use this data": replace its copy
+    // outright instead of merging (merging would keep rows the file doesn't have).
+    if (S.usingLauncher) { _forcePush = true; markUnsaved(); }
     e.target.value = '';
   });
   // Confirm dialog
