@@ -9,7 +9,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -70,13 +69,8 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .icon-btn{background:none;border:1px solid var(--border-mid);padding:5px 10px;cursor:pointer;color:var(--text-dim);display:flex;align-items:center;gap:5px;font-size:10px;font-family:var(--font-mono);font-weight:400;letter-spacing:0.08em;text-transform:uppercase;transition:border-color .1s,color .1s;white-space:nowrap}
 .icon-btn:hover{border-color:var(--accent-dim);color:var(--accent)}
 .icon-btn i{font-size:14px}
-#lm-dot{width:7px;height:7px;border-radius:50%;background:var(--border-mid);flex-shrink:0;cursor:default}
-#lm-dot.online{background:#4DC88A}
 #save-status{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-subtle);white-space:nowrap}
 #save-status.unsaved{color:var(--accent)}
-.dropdown-wrapper{position:relative}
-.dropdown-menu{position:absolute;top:calc(100% + 4px);right:0;background:var(--surface);border:1px solid var(--border-mid);z-index:100;min-width:160px;overflow:hidden;display:none}
-.dropdown-menu.open{display:block}
 .dropdown-item{padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:11px;font-family:var(--font-mono);letter-spacing:0.05em;color:var(--text-dim);border-bottom:1px solid var(--border)}
 .dropdown-item:last-child{border-bottom:none}
 .dropdown-item:hover{background:rgba(200,165,55,0.05);color:var(--accent)}
@@ -375,12 +369,6 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .link-chip-remove:hover{color:var(--p1)}
 .link-to-btn{padding:3px 10px;border-radius:var(--r-pill);border:1px dashed var(--border);background:transparent;cursor:pointer;font-size:12px;color:var(--text-subtle);display:inline-flex;align-items:center;gap:4px}
 .link-to-btn:hover{border-color:var(--text-muted);color:var(--text)}
-/* ── What's next banner ── */
-#next-action-banner{background:var(--soon-bg);border:1px solid var(--soon-text);border-radius:var(--r-card);padding:12px 14px;margin-bottom:14px;font-size:13px;color:var(--soon-text);position:relative;line-height:1.5;display:none}
-#next-action-banner.visible{display:block}
-#next-action-banner strong{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;opacity:.8}
-#next-action-close{position:absolute;top:8px;right:10px;background:none;border:none;cursor:pointer;color:var(--soon-text);font-size:16px;line-height:1;opacity:.6}
-#next-action-close:hover{opacity:1}
 /* ── Link picker ── */
 #link-picker-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:300;display:none;align-items:flex-start;justify-content:center;padding-top:80px}
 #link-picker-overlay.open{display:flex}
@@ -800,29 +788,6 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .dash-heatmap-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card);padding:16px 18px;overflow:hidden}
 .dash-heatmap-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:14px}
 .dash-heatmap-svg{display:block;width:100%;height:auto}
-/* ── Wiki ── */
-#wiki-dot{width:8px;height:8px;border-radius:50%;background:var(--border-mid);flex-shrink:0;cursor:pointer;transition:transform .15s}
-#wiki-dot:hover{transform:scale(1.4)}
-#wiki-dot.online{background:#7C3AED}
-#wiki-dot.starting{background:#E67E22;animation:wiki-pulse .8s ease-in-out infinite alternate}
-@keyframes wiki-pulse{from{opacity:.5}to{opacity:1}}
-#wiki-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:none;align-items:center;justify-content:center}
-#wiki-modal-overlay.open{display:flex}
-#wiki-modal{background:var(--surface);border-radius:var(--r-card);border:1px solid var(--border-mid);width:700px;max-width:96vw;padding:24px;max-height:90vh;display:flex;flex-direction:column}
-#wiki-modal-body{font-size:13px;line-height:1.7;overflow-y:auto;flex:1}
-#wiki-modal-body h1,#wiki-modal-body h2,#wiki-modal-body h3{font-size:14px;font-weight:700;margin:14px 0 6px}
-#wiki-modal-body h1{font-size:15px}
-#wiki-modal-body table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0}
-#wiki-modal-body th,#wiki-modal-body td{border:1px solid var(--border);padding:5px 8px;text-align:left}
-#wiki-modal-body th{background:var(--bg);font-weight:600}
-#wiki-modal-body code{background:var(--bg);padding:1px 4px;border-radius:3px;font-size:11px}
-#wiki-modal-body pre{background:var(--bg);padding:10px;overflow-x:auto;font-size:11px}
-#wiki-modal-body a{color:var(--text-muted);text-decoration:underline}
-#wiki-modal-body p{margin:4px 0}
-#wiki-modal-body ul,#wiki-modal-body ol{padding-left:20px;margin:4px 0}
-.wiki-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--bg);color:var(--text-muted);font-size:11px;cursor:pointer;font-family:inherit;margin-top:8px;transition:color .1s,background .1s}
-.wiki-chip:hover{color:var(--text);background:var(--surface)}
-.wiki-chip i{font-size:12px}
 .cuthold-table .td-reason{color:var(--text-muted);font-style:italic;max-width:220px}
 .cuthold-table .td-noamt{color:var(--text-subtle);font-style:italic}
 .cuthold-total-row td{border-top:1px solid var(--border-mid);font-weight:500;color:var(--text);background:var(--bg)}
@@ -881,14 +846,11 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .help-sec b{color:var(--text);font-weight:500}
 .help-why{font-size:12px;color:var(--text-muted);border-left:2px solid var(--border-mid);padding-left:10px;margin-top:8px}
 .help-ring{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
-/* ── Digest + AI output modals ── */
 /* ── Team flag ── */
 .team-flag-btn{display:flex;align-items:center;gap:3px;padding:3px 7px;border-radius:var(--r-pill);border:1px solid transparent;cursor:pointer;font-size:11px;font-weight:500;flex-shrink:0;background:transparent;color:var(--text-subtle);opacity:0;transition:opacity .15s,background .15s,color .15s;font-family:inherit;line-height:1}
 .task-card:hover .team-flag-btn,.team-flag-btn.flagged{opacity:1}
 .team-flag-btn.flagged{background:#2A1F4A;color:#A78BFA;border-color:#4A3878}
 .team-flag-btn i{font-size:12px}
-#digest-modal-overlay,#ai-output-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:none;align-items:center;justify-content:center}
-#digest-modal-overlay.open,#ai-output-overlay.open{display:flex}
 /* Confirm dialog — sits above the other modals so it can be raised from inside one */
 #confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:300;display:none;align-items:center;justify-content:center}
 #confirm-overlay.open{display:flex}
@@ -901,10 +863,6 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 #confirm-subs li:last-child{border-bottom:none}
 /* it's a preview, not a control — the real checkboxes are on the card */
 #confirm-subs .task-checkbox{cursor:default}
-#digest-modal{background:var(--surface);border-radius:var(--r-card);border:1px solid var(--border-mid);width:440px;max-width:95vw;padding:24px}
-#digest-modal h3{font-size:11px;font-weight:500;margin-bottom:16px;text-transform:uppercase;letter-spacing:0.12em;color:var(--accent)}
-#ai-output-modal{background:var(--surface);border-radius:var(--r-card);border:1px solid var(--border-mid);width:640px;max-width:95vw;padding:24px}
-#ai-output-modal h3{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.12em;color:var(--accent)}
 </style>
 </head>
 <body>
@@ -917,16 +875,6 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 <div id="topbar">
   <span id="app-name">Focal</span>
   <div id="topbar-right">
-    <div class="dropdown-wrapper">
-      <button class="icon-btn" id="ai-menu-btn"><i class="ti ti-sparkles"></i> AI</button>
-      <div class="dropdown-menu" id="ai-menu">
-        <div class="dropdown-item" id="prioritize-btn"><i class="ti ti-brain"></i>Prioritize tasks</div>
-        <div class="dropdown-item" id="digest-btn"><i class="ti ti-calendar-stats"></i>Generate digest…</div>
-        <div class="dropdown-item" id="insight-btn"><i class="ti ti-network"></i>Cross-entity insight</div>
-      </div>
-    </div>
-    <div id="lm-dot" title="Local model offline"></div>
-    <div id="wiki-dot" title="Wiki offline"></div>
     <span id="save-status">All saved</span>
   </div>
 </div>
@@ -954,7 +902,6 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
       <div class="nav-item nav-child" data-view="done"><i class="ti ti-check"></i><span class="nav-label">Done</span><span class="nav-badge" id="badge-done">0</span></div>
       <div class="nav-item nav-child" data-view="recurring"><i class="ti ti-refresh"></i><span class="nav-label">Recurring</span><span class="nav-badge" id="badge-recurring">0</span></div>
       <div class="nav-item nav-child" data-view="snoozed"><i class="ti ti-zzz"></i><span class="nav-label">Snoozed</span><span class="nav-badge" id="badge-snoozed">0</span></div>
-      <div class="nav-item nav-child" data-view="priority"><i class="ti ti-brain"></i><span class="nav-label">AI Priority</span><span class="nav-badge" id="badge-priority">0</span></div>
     </div>
     <div class="nav-item" data-view="projects"><i class="ti ti-folders"></i><span class="nav-label">Projects</span><span class="nav-badge" id="badge-projects">0</span></div>
     <div class="nav-item" data-view="ideas"><i class="ti ti-bulb"></i><span class="nav-label">Ideas</span><span class="nav-badge" id="badge-ideas">0</span></div>
@@ -1056,10 +1003,6 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
         <button class="btn-sm" id="add-subtask-btn">Add</button>
       </div>
     </div>
-    <div class="form-group" id="wiki-task-field-wrap" style="display:none">
-      <label>Wiki reference</label>
-      <select id="modal-wiki-page"><option value="">None</option></select>
-    </div>
     <div class="modal-footer">
       <button class="btn-cancel" id="modal-cancel">Cancel</button>
       <button class="btn-primary" id="modal-save">Save task</button>
@@ -1111,10 +1054,6 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
     <div class="form-group">
       <label>Notes</label>
       <textarea id="pf-notes" placeholder="Project notes..."></textarea>
-    </div>
-    <div class="form-group" id="wiki-proj-field-wrap" style="display:none">
-      <label>Wiki reference</label>
-      <select id="pf-wiki-page"><option value="">None</option></select>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" id="project-modal-cancel">Cancel</button>
@@ -1266,57 +1205,6 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
   </div>
 </div>
 
-<!-- Digest modal -->
-<div id="digest-modal-overlay">
-  <div id="digest-modal">
-    <h3>Generate Digest</h3>
-    <div class="type-toggle" style="margin-bottom:16px">
-      <button class="type-toggle-btn active" id="digest-single-btn">Single day</button>
-      <button class="type-toggle-btn" id="digest-range-btn">Date range</button>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label id="digest-start-label">Date</label>
-        <input type="date" id="digest-start">
-      </div>
-      <div class="form-group" id="digest-end-wrap" style="display:none">
-        <label>End Date</label>
-        <input type="date" id="digest-end">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" id="digest-modal-cancel">Cancel</button>
-      <button class="btn-primary" id="digest-generate-btn">Generate</button>
-    </div>
-  </div>
-</div>
-
-<!-- AI output modal -->
-<div id="ai-output-overlay">
-  <div id="ai-output-modal">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <h3 id="ai-output-title"></h3>
-      <button class="icon-btn" id="ai-output-copy"><i class="ti ti-copy"></i> Copy</button>
-    </div>
-    <div id="ai-output-text" style="font-size:13px;line-height:1.7;white-space:pre-wrap;max-height:60vh;overflow-y:auto"></div>
-    <div class="modal-footer" style="margin-top:16px">
-      <button class="btn-primary" id="ai-output-close">Done</button>
-    </div>
-  </div>
-</div>
-
-<!-- Wiki modal -->
-<div id="wiki-modal-overlay">
-  <div id="wiki-modal">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-shrink:0">
-      <h3 id="wiki-modal-title" style="font-size:11px;font-weight:500;margin:0;text-transform:uppercase;letter-spacing:0.1em;color:var(--accent)"></h3>
-      <button class="icon-btn" id="wiki-modal-close"><i class="ti ti-x"></i></button>
-    </div>
-    <div id="wiki-modal-body"></div>
-  </div>
-</div>
-
-
 <input type="file" id="open-db-hidden" accept=".db" style="display:none">
 
 <!-- Confirm dialog — replaces window.confirm() so the prompt is styled like the app -->
@@ -1435,7 +1323,6 @@ const S = {
   db: null,
   dbHandle: null,
   unsaved: false,
-  lmOnline: false,
   showAllFocus: false,
   doneFilter: 'today',   // 'today'|'yesterday'|'week'|'month'|'all'|'custom'
   doneFrom: '',          // custom completed-on range (inclusive), YYYY-MM-DD
@@ -1465,12 +1352,10 @@ const S = {
   editingSuccess: null,
   successFilters: { year: '', status: '', impactLevel: '', area: '', search: '' },
   catsNavOpen: true,
-  wikiOnline: false,
   usingLauncher: false,
   dashboardDays: 7,
   dashEdit: false,       // dashboard Customize mode
   dashBoard: (() => { try { return localStorage.getItem('focal_dash_board') || ''; } catch(e) { return ''; } })(),   // open dashboard view's id (per-browser)
-  wikiPages: [],
   changelog: [],
   sessions: [],          // Launch sessions — permanent, unlike the capped changelog
   prefs: {},             // key → string; settings that should follow focal.db across devices
@@ -1781,7 +1666,7 @@ function dbLoadAll() {
       subtasks:subs, aiRank:o.aiRank!=null?o.aiRank:null, aiReason:o.aiReason||'',
       created:o.created||new Date().toISOString(), notes:o.notes||'',
       projectId:o.projectId!=null?o.projectId:null,
-      teamFlag:o.teamFlag===1, wikiPage:o.wikiPage||'', completedAt:o.completedAt||'',
+      teamFlag:o.teamFlag===1, completedAt:o.completedAt||'',
       snoozedUntil:o.snoozedUntil||'', snoozedFrom:o.snoozedFrom||'',
       deferrals:toInt(o.deferrals, 0), nextStep:o.nextStep||'' };
   }) : [];
@@ -1795,7 +1680,7 @@ function dbLoadAll() {
       progress:o.progress||0, progressManual:o.progressManual===1,
       startDate:o.startDate||'', dueDate:o.dueDate||'', type:o.type||'client',
       jobNumber:o.jobNumber||'', notes:o.notes||'', created:o.created||new Date().toISOString(),
-      wikiPage:o.wikiPage||'', noteList };
+      noteList };
   }) : [];
 
   const catRes = S.db.exec('SELECT * FROM categories ORDER BY id');
@@ -1883,7 +1768,7 @@ function dbSaveAll() {
   S.db.run('BEGIN TRANSACTION');
   try {
     S.db.run('DELETE FROM tasks');
-    const tSt = S.db.prepare('INSERT INTO tasks (id,title,priority,category,due,recur,description,done,subtasks,aiRank,aiReason,created,notes,projectId,teamFlag,wikiPage,completedAt,snoozedUntil,snoozedFrom,deferrals,nextStep) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    const tSt = S.db.prepare('INSERT INTO tasks (id,title,priority,category,due,recur,description,done,subtasks,aiRank,aiReason,created,notes,projectId,teamFlag,completedAt,snoozedUntil,snoozedFrom,deferrals,nextStep) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const t of S.tasks) {
       tSt.run([
         toInt(t.id, 0),
@@ -1901,7 +1786,6 @@ function dbSaveAll() {
         String(t.notes || ''),
         toIntOrNull(t.projectId),
         t.teamFlag ? 1 : 0,
-        String(t.wikiPage || ''),
         String(t.completedAt || ''),
         String(t.snoozedUntil || ''),
         String(t.snoozedFrom || ''),
@@ -1912,7 +1796,7 @@ function dbSaveAll() {
     tSt.free();
 
     S.db.run('DELETE FROM projects');
-    const pSt = S.db.prepare('INSERT INTO projects (id,title,status,progress,progressManual,startDate,dueDate,type,jobNumber,notes,created,wikiPage,noteList) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    const pSt = S.db.prepare('INSERT INTO projects (id,title,status,progress,progressManual,startDate,dueDate,type,jobNumber,notes,created,noteList) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)');
     for (const p of S.projects) {
       pSt.run([
         toInt(p.id, 0),
@@ -1926,7 +1810,6 @@ function dbSaveAll() {
         String(p.jobNumber || ''),
         String(p.notes || ''),
         String(p.created || new Date().toISOString()),
-        String(p.wikiPage || ''),
         JSON.stringify(Array.isArray(p.noteList) ? p.noteList : []),
       ]);
     }
@@ -2016,8 +1899,6 @@ function migrateDB() {
   // Add columns that were introduced after initial schema — safe to run on every open
   const migrations = [
     "ALTER TABLE tasks ADD COLUMN teamFlag INTEGER DEFAULT 0",
-    "ALTER TABLE tasks ADD COLUMN wikiPage TEXT DEFAULT ''",
-    "ALTER TABLE projects ADD COLUMN wikiPage TEXT DEFAULT ''",
     "ALTER TABLE tasks ADD COLUMN completedAt TEXT DEFAULT ''",
     "ALTER TABLE projects ADD COLUMN noteList TEXT DEFAULT '[]'",
     "ALTER TABLE tasks ADD COLUMN snoozedUntil TEXT DEFAULT ''",
@@ -2117,7 +1998,7 @@ function taskFromQueued(q) {
     created: String(q.created || new Date().toISOString()),
     notes: String(q.notes || ''),
     projectId: (q.projectId != null && q.projectId !== '') ? parseInt(q.projectId, 10) : null,
-    teamFlag: !!q.teamFlag, wikiPage: '', completedAt: '',
+    teamFlag: !!q.teamFlag, completedAt: '',
   };
 }
 
@@ -2665,7 +2546,6 @@ function renderSidebar() {
   document.getElementById('badge-snoozed').textContent = S.tasks.filter(isSnoozed).length;
   document.getElementById('badge-review').textContent = S.review.length;
   document.getElementById('nav-review').style.display = (S.review.length || S.view==='review') ? '' : 'none';
-  document.getElementById('badge-priority').textContent = pendingCount;
   const projBadge = document.getElementById('badge-projects');
   if (projBadge) projBadge.textContent = S.projects.filter(p=>p.status!=='complete').length;
   const ideaBadge = document.getElementById('badge-ideas');
@@ -2715,8 +2595,8 @@ function renderSidebar() {
   });
 }
 
-const TASK_VIEWS = new Set(['focus','today','upcoming','all','recent','done','recurring','snoozed','priority','team']);
-const TASK_GROUP_VIEWS = new Set(['today','upcoming','all','recent','done','recurring','snoozed','priority','team']); // excludes focus
+const TASK_VIEWS = new Set(['focus','today','upcoming','all','recent','done','recurring','snoozed','team']);
+const TASK_GROUP_VIEWS = new Set(['today','upcoming','all','recent','done','recurring','snoozed','team']); // excludes focus
 function isTaskView(v) { return TASK_VIEWS.has(v) || v.startsWith('cat:'); }
 function isTaskGroupView(v) { return TASK_GROUP_VIEWS.has(v) || v.startsWith('cat:'); }
 
@@ -2724,7 +2604,7 @@ function setView(v) {
   S.view=v; S.showAllFocus=false; S.filters={p:new Set(),cats:new Set()};
   if (v!=='dashboard') { S.dashEdit=false; S.hoursDay=''; }
   // Every task list opens sorted by due date — what's next is the question these
-  // screens answer. Focus is the exception: it's the AI ranking, so it keeps the
+  // screens answer. Focus is the exception: it's the rule-based ranking, so it keeps the
   // 'default' (Smart) order. The sort bar still offers Smart/Newest and Priority.
   S.sort = v==='focus' ? 'default' : 'due';
   if (v==='done') { S.doneFilter='today'; S.doneFrom=''; S.doneTo=''; }
@@ -2745,7 +2625,6 @@ function renderContent() {
   else if (S.view==='snoozed') renderSnoozed(c);
   else if (S.view==='review') renderReview(c);
   else if (S.view==='checkins') renderCheckins(c);
-  else if (S.view==='priority') renderPriority(c);
   else if (S.view==='ideas') renderIdeas(c);
   else if (S.view.startsWith('idea:')) renderIdeaDetail(+S.view.split(':')[1], c);
   else if (S.view==='projects') renderProjects(c);
@@ -2772,31 +2651,6 @@ function renderQuickAdd() {
     inp.placeholder = 'Quick add task — press Enter…';
     inp.dataset.mode = 'task';
   }
-}
-
-function renderPriority(c) {
-  c.innerHTML='';
-  const hdr=document.createElement('div'); hdr.className='content-header';
-  hdr.innerHTML=`<h2>AI Priority</h2><button class="new-task-btn" id="hdr-prioritize-btn"><i class="ti ti-brain"></i>Prioritize</button>`;
-  c.appendChild(hdr);
-  hdr.querySelector('#hdr-prioritize-btn').addEventListener('click', prioritize);
-
-  c.appendChild(mkDailyGoalBar());
-
-  let tasks=[...S.tasks.filter(t=>!t.done||S.pendingDone.has(t.id))];
-  const hasRanks=tasks.some(t=>t.aiRank!=null);
-  tasks.sort((a,b)=>(a.aiRank??999)-(b.aiRank??999));
-
-  if (!tasks.length) { c.appendChild(mkEmpty('ti-brain','No pending tasks')); return; }
-
-  if (!hasRanks) {
-    const tip=document.createElement('div');
-    tip.style.cssText='font-size:13px;color:var(--text-subtle);margin-bottom:14px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-card)';
-    tip.innerHTML='<i class="ti ti-info-circle" style="margin-right:6px"></i>Click Prioritize to rank tasks with AI, or apply rule-based scoring.';
-    c.appendChild(tip);
-  }
-
-  tasks.forEach(t=>c.appendChild(mkCard(t,true)));
 }
 
 function renderRecurring(c) {
@@ -4150,20 +4004,13 @@ function renderFocus(c) {
   let tasks=[...S.tasks.filter(t=>!t.done||S.pendingDone.has(t.id))];
   tasks.sort((a,b)=>(a.aiRank??999)-(b.aiRank??999));
   const hdr=document.createElement('div'); hdr.className='content-header';
-  hdr.innerHTML=`<h2>Focus</h2><div style="display:flex;gap:8px"><button class="icon-btn" id="whats-next-btn"><i class="ti ti-sparkles"></i>What's next?</button><button class="new-task-btn" id="hdr-new-btn"><i class="ti ti-plus"></i>New task</button></div>`;
+  hdr.innerHTML=`<h2>Focus</h2><button class="new-task-btn" id="hdr-new-btn"><i class="ti ti-plus"></i>New task</button>`;
   c.appendChild(hdr);
   hdr.querySelector('#hdr-new-btn').onclick=()=>openModal(null);
-  hdr.querySelector('#whats-next-btn').onclick=askNextAction;
 
   c.appendChild(mkDailyGoalBar());
   const fresh=mkFreshStartBanner(); if (fresh) c.appendChild(fresh);
   const frog=mkFrogPanel(); if (frog) c.appendChild(frog);
-
-  // AI next-action banner (persistent until dismissed)
-  const banner=document.createElement('div'); banner.id='next-action-banner';
-  banner.innerHTML='<strong>✦ What to focus on next</strong><span id="next-action-text"></span><button id="next-action-close" title="Dismiss">&times;</button>';
-  banner.querySelector('#next-action-close').onclick=()=>banner.classList.remove('visible');
-  c.appendChild(banner);
 
   if (!tasks.length) { c.appendChild(mkEmpty('ti-bolt','No pending tasks')); return; }
   const top=tasks.slice(0,5), rest=tasks.slice(5);
@@ -4928,83 +4775,6 @@ async function renderSettings(c) {
   fuRow.querySelector('input').onchange = e => { localStorage.setItem('focal_followup_cats', e.target.value.trim()); showToast('Follow-up categories saved'); };
   genSec.appendChild(fuRow);
 
-  // AI timeout setting
-  const timeoutRow = document.createElement('div');
-  timeoutRow.className = 'settings-row';
-  const curTimeout = parseInt(localStorage.getItem('focal_lm_timeout') || '90', 10);
-  timeoutRow.innerHTML = `
-    <div>
-      <div style="font-size:13px">AI response timeout</div>
-      <label>Increase if the local model is slow to respond</label>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <input type="number" id="lm-timeout-input" min="15" max="600" value="${curTimeout}"
-        style="width:56px;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit;text-align:center">
-      <span style="font-size:12px;color:var(--text-muted)">seconds</span>
-    </div>`;
-  timeoutRow.querySelector('#lm-timeout-input').onchange = function() {
-    const v = Math.max(15, Math.min(600, parseInt(this.value)||90));
-    this.value = v;
-    localStorage.setItem('focal_lm_timeout', v);
-    showToast(`AI timeout set to ${v}s`);
-  };
-  genSec.appendChild(timeoutRow);
-
-  // ── AI settings — any OpenAI-compatible endpoint ──────────────────────────
-  // Local (LM Studio, Ollama, llama.cpp, …) or hosted (OpenAI, OpenRouter, …).
-  const endpointRow = document.createElement('div');
-  endpointRow.className = 'settings-row';
-  endpointRow.innerHTML = `
-    <div>
-      <div style="font-size:13px">AI endpoint</div>
-      <label>Base URL of an OpenAI-compatible API (LM Studio default: ${LM_DEFAULT_ENDPOINT}, OpenAI: https://api.openai.com)</label>
-    </div>
-    <input type="text" id="lm-endpoint-input" value="${esc(getLMEndpoint())}" placeholder="${LM_DEFAULT_ENDPOINT}"
-      style="width:220px;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
-  endpointRow.querySelector('#lm-endpoint-input').onchange = function() {
-    const v = this.value.trim().replace(/\/+$/, '');
-    if (v) localStorage.setItem('focal_lm_endpoint', v);
-    else localStorage.removeItem('focal_lm_endpoint');
-    checkLM();
-    showToast('Endpoint saved');
-  };
-  genSec.appendChild(endpointRow);
-
-  const keyRow = document.createElement('div');
-  keyRow.className = 'settings-row';
-  keyRow.innerHTML = `
-    <div>
-      <div style="font-size:13px">API key</div>
-      <label>Optional — leave blank for local servers. Stored in this browser only</label>
-    </div>
-    <input type="password" id="ai-key-input" value="${esc(localStorage.getItem('focal_ai_key')||'')}" placeholder="none"
-      autocomplete="off" style="width:220px;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
-  keyRow.querySelector('#ai-key-input').onchange = function() {
-    const v = this.value.trim();
-    if (v) localStorage.setItem('focal_ai_key', v);
-    else localStorage.removeItem('focal_ai_key');
-    checkLM();
-    showToast(v ? 'API key saved' : 'API key cleared');
-  };
-  genSec.appendChild(keyRow);
-
-  const modelRow = document.createElement('div');
-  modelRow.className = 'settings-row';
-  modelRow.innerHTML = `
-    <div>
-      <div style="font-size:13px">Model name</div>
-      <label>Model id sent to the endpoint — leave blank to auto-detect the server's first model</label>
-    </div>
-    <input type="text" id="lm-model-input" value="${esc(localStorage.getItem('focal_lm_model')||'')}" placeholder="auto-detect"
-      style="width:220px;font-size:13px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
-  modelRow.querySelector('#lm-model-input').onchange = function() {
-    const v = this.value.trim();
-    if (v) localStorage.setItem('focal_lm_model', v);
-    else localStorage.removeItem('focal_lm_model');
-    showToast('Model name saved');
-  };
-  genSec.appendChild(modelRow);
-
   // ── Streak pause ──────────────────────────────────
   const pauseRow = document.createElement('div');
   pauseRow.className = 'settings-row';
@@ -5331,210 +5101,6 @@ async function renderSettings(c) {
   clSearch.oninput = () => { clCurrentPage = 0; renderClTable(clSearch.value.toLowerCase().trim()); };
   clSec.appendChild(clWrap);
   c.appendChild(clSec);
-
-  // ── Daily Summary ──────────────────────────────────
-  const sumSec = document.createElement('div');
-  sumSec.className = 'settings-section';
-
-  const sumHdr = document.createElement('div');
-  sumHdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)';
-  sumHdr.innerHTML = `<div>
-    <h3 style="margin:0;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted)">Daily Summary → Wiki</h3>
-    <p style="margin:4px 0 0;font-size:11px;color:var(--text-muted)">Summarise the last 24 h of changes with the local model and upload to <code style="font-size:10px">/raw/focal/</code></p>
-  </div>`;
-  sumSec.appendChild(sumHdr);
-
-  // Date picker + status row
-  const sumControls = document.createElement('div');
-  sumControls.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px';
-
-  const dateLabel = document.createElement('label');
-  dateLabel.style.cssText = 'font-size:12px;color:var(--text-muted)';
-  dateLabel.textContent = 'Date:';
-  const datePick = document.createElement('input');
-  datePick.type = 'date';
-  datePick.style.cssText = 'font-size:12px;padding:3px 8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit';
-  // Default to yesterday (summaries are usually for the previous day)
-  datePick.value = addDays(today(), -1);
-
-  const genSumBtn = document.createElement('button');
-  genSumBtn.className = 'btn-primary';
-  genSumBtn.style.cssText = 'font-size:11px;padding:4px 12px';
-  genSumBtn.innerHTML = '<i class="ti ti-sparkles"></i> Generate summary';
-
-  const sumStatusEl = document.createElement('span');
-  sumStatusEl.style.cssText = 'font-size:11px;color:var(--text-muted)';
-
-  sumControls.appendChild(dateLabel);
-  sumControls.appendChild(datePick);
-  sumControls.appendChild(genSumBtn);
-  sumControls.appendChild(sumStatusEl);
-  sumSec.appendChild(sumControls);
-
-  // Preview panel (hidden until generated)
-  const sumPreview = document.createElement('div');
-  sumPreview.style.cssText = 'display:none';
-  sumPreview.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-      <span style="font-size:11px;font-weight:600;color:var(--text-muted)" id="sum-preview-label">Preview</span>
-      <button class="btn-primary" id="sum-upload-btn" style="font-size:11px;padding:4px 12px"><i class="ti ti-cloud-upload"></i> Upload to wiki</button>
-    </div>
-    <textarea id="sum-preview-text" style="width:100%;min-height:260px;font-size:12px;font-family:monospace;border:1px solid var(--border);padding:10px;background:var(--bg);color:var(--text);resize:vertical;box-sizing:border-box;line-height:1.6"></textarea>`;
-  sumSec.appendChild(sumPreview);
-
-  // Previously uploaded files
-  const prevFiles = document.createElement('div');
-  prevFiles.style.cssText = 'margin-top:14px';
-  (async () => {
-    if (!S.wikiOnline) return;
-    try {
-      const files = await fetch('http://localhost:8765/focal-files').then(r=>r.json());
-      if (!files.length) return;
-      prevFiles.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px">Previously uploaded</div>';
-      for (const f of files.slice(0,8)) {
-        const row = document.createElement('div');
-        row.className = 'backup-row';
-        const dt = new Date(f.modified * 1000);
-        row.innerHTML = `<i class="ti ti-markdown" style="color:var(--text-muted);font-size:14px"></i><div style="flex:1"><div style="font-size:12px">${esc(f.name)}</div><div style="font-size:11px;color:var(--text-muted)">${formatRelTime(dt)} · ${Math.round(f.size/1024*10)/10} KB</div></div>`;
-        prevFiles.appendChild(row);
-      }
-    } catch(e) {}
-  })();
-  sumSec.appendChild(prevFiles);
-
-  // Wiki offline warning
-  if (!S.wikiOnline) {
-    const warn = document.createElement('p');
-    warn.style.cssText = 'font-size:12px;color:#E67E22;margin:0';
-    warn.innerHTML = '<i class="ti ti-alert-triangle"></i> Wiki server offline — start <code>python3 wiki_server.py</code> to enable uploads.';
-    sumSec.appendChild(warn);
-  }
-
-  // Generate handler
-  genSumBtn.onclick = async () => {
-    const date = datePick.value;
-    if (!date) { showToast('Pick a date first'); return; }
-    if (!S.lmOnline) { showToast('AI endpoint offline — check Settings'); return; }
-
-    const start = new Date(date + 'T00:00:00').getTime();
-    const end   = new Date(date + 'T23:59:59').getTime();
-    const entries = S.changelog.filter(e => {
-      const t = new Date(e.ts).getTime();
-      return t >= start && t <= end;
-    });
-
-    if (!entries.length) {
-      showToast(`No changelog entries for ${date}`);
-      return;
-    }
-
-    const completions = entries.filter(e => e.action === 'complete' && !e.description.includes('Subtask'));
-
-    genSumBtn.disabled = true;
-    sumStatusEl.textContent = `Summarising ${entries.length} entries (${completions.length} tasks completed)…`;
-    sumPreview.style.display = 'none';
-
-    const entryLines = entries.map(e => {
-      const t = new Date(e.ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-      return `[${t}] ${e.entityType} | ${e.action} | ${e.description}`;
-    }).join('\n');
-    const completionList = completions.length
-      ? `\n\nCOMPLETED TASKS TODAY (${completions.length} — list every single one, do not omit or group):\n` +
-        completions.map((e,i) => `${i+1}. ${e.description.replace(/^✓ Completed: /, '').replace(/^"|"$/g,'')}`).join('\n')
-      : '';
-
-    const dateLabel = new Date(date+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-
-    const messages = [
-      { role: 'system', content: `You are writing a concise daily work summary for a personal wiki. The user manages tasks, projects, and ideas in a tool called Focal. Given a list of change log entries, produce a clean markdown document with the following structure:
-
-# Focal Daily Summary — ${dateLabel}
-
-## Overview
-2–3 sentence narrative of what the day looked like.
-
-## Completed Tasks
-List EVERY completed task by name — do not summarise, group, or omit any. Use the exact titles provided.
-
-## Other Task Activity
-Tasks created or updated (not completions). Skip if none.
-
-## Projects
-Only include if there were project changes.
-
-## Ideas & Successes
-Only include if relevant.
-
-## Notes
-Any patterns, momentum, or things to follow up on.
-
-Rules: Skip sections with no activity. Use real names from the log. EVERY completed task must appear individually in the Completed Tasks section — this is a personal record. Output only the markdown, no preamble.` },
-      { role: 'user', content: `Here are the changelog entries for ${dateLabel}:${completionList}\n\nFull changelog:\n${entryLines}` }
-    ];
-
-    try {
-      const result = await callLMStudioWithWiki(messages, { max_tokens: 3000, temperature: 0.3, timeout: getLMTimeout(), skipWiki: true });
-      const preview = sumPreview.querySelector('#sum-preview-text');
-      preview.value = result;
-      sumPreview.querySelector('#sum-preview-label').textContent = `Preview (${entries.length} entries → ${date})`;
-      sumPreview.style.display = 'block';
-      sumStatusEl.textContent = '✓ Ready to upload';
-    } catch(e) {
-      sumStatusEl.textContent = 'Error: ' + e.message;
-    }
-    genSumBtn.disabled = false;
-  };
-
-  // Upload handler
-  sumPreview.querySelector('#sum-upload-btn').onclick = async () => {
-    const text = sumPreview.querySelector('#sum-preview-text').value.trim();
-    if (!text) return;
-    const date = datePick.value;
-    const filename = `${date}-focal-summary.md`;
-    const uploadBtn = sumPreview.querySelector('#sum-upload-btn');
-    uploadBtn.disabled = true;
-    uploadBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite"></i> Uploading…';
-    try {
-      // Live health check — wikiOnline may be stale if server restarted
-      const health = await fetch('http://localhost:8765/health', {signal: AbortSignal.timeout(3000)}).catch(()=>null);
-      if (!health || !health.ok) {
-        throw new Error('Wiki server is not reachable. Start wiki_server.py and try again.');
-      }
-      // Send as text/plain — avoids CORS preflight entirely (simple request)
-      const r = await fetch(`http://localhost:8765/write-focal?filename=${encodeURIComponent(filename)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: text,
-      });
-      if (!r.ok) { const t = await r.text(); throw new Error(`Server error ${r.status}: ${t}`); }
-      const data = await r.json();
-      if (data.ok) {
-        showToast(`Uploaded: ${data.filename}`);
-        sumStatusEl.textContent = `✓ Saved to wiki as ${data.filename}`;
-        uploadBtn.innerHTML = '<i class="ti ti-check"></i> Uploaded';
-        // Refresh the prev files list
-        const files = await fetch('http://localhost:8765/focal-files').then(r=>r.json()).catch(()=>[]);
-        if (files.length) {
-          prevFiles.innerHTML = '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px">Previously uploaded</div>';
-          for (const f of files.slice(0,8)) {
-            const row = document.createElement('div');
-            row.className = 'backup-row';
-            const dt = new Date(f.modified * 1000);
-            row.innerHTML = `<i class="ti ti-markdown" style="color:var(--text-muted);font-size:14px"></i><div style="flex:1"><div style="font-size:12px">${esc(f.name)}</div><div style="font-size:11px;color:var(--text-muted)">${formatRelTime(dt)} · ${Math.round(f.size/1024*10)/10} KB</div></div>`;
-            prevFiles.appendChild(row);
-          }
-        }
-      } else {
-        throw new Error('Server returned unexpected response');
-      }
-    } catch(e) {
-      showToast('Upload failed: ' + e.message);
-      uploadBtn.disabled = false;
-      uploadBtn.innerHTML = '<i class="ti ti-cloud-upload"></i> Upload to wiki';
-    }
-  };
-
-  c.appendChild(sumSec);
 }
 
 function formatRelTime(dt) {
@@ -5782,18 +5348,6 @@ function renderProjectDetail(id, c) {
     });
   }
   c.appendChild(ideaSec);
-
-  // Wiki reference chip
-  if (proj.wikiPage) {
-    const wikiSec = document.createElement('div'); wikiSec.className = 'proj-detail-section';
-    const wChip = document.createElement('button');
-    wChip.className = 'wiki-chip';
-    wChip.innerHTML = `<i class="ti ti-book"></i>${esc(proj.wikiPage)}`;
-    wChip.onclick = () => openWikiPage(proj.wikiPage);
-    wikiSec.innerHTML = '<h4>Wiki Reference</h4>';
-    wikiSec.appendChild(wChip);
-    c.appendChild(wikiSec);
-  }
 }
 
 function openProjectModal(proj) {
@@ -5809,14 +5363,6 @@ function openProjectModal(proj) {
   document.getElementById('pf-type-client').classList.toggle('active',isClient);
   document.getElementById('pf-type-internal').classList.toggle('active',!isClient);
   document.getElementById('pf-job-wrap').style.display=isClient?'':'none';
-  // Wiki reference field
-  const projWikiWrap = document.getElementById('wiki-proj-field-wrap');
-  const projWikiSel = document.getElementById('pf-wiki-page');
-  if (S.wikiOnline && S.wikiPages.length) {
-    projWikiWrap.style.display = '';
-    projWikiSel.innerHTML = '<option value="">None</option>' + S.wikiPages.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
-    projWikiSel.value = proj ? (proj.wikiPage||'') : '';
-  } else { projWikiWrap.style.display = 'none'; }
   document.getElementById('project-modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('pf-title').focus(),50);
 }
@@ -5830,14 +5376,12 @@ function saveProjectModal() {
   const title=document.getElementById('pf-title').value.trim();
   if (!title) { document.getElementById('pf-title').focus(); return; }
   const type=document.getElementById('pf-type-client').classList.contains('active')?'client':'internal';
-  const projWikiPage = S.wikiOnline ? document.getElementById('pf-wiki-page').value : (S.editingProject?.wikiPage||'');
   const data={
     title, status:document.getElementById('pf-status').value, type,
     jobNumber:type==='client'?document.getElementById('pf-job').value.trim():'',
     startDate:document.getElementById('pf-start').value,
     dueDate:document.getElementById('pf-due').value,
     notes:document.getElementById('pf-notes').value.trim(),
-    wikiPage:projWikiPage,
   };
   if (S.editingProject) {
     const snap = {...S.editingProject};
@@ -5846,7 +5390,7 @@ function saveProjectModal() {
     if (!S.editingProject.progressManual) S.editingProject.progress = autoProgress(S.editingProject.id);
     logChange('project', S.editingProject.id, 'update', `"${S.editingProject.title}"${diff ? ' — ' + diff : ''}`);
   } else {
-    const proj={id:nextProjectId(),progress:0,progressManual:false,created:new Date().toISOString(),wikiPage:'',...data};
+    const proj={id:nextProjectId(),progress:0,progressManual:false,created:new Date().toISOString(),...data};
     S.projects.push(proj);
     logChange('project', proj.id, 'create', 'Created project: "' + proj.title + '"');
   }
@@ -6217,15 +5761,6 @@ function mkCard(task, showReason) {
   // Linked entities panel
   inner.appendChild(mkLinkedEntitiesPanel('task', task.id, true));
 
-  // Wiki chip
-  if (task.wikiPage) {
-    const wChip = document.createElement('button');
-    wChip.className = 'wiki-chip';
-    wChip.innerHTML = `<i class="ti ti-book"></i>${esc(task.wikiPage)}`;
-    wChip.onclick = e => { e.stopPropagation(); openWikiPage(task.wikiPage); };
-    inner.appendChild(wChip);
-  }
-
   exp.appendChild(inner); card.appendChild(exp);
   return card;
 }
@@ -6359,7 +5894,7 @@ function getDailyTarget() {
 // Built on what reliably helps people start things they're avoiding (ADHD especially):
 // shrink the first step, make time visible, reward *starting* and not only finishing,
 // reward immediately, aim the reward at the hard tasks rather than the count, and
-// never punish a lapse. No AI here — every piece works offline.
+// never punish a lapse. Every piece works offline.
 // ─────────────────────────────────────────────
 
 function prefOn(key) { return localStorage.getItem(key) !== 'off'; }
@@ -6989,7 +6524,7 @@ const DIFF_LEVELS  = [{ v: 1, label: 'Easy' }, { v: 2, label: 'Moderate' }, { v:
 const CHECKIN_TAGS = ['Meetings', 'Interruptions', 'Distracted', 'Stuck', 'Low energy'];
 const CHECKIN_ACKS = ['On the record.', 'Logged. That hour counts.', 'Got it. Hour accounted for.', 'Logged. One more hour you can see.'];
 const CHECKIN_OVERLAYS = ['modal-overlay', 'project-modal-overlay', 'idea-modal-overlay', 'success-modal-overlay', 'confirm-overlay',
-  'help-overlay', 'launch-overlay', 'digest-modal-overlay', 'ai-output-overlay', 'wiki-modal-overlay', 'link-picker-overlay',
+  'help-overlay', 'launch-overlay', 'link-picker-overlay',
   'import-proj-overlay', 'img-lightbox'];
 let _ciTick = null, _ciAnnounced = null;
 
@@ -7260,7 +6795,7 @@ function ciSearch(raw) {
 function ciNewTask(title) {
   const task = { id: nextId(), title, priority: 3, category: S.lastCat || (S.categories[0]?.name || ''), due: today(), recur: '',
     description: '', done: false, completedAt: '', subtasks: [], aiRank: null, aiReason: '', created: new Date().toISOString(),
-    notes: '', teamFlag: false, wikiPage: '', projectId: null, snoozedUntil: '', snoozedFrom: '', deferrals: 0, nextStep: '' };
+    notes: '', teamFlag: false, projectId: null, snoozedUntil: '', snoozedFrom: '', deferrals: 0, nextStep: '' };
   S.tasks.push(task); markJustAdded(task.id);
   logChange('task', task.id, 'create', 'Created task: "' + title + '" (from a check-in)');
   markUnsaved(); renderSidebar();
@@ -7450,7 +6985,7 @@ function createFollowUp(t, due) {
   const fu = { id: nextId(), title: 'Follow up: ' + t.title, priority: t.priority || 3, category: t.category || '', due, recur: '',
     description: `If “${t.title}” still isn’t settled by ${fmtSnoozeDate(due)}, then chase it.`,
     done: false, subtasks: [], aiRank: null, aiReason: '', created: new Date().toISOString(), notes: '',
-    projectId: t.projectId ?? null, teamFlag: false, wikiPage: '', completedAt: '',
+    projectId: t.projectId ?? null, teamFlag: false, completedAt: '',
     snoozedUntil: '', snoozedFrom: '', deferrals: 0, nextStep: '' };
   S.tasks.push(fu);
   addLink('task', t.id, 'task', fu.id, 'follow-up');
@@ -7571,36 +7106,6 @@ function openHelp() {
 }
 function closeHelp() {
   document.getElementById('help-overlay').classList.remove('open');
-}
-
-function getLMTimeout() {
-  return parseInt(localStorage.getItem('focal_lm_timeout') || '90', 10) * 1000;
-}
-
-// Any OpenAI-compatible server works (LM Studio, Ollama, llama.cpp server, …).
-// LM Studio's default port is 1234; change the endpoint in Settings.
-const LM_DEFAULT_ENDPOINT = 'http://127.0.0.1:1234';
-
-function getLMEndpoint() {
-  const saved = localStorage.getItem('focal_lm_endpoint');
-  return (saved || LM_DEFAULT_ENDPOINT).replace(/\/+$/, '');
-}
-
-// Model id sent with each request. Explicit setting (Settings → Local model name)
-// wins; otherwise the first model reported by the server's /v1/models is used
-// (detected by checkLM). Prefer a non-reasoning model — Focal's calls cap at 600
-// tokens, which a reasoning model would spend on thinking and return empty.
-function getLMModel() {
-  return (localStorage.getItem('focal_lm_model') || '').trim() || S.lmDetectedModel || 'local-model';
-}
-
-// Request headers for the AI endpoint — adds Bearer auth when an API key is
-// set (hosted services); local servers need no key.
-function aiHeaders(json=true) {
-  const h = json ? {'Content-Type':'application/json'} : {};
-  const key = (localStorage.getItem('focal_ai_key') || '').trim();
-  if (key) h['Authorization'] = 'Bearer ' + key;
-  return h;
 }
 
 function toggleDone(id) {
@@ -7789,7 +7294,7 @@ function duplicateTask(task) {
 // ─────────────────────────────────────────────
 function openModal(task, presetProjectId, asCopy) {
   S.editingTask=(task && !asCopy) ? task : null;
-  S.copyFrom=asCopy ? {wikiPage:task.wikiPage||'', notes:task.notes||'', teamFlag:!!task.teamFlag} : null;
+  S.copyFrom=asCopy ? {notes:task.notes||'', teamFlag:!!task.teamFlag} : null;
   S.modalSubs=task ? JSON.parse(JSON.stringify(task.subtasks||[])) : [];
   document.getElementById('modal-title').textContent=S.reviewing?'Review Task':asCopy?'Duplicate Task':(task?'Edit Task':'New Task');
   document.getElementById('f-title').value=task?task.title:'';
@@ -7822,14 +7327,6 @@ function openModal(task, presetProjectId, asCopy) {
   projSel.value=selectedProj||'';
   // Team agenda
   document.getElementById('f-team').checked = task ? !!task.teamFlag : !!S.copyFrom?.teamFlag;
-  // Wiki reference field
-  const wikiWrap = document.getElementById('wiki-task-field-wrap');
-  const wikiSel = document.getElementById('modal-wiki-page');
-  if (S.wikiOnline && S.wikiPages.length) {
-    wikiWrap.style.display = '';
-    wikiSel.innerHTML = '<option value="">None</option>' + S.wikiPages.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
-    wikiSel.value = task ? (task.wikiPage||'') : '';
-  } else { wikiWrap.style.display = 'none'; }
   renderModalSubs();
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('f-title').focus(),50);
@@ -7879,9 +7376,8 @@ function saveModal() {
   let recur=document.getElementById('f-recur').value;
   if (recur==='every') { const d=Math.max(1, parseInt(document.getElementById('f-recur-days').value)||7); recur='every:'+d; }
   const projVal=document.getElementById('f-project').value;
-  const wikiPage = S.wikiOnline ? document.getElementById('modal-wiki-page').value : (S.editingTask?.wikiPage || S.copyFrom?.wikiPage || '');
   const teamFlag=document.getElementById('f-team').checked;
-  const data={title,priority:+document.getElementById('f-priority').value,category:cat,due:document.getElementById('f-due').value,recur,description:document.getElementById('f-desc').value.trim(),subtasks:S.modalSubs,projectId:projVal?parseInt(projVal):null,wikiPage,teamFlag};
+  const data={title,priority:+document.getElementById('f-priority').value,category:cat,due:document.getElementById('f-due').value,recur,description:document.getElementById('f-desc').value.trim(),subtasks:S.modalSubs,projectId:projVal?parseInt(projVal):null,teamFlag};
   if (S.editingTask) {
     const snap = {...S.editingTask};
     const diff = diffLog(snap, data, TASK_DIFF_FIELDS);
@@ -8073,262 +7569,8 @@ function closeImageLightbox(){
 }
 
 // ─────────────────────────────────────────────
-// LM STUDIO
+// CONFIRM DIALOG
 // ─────────────────────────────────────────────
-// ─────────────────────────────────────────────
-// WIKI
-// ─────────────────────────────────────────────
-async function checkWiki() {
-  try {
-    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 2000);
-    const r = await fetch('http://localhost:8765/health', {signal: ctrl.signal});
-    S.wikiOnline = r.ok;
-    if (S.wikiOnline) S.wikiPages = await fetch('http://localhost:8765/pages').then(r=>r.json());
-  } catch(e) { S.wikiOnline = false; }
-  _updateWikiDot();
-}
-
-function _updateWikiDot() {
-  const dot = document.getElementById('wiki-dot');
-  if (!dot) return;
-  if (S.wikiOnline) {
-    dot.className = 'online';
-    dot.title = 'Wiki online — click to stop server';
-  } else {
-    dot.className = '';
-    dot.title = 'Wiki offline — click to start server';
-  }
-}
-
-// ── Wiki server launcher dialog ──────────────────────────
-function showLauncherDialog() {
-  let overlay = document.getElementById('launcher-dialog-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'launcher-dialog-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:300;display:flex;align-items:center;justify-content:center';
-    overlay.innerHTML = `
-      <div style="background:var(--surface);border:1px solid var(--border-mid);width:480px;max-width:95vw;padding:24px">
-        <h3 style="margin:0 0 10px;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.12em;color:var(--accent)">Start the Focal launcher</h3>
-        <p style="font-size:13px;color:var(--text-muted);margin:0 0 14px;line-height:1.6">
-          The wiki server is managed by <code style="font-size:12px;background:var(--bg);padding:1px 5px;border-radius:4px">focal_launcher.py</code>.
-          Stop your current server, then run:
-        </p>
-        <div style="display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);padding:10px 12px;margin-bottom:16px">
-          <code id="launcher-cmd" style="flex:1;font-size:13px;color:var(--text);font-family:monospace">python3 focal_launcher.py</code>
-          <button id="launcher-copy-btn" style="font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-family:inherit;flex-shrink:0">Copy</button>
-        </div>
-        <p style="font-size:12px;color:var(--text-muted);margin:0 0 16px">
-          Then open <strong>http://localhost:8080</strong> and click the dot again to start the wiki server.
-        </p>
-        <div style="display:flex;justify-content:flex-end">
-          <button id="launcher-dialog-close" style="font-size:11px;padding:6px 18px;border:none;background:var(--accent);color:#000;cursor:pointer;font-family:inherit;font-weight:500;letter-spacing:0.06em;text-transform:uppercase">Got it</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    overlay.querySelector('#launcher-dialog-close').addEventListener('click', () => overlay.remove());
-    overlay.querySelector('#launcher-copy-btn').addEventListener('click', () => {
-      navigator.clipboard.writeText('python3 focal_launcher.py').then(() => {
-        const btn = overlay.querySelector('#launcher-copy-btn');
-        btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500);
-      });
-    });
-  } else {
-    overlay.style.display = 'flex';
-  }
-}
-
-// Toggle wiki server via focal_launcher.py API
-async function toggleWikiServer() {
-  const dot = document.getElementById('wiki-dot');
-
-  if (S.wikiOnline) {
-    // Stop
-    try {
-      const r = await fetch('http://localhost:8080/api/stop-wiki', {method:'POST'});
-      if (r.ok) {
-        S.wikiOnline = false;
-        S.wikiPages = [];
-        _updateWikiDot();
-        showToast('Wiki server stopped');
-      } else {
-        showToast('Could not stop wiki server');
-      }
-    } catch(e) {
-      showToast('Stop wiki_server.py manually in your terminal');
-    }
-    return;
-  }
-
-  // --- Start ---
-  // First check: are we being served by the launcher (not file:// or plain http.server)?
-  let launcherAvailable = false;
-  try {
-    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 1500);
-    const probe = await fetch('http://localhost:8080/api/wiki-status', {signal: ctrl.signal});
-    launcherAvailable = probe.ok;
-  } catch(e) { launcherAvailable = false; }
-
-  if (!launcherAvailable) {
-    showLauncherDialog();
-    return;
-  }
-
-  // Launcher is reachable — start the wiki server
-  if (dot) { dot.className = 'starting'; dot.title = 'Starting wiki server…'; }
-  try {
-    const r = await fetch('http://localhost:8080/api/start-wiki', {method:'POST'});
-    const d = await r.json().catch(() => ({}));
-    if (r.ok && d.ok) {
-      // Poll until wiki responds (up to 5s)
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        attempts++;
-        try {
-          const h = await fetch('http://localhost:8765/health', {signal: AbortSignal.timeout(1000)});
-          if (h.ok) {
-            clearInterval(poll);
-            S.wikiPages = await fetch('http://localhost:8765/pages').then(r=>r.json()).catch(()=>[]);
-            S.wikiOnline = true;
-            _updateWikiDot();
-            showToast('Wiki server started');
-            return;
-          }
-        } catch(e2) {}
-        if (attempts >= 10) {
-          clearInterval(poll);
-          _updateWikiDot();
-          showToast('Wiki server slow to start — check your terminal');
-        }
-      }, 500);
-    } else {
-      _updateWikiDot();
-      showToast('Failed to start: ' + (d.msg || `HTTP ${r.status}`));
-    }
-  } catch(e) {
-    _updateWikiDot();
-    showToast('Start failed: ' + e.message);
-  }
-}
-
-async function openWikiPage(name) {
-  document.getElementById('wiki-modal-title').textContent = name;
-  document.getElementById('wiki-modal-body').innerHTML = '<p style="color:var(--text-muted)">Loading…</p>';
-  document.getElementById('wiki-modal-overlay').classList.add('open');
-  try {
-    const text = await fetch(`http://localhost:8765/page?name=${encodeURIComponent(name)}`).then(r=>r.text());
-    document.getElementById('wiki-modal-body').innerHTML = typeof marked !== 'undefined' ? marked.parse(text) : `<pre style="white-space:pre-wrap">${esc(text)}</pre>`;
-  } catch(e) {
-    document.getElementById('wiki-modal-body').innerHTML = '<p style="color:var(--p1)">Failed to load page. Is wiki_server.py running?</p>';
-  }
-}
-
-function closeWikiModal() {
-  document.getElementById('wiki-modal-overlay').classList.remove('open');
-}
-
-async function checkLM() {
-  try {
-    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),4000);
-    const r=await fetch(`${getLMEndpoint()}/v1/models`,{signal:ctrl.signal, headers:aiHeaders(false)});
-    S.lmOnline=r.ok;
-    if (r.ok) { try { const d=await r.json(); S.lmDetectedModel=d.data?.[0]?.id||''; } catch(e){} }
-  } catch(e){ S.lmOnline=false; }
-  const dot=document.getElementById('lm-dot');
-  dot.className=S.lmOnline?'online':'';
-  dot.title=S.lmOnline
-    ? `AI endpoint online${S.lmDetectedModel?' — '+S.lmDetectedModel:''}`
-    : 'AI endpoint offline — check the endpoint (and API key) in Settings';
-}
-
-// ─────────────────────────────────────────────
-// LM STUDIO WIKI-AWARE HELPER
-// ─────────────────────────────────────────────
-async function callLMStudioWithWiki(messages, opts={}) {
-  // Talks to any OpenAI-compatible /v1/chat/completions endpoint — local
-  // (LM Studio, Ollama, …) or hosted (OpenAI, OpenRouter, …).
-  const tools = (S.wikiOnline && !opts.skipWiki) ? [
-    {type:'function', function:{name:'get_page',
-      description:"Read a full wiki page by name. Use search_wiki first if you are unsure which pages exist.",
-      parameters:{type:'object', properties:{name:{type:'string', description:'Page filename without the .md extension'}}, required:['name']}}},
-    {type:'function', function:{name:'search_wiki',
-      description:'Search all wiki pages for a keyword or phrase. Returns matching excerpts.',
-      parameters:{type:'object', properties:{query:{type:'string', description:'Search term'}}, required:['query']}}},
-  ] : undefined;
-
-  // Enrich system prompt with wiki context hint when tools are available
-  let msgs = messages.map((m,i) => {
-    if (i===0 && m.role==='system' && tools) {
-      return {...m, content: m.content + '\n\nYou have wiki tools available (get_page, search_wiki). The wiki contains the user\'s personal work documentation. Use them to look up relevant context before answering when it would improve accuracy.'};
-    }
-    return m;
-  });
-
-  for (let round=0; round<5; round++) {
-    const body = {model:getLMModel(), temperature:opts.temperature??0.3, max_tokens:opts.max_tokens??600,
-      messages:msgs, ...(tools ? {tools, tool_choice:'auto'} : {})};
-    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), opts.timeout??getLMTimeout());
-    const r = await fetch(`${getLMEndpoint()}/v1/chat/completions`,
-      {method:'POST', headers:aiHeaders(), signal:ctrl.signal, body:JSON.stringify(body)});
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    const d = await r.json();
-    const choice = d.choices?.[0];
-    if (!choice) throw new Error('No response from the AI endpoint');
-    if (choice.finish_reason === 'tool_calls') {
-      msgs.push(choice.message);
-      for (const tc of (choice.message.tool_calls||[])) {
-        let result;
-        try {
-          const args = JSON.parse(tc.function.arguments||'{}');
-          if (tc.function.name === 'get_page') {
-            result = await fetch(`http://localhost:8765/page?name=${encodeURIComponent(args.name)}`).then(r=>r.text());
-          } else if (tc.function.name === 'search_wiki') {
-            result = JSON.stringify(await fetch(`http://localhost:8765/search?q=${encodeURIComponent(args.query)}`).then(r=>r.json()));
-          } else { result = 'Unknown tool'; }
-        } catch(e) { result = 'Wiki lookup failed: '+e.message; }
-        msgs.push({role:'tool', tool_call_id:tc.id, content:String(result)});
-      }
-    } else {
-      // Some thinking models return empty content when they exhaust max_tokens
-      // on reasoning. Fall back to scanning reasoning_content for embedded JSON.
-      const text = choice.message.content?.trim() || '';
-      if (text) return text;
-      const rc = choice.message.reasoning_content?.trim() || '';
-      const m = rc.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
-      if (m) return m[1];
-      return text;
-    }
-  }
-  throw new Error('Tool call loop exceeded max rounds');
-}
-
-// ─────────────────────────────────────────────
-// DIGEST + INSIGHT
-// ─────────────────────────────────────────────
-function openDigestModal() {
-  const t = today();
-  document.getElementById('digest-start').value = t;
-  document.getElementById('digest-end').value = t;
-  // reset to single-day mode
-  document.getElementById('digest-end-wrap').style.display = 'none';
-  document.getElementById('digest-start-label').textContent = 'Date';
-  document.getElementById('digest-single-btn').classList.add('active');
-  document.getElementById('digest-range-btn').classList.remove('active');
-  document.getElementById('digest-modal-overlay').classList.add('open');
-}
-function closeDigestModal() {
-  document.getElementById('digest-modal-overlay').classList.remove('open');
-}
-function showAIOutput(title, text) {
-  document.getElementById('ai-output-title').textContent = title;
-  document.getElementById('ai-output-text').textContent = text;
-  document.getElementById('ai-output-overlay').classList.add('open');
-}
-function closeAIOutput() {
-  document.getElementById('ai-output-overlay').classList.remove('open');
-}
-
 // In-app replacement for window.confirm(). Unlike the native one this doesn't block,
 // so the caller's follow-on work has to live in onConfirm rather than after the call.
 let _confirmFn = null;
@@ -8344,304 +7586,6 @@ function showConfirm({title, body, confirmLabel, onConfirm}) {
 function closeConfirm() {
   document.getElementById('confirm-overlay').classList.remove('open');
   _confirmFn = null;
-}
-
-async function runDigest(startDate, endDate) {
-  // endDate defaults to startDate for single-day
-  const end = endDate || startDate;
-  const label = startDate === end ? startDate : `${startDate} – ${end}`;
-
-  // Filter data for the date range
-  const inRange = (d) => d && d >= startDate && d <= end;
-  const doneTasks = S.tasks.filter(t => t.done && inRange(t.due));
-  const pendingTasks = S.tasks.filter(t => !t.done && inRange(t.due));
-  const activeProjects = S.projects.filter(p => {
-    const overlap = (!p.dueDate || p.dueDate >= startDate) && (!p.startDate || p.startDate <= end);
-    return overlap && ['in-progress','active'].includes(p.status);
-  });
-  const periodSuccesses = S.successes.filter(s => inRange(s.startDate) || inRange(s.endDate));
-
-  // Completed subtasks from non-done parent tasks (date-filtered if doneAt recorded, otherwise all done subs)
-  const completedSubs = [];
-  S.tasks.filter(t => !t.done).forEach(t => {
-    (t.subtasks || []).forEach(s => {
-      if (!s.done) return;
-      // If doneAt exists, filter by range; if not (legacy data), include all done subs
-      if (!s.doneAt || inRange(s.doneAt)) {
-        completedSubs.push({ parentTask: t.title, subtask: s.title, doneAt: s.doneAt || null });
-      }
-    });
-  });
-
-  // Offline fallback — rule-based summary
-  if (!S.lmOnline) {
-    const lines = [
-      `Digest: ${label}`,
-      '',
-      `✅ Completed tasks: ${doneTasks.length}`,
-      doneTasks.map(t => `  • ${t.title}`).join('\n'),
-      completedSubs.length ? '' : null,
-      completedSubs.length ? `☑️ Completed subtasks (parent still open): ${completedSubs.length}` : null,
-      completedSubs.map(s => `  • ${s.parentTask} → ${s.subtask}`).join('\n') || null,
-      '',
-      `📋 Pending tasks due: ${pendingTasks.length}`,
-      pendingTasks.map(t => `  • ${t.title} (${t.due})`).join('\n'),
-      '',
-      `🚀 Active projects: ${activeProjects.length}`,
-      activeProjects.map(p => `  • ${p.title} (${effectiveProgress(p)}% complete)`).join('\n'),
-      '',
-      `🏆 Successes/wins: ${periodSuccesses.length}`,
-      periodSuccesses.map(s => `  • ${s.title}`).join('\n'),
-    ].filter(l => l != null).join('\n').trim();
-    showAIOutput(`Digest: ${label}`, lines);
-    return;
-  }
-
-  // Online — show loading state immediately, then overwrite
-  showAIOutput(`Digest: ${label}`, '⏳ Generating digest…');
-  const payload = {
-    period: { start: startDate, end },
-    completedTasks: doneTasks.map(t=>({title:t.title,category:t.category})),
-    completedSubtasks: completedSubs,
-    pendingTasks: pendingTasks.map(t=>({title:t.title,priority:t.priority,category:t.category,due:t.due})),
-    activeProjects: activeProjects.map(p=>({title:p.title,status:p.status,progress:effectiveProgress(p)})),
-    successes: periodSuccesses.map(s=>({title:s.title,area:s.areaBenefit,impactLevel:s.impactLevel})),
-  };
-  try {
-    const text = await callLMStudioWithWiki([
-      {role:'system', content:'You are a professional digest writer. Produce a clear, structured summary suitable for sharing with a manager or using in a performance review. Use sections with headers, reference actual item names, and be concise. Do not invent data — only reference what is provided.'},
-      {role:'user', content:`Generate a digest for the period ${label}:\n\n${JSON.stringify(payload, null, 2)}`}
-    ], {temperature:0.3, max_tokens:800, timeout:getLMTimeout()});
-    document.getElementById('ai-output-text').textContent = text || '(No response)';
-  } catch(e) {
-    document.getElementById('ai-output-text').textContent = `Error generating digest: ${e.message}`;
-  }
-}
-
-async function runInsight() {
-  if (!S.lmOnline) {
-    showToast('AI endpoint offline — cross-entity insight requires AI connection');
-    return;
-  }
-  showAIOutput('Cross-Entity Insight', '⏳ Analysing your data…');
-  const payload = {
-    pendingTasks: S.tasks.filter(t=>!t.done).map(t=>({title:t.title,priority:t.priority,due:t.due,category:t.category})),
-    recentlyCompleted: S.tasks.filter(t=>t.done).slice(-20).map(t=>({title:t.title,category:t.category})),
-    projects: S.projects.map(p=>({title:p.title,status:p.status,progress:effectiveProgress(p),type:p.type})),
-    ideas: S.ideas.filter(i=>i.status!=='archived').map(i=>({title:i.title,status:i.status,description:i.description})),
-    successes: S.successes.filter(s=>s.status!=='archived').map(s=>({title:s.title,area:s.areaBenefit,impactLevel:s.impactLevel})),
-  };
-  try {
-    const text = await callLMStudioWithWiki([
-      {role:'system', content:"You are a strategic analyst reviewing someone's personal operating system. Provide insight across 4 sections: (1) Patterns you notice, (2) Things falling through the cracks, (3) Idea-to-project alignment opportunities, (4) One specific 2-week recommendation. Reference items by name. Keep total response under 400 words."},
-      {role:'user', content:`Here is my current data:\n\n${JSON.stringify(payload, null, 2)}`}
-    ], {temperature:0.4, max_tokens:700, timeout:getLMTimeout()});
-    document.getElementById('ai-output-text').textContent = text || '(No response)';
-  } catch(e) {
-    document.getElementById('ai-output-text').textContent = `Error generating insight: ${e.message}`;
-  }
-}
-
-async function askNextAction() {
-  await checkLM();
-  const btn = document.getElementById('whats-next-btn');
-  const banner = document.getElementById('next-action-banner');
-  const txt = document.getElementById('next-action-text');
-  if (!btn || !banner || !txt) return;
-
-  if (!S.lmOnline) {
-    // Rule-based fallback: suggest highest-ranked pending task
-    const top = S.tasks.filter(t=>!t.done).sort((a,b)=>(a.aiRank??999)-(b.aiRank??999))[0];
-    if (!top) { showToast('No pending tasks to suggest'); return; }
-    txt.textContent = `Focus on: "${top.title}"`;
-    banner.classList.add('visible');
-    showToast('AI endpoint offline — rule-based suggestion');
-    return;
-  }
-
-  btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 ti-spin"></i>Thinking…';
-  try {
-    const pending = S.tasks.filter(t=>!t.done).sort((a,b)=>(a.aiRank??999)-(b.aiRank??999)).slice(0,10)
-      .map(t=>({id:t.id,title:t.title,priority:t.priority,due:t.due||null,category:t.category}));
-    const activeIdeas = S.ideas.filter(i=>['inbox','exploring'].includes(i.status))
-      .map(i=>({id:i.id,title:i.title,description:i.description,status:i.status}));
-    const recentWins = S.tasks.filter(t=>t.done).slice(-10).map(t=>({title:t.title,category:t.category}));
-    const activeProjects = S.projects.filter(p=>['in-progress','active'].includes(p.status))
-      .map(p=>({title:p.title,progress:effectiveProgress(p)}));
-
-    const payload = { pendingTasks:pending, activeIdeas, recentWins, activeProjects };
-    const content = await callLMStudioWithWiki([
-      {role:'system', content:"You are a personal productivity coach. Given this person's current tasks, ideas, and recent accomplishments, what single most impactful thing should they focus on next and why? Be specific, actionable, and under 3 sentences. Do not list options — give one clear recommendation."},
-      {role:'user', content: JSON.stringify(payload)}
-    ], {temperature:0.4, max_tokens:200, timeout:getLMTimeout()});
-    if (!content) throw new Error('Empty response');
-    txt.textContent = content;
-    banner.classList.add('visible');
-  } catch(e) {
-    console.error(e);
-    const top = S.tasks.filter(t=>!t.done).sort((a,b)=>(a.aiRank??999)-(b.aiRank??999))[0];
-    txt.textContent = top ? `Focus on: "${top.title}"` : 'No pending tasks.';
-    banner.classList.add('visible');
-    showToast('AI error — showing top task instead');
-  } finally {
-    btn.disabled = false; btn.innerHTML = '<i class="ti ti-sparkles"></i>What\'s next?';
-  }
-}
-
-// Robust JSON extractor for ranking responses — salvages complete objects
-// even when the model truncates mid-array (common with thinking models)
-function repairRankingJSON(raw) {
-  // 1. Try direct parse of the first [...] block
-  const arrMatch = raw.match(/\[[\s\S]*?\]/);
-  if (arrMatch) { try { return JSON.parse(arrMatch[0]); } catch(e) {} }
-
-  // 2. Walk the string character-by-character, collecting complete {…} objects
-  const start = raw.indexOf('[');
-  if (start === -1) throw new Error('No JSON array in response');
-  const str = raw.slice(start);
-  const objects = [];
-  let depth = 0, inStr = false, esc = false, objStart = -1;
-  for (let i = 0; i < str.length; i++) {
-    const c = str[i];
-    if (esc)          { esc = false; continue; }
-    if (c==='\\' && inStr) { esc = true; continue; }
-    if (c==='"')      { inStr = !inStr; continue; }
-    if (inStr)        continue;
-    if (c==='{')      { if (depth===1) objStart=i; depth++; }
-    else if (c==='}') { depth--; if (depth===1 && objStart!==-1) {
-      try { objects.push(JSON.parse(str.slice(objStart, i+1))); } catch(e) {}
-      objStart = -1;
-    }}
-    else if (c==='[' && depth===0) depth=1;
-    else if (c===']' && depth===1) break;
-  }
-  if (objects.length) return objects;
-  throw new Error('Could not parse any ranking objects from model response');
-}
-
-async function prioritize() {
-  await checkLM();
-  if (!S.lmOnline) {
-    ruleRank(); markUnsaved(); render(); showToast('AI endpoint offline — rule-based ranking applied'); return;
-  }
-  const pending = S.tasks.filter(t=>!t.done);
-  if (!pending.length) { showToast('No pending tasks'); return; }
-  const btn = document.getElementById('prioritize-btn');
-  btn.disabled = true; btn.innerHTML='<i class="ti ti-loader-2 ti-spin"></i>Prioritizing…';
-  // For thinking models: update label after 30s so it doesn't look frozen
-  const thinkingTimer = setTimeout(() => {
-    if (btn.disabled) btn.innerHTML='<i class="ti ti-loader-2 ti-spin"></i>Thinking… (may take 2–3 min)';
-  }, 30000);
-  try {
-    // ── Step 1: keyword scan — catch urgency signals the date filter would miss ──
-    // Tasks with day names, "urgent", "ASAP", etc. in title/description go to AI regardless of due date
-    const URGENCY_RE = /\b(urgent|asap|critical|today|tonight|now|eod|eow|end of (day|week)|first thing|right away|immediately|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun|due (this|next|monday|tuesday|wednesday|thursday|friday|saturday|sunday))\b/i;
-    const hasUrgencySignal = t => {
-      const text = [t.title, t.description, t.notes, ...(t.subtasks||[]).map(s=>s.title)].filter(Boolean).join(' ');
-      return URGENCY_RE.test(text);
-    };
-
-    // ── Step 2: date window — overdue + within 5 business days extended through Sunday ──
-    const bizEnd = addBusinessDays(today(), 5);
-    const bizEndDate = new Date(bizEnd + 'T12:00:00');
-    const daysToSun = bizEndDate.getDay() === 0 ? 0 : 7 - bizEndDate.getDay();
-    const windowEnd = daysToSun > 0 ? addDays(bizEnd, daysToSun) : bizEnd;
-
-    const inDateWindow = t => t.due ? t.due <= windowEnd : t.priority <= 2;
-
-    // AI sees: urgency-signalled tasks + date-window tasks (union, deduplicated)
-    const aiSet = pending.filter(t => hasUrgencySignal(t) || inDateWindow(t));
-    const ruleSet = pending.filter(t => !aiSet.includes(t));
-
-    const makeRow = t => {
-      const subtaskTitles = (t.subtasks||[]).filter(s=>!s.done).map(s=>s.title).join('; ');
-      // stripImgTokens: an [img:…] marker is noise in the ranking prompt
-      const blurb = [stripImgTokens(t.description), stripImgTokens(t.notes), subtaskTitles].filter(Boolean).map(s=>s.slice(0,120)).join(' | ');
-      return {
-        id: t.id,
-        title: t.title,
-        priority: t.priority,                  // 1=High 2=Med-High 3=Med 4=Low
-        due: t.due || null,
-        daysUntilDue: t.due ? Math.round((new Date(t.due+'T12:00:00') - new Date()) / 86400000) : null,
-        category: t.category,
-        subtasksDone: (t.subtasks||[]).filter(s=>s.done).length,
-        subtasksTotal: (t.subtasks||[]).length,
-        notes: blurb || null,
-      };
-    };
-
-    // If nothing falls in the AI window, fall back to full rule-based ranking
-    if (!aiSet.length) {
-      ruleRank(); markUnsaved(); render();
-      showToast('No urgent tasks found — rule-based ranking applied');
-      return;
-    }
-
-    const payload = aiSet.map(makeRow);
-
-    // Give the AI a brief awareness of what's NOT in its set (ids + titles only)
-    const futureContext = ruleSet.length
-      ? `\n\nFor context only (NOT to be ranked — already handled): ${ruleSet.map(t=>`[${t.id}] ${t.title}`).join('; ')}`
-      : '';
-
-    const sysPrompt = `You are a task prioritization engine. Today is ${today()} (${new Date().toLocaleDateString('en-US',{weekday:'long'})}).
-Return ONLY a valid JSON array of {id, rank, reason} objects for the tasks provided — no markdown, no preamble, no explanation.
-
-Due date rules (critical):
-- daysUntilDue is the AUTHORITATIVE due date. Negative = overdue. Zero = due today. Positive = days remaining.
-- DO NOT infer due dates from text in the notes field — notes may contain old date references. Only use daysUntilDue for actual due status.
-- Urgency keywords in the TITLE (not notes) override daysUntilDue: "urgent", "ASAP", day names, "first thing", "EOD", "critical" in the title = high urgency regardless of days.
-
-Ranking order:
-1. Title-level urgency keywords (as above) — rank these highest
-2. Overdue tasks (daysUntilDue < 0) — more overdue = higher rank
-3. Due today or tomorrow (daysUntilDue 0–1)
-4. Due within window, sorted by daysUntilDue then priority (1=highest)
-
-reason field: 6 words max. Be factual — cite daysUntilDue or the exact title keyword. Never invent a due date.
-Examples: "3 days overdue", "title: urgent Monday", "due tomorrow P1", "due in 4 days"
-Output the JSON array immediately.${futureContext}`;
-    const content = await callLMStudioWithWiki([
-      {role:'system', content: sysPrompt},
-      {role:'user', content:'/no_think\n' + JSON.stringify(payload)}
-    // Use 8× token headroom for reasoning models (1836 thinking + ~500 output at ~17 t/s ≈ 140s min)
-    // Hard floor of 5 min regardless of user timeout setting
-    ], {temperature:0.2, max_tokens:8000, timeout:Math.max(300000, getLMTimeout()), skipWiki:true});
-    const ranked = repairRankingJSON(content);
-    ranked.forEach(x=>{ const t=S.tasks.find(t=>t.id===x.id); if(t){t.aiRank=x.rank;t.aiReason=x.reason||'';} });
-
-    // ── Client-side urgency boost ──────────────────────────────────────────
-    // Models don't reliably rank urgency-keyword tasks first even when told to.
-    // Hard-force: urgency tasks → top, non-urgency AI tasks → middle, rule set → bottom.
-    // Relative AI ordering is preserved within each group.
-    const aiRankedTasks = ranked.map(x=>S.tasks.find(t=>t.id===x.id)).filter(Boolean);
-    const urgencyGroup  = aiRankedTasks.filter(t => hasUrgencySignal(t)).sort((a,b)=>a.aiRank-b.aiRank);
-    const normalGroup   = aiRankedTasks.filter(t => !hasUrgencySignal(t)).sort((a,b)=>a.aiRank-b.aiRank);
-    [...urgencyGroup, ...normalGroup].forEach((t,i) => { t.aiRank = i + 1; });
-
-    // Rule-rank the future tasks and append after the AI set
-    const maxAiRank = aiRankedTasks.length;
-    ruleSet.sort((a,b)=>(a.priority-b.priority)||((a.due||'9')<(b.due||'9')?-1:1))
-           .forEach((t,i)=>{
-             t.aiRank = maxAiRank+i+1;
-             if (!t.due) { t.aiReason = ''; }
-             else {
-               const d = Math.round((new Date(t.due+'T12:00:00') - new Date()) / 86400000);
-               t.aiReason = d < 0 ? `${Math.abs(d)}d overdue` : d === 0 ? 'due today' : d === 1 ? 'due tomorrow' : `due in ${d}d`;
-             }
-           });
-
-    markUnsaved(); render();
-    const urgCount = urgencyGroup.length;
-    showToast(`AI ranked ${ranked.length} tasks · ${urgCount} urgency-flagged at top · ${ruleSet.length} future by rules`);
-  } catch(e) {
-    console.error('[prioritize]', e.message, e);
-    ruleRank(); markUnsaved(); render();
-    showToast(`AI error: ${e.message} — rule-based ranking applied`);
-  } finally {
-    clearTimeout(thinkingTimer);
-    btn.disabled=false; btn.innerHTML='<i class="ti ti-brain"></i>Prioritize';
-  }
 }
 
 // ─────────────────────────────────────────────
@@ -8688,7 +7632,7 @@ async function init() {
     if (res.ok) {
       await _bootFromBytes(await res.arrayBuffer());
       S.usingLauncher = true;
-      markSaved(); ruleRank(); render(); checkLM(); checkWiki(); setupEvents(); launchBoot(); autoBackup(true);
+      markSaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true);
       // Pull any tasks external agents queued while Focal was closed, then keep
       // watching. Background tabs throttle the interval, so also drain on refocus.
       drainPendingTasks();
@@ -8706,7 +7650,7 @@ async function init() {
         const perm = await handle.queryPermission({mode:'readwrite'});
         if (perm === 'granted') {
           await initDB(handle);
-          markSaved(); ruleRank(); render(); checkLM(); checkWiki(); setupEvents(); launchBoot(); autoBackup(true); return;
+          markSaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true); return;
         } else {
           S.dbHandle = handle; // keep for later prompt on first save
         }
@@ -8716,7 +7660,7 @@ async function init() {
 
   // 3. Nothing found — start with an empty DB, no dialog
   await initDB();
-  markSaved(); ruleRank(); render(); checkLM(); checkWiki(); setupEvents(); launchBoot(); autoBackup(true);
+  markSaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true);
 }
 
 async function importFromCSV() {
@@ -8774,65 +7718,24 @@ function setupEvents() {
   document.getElementById('tasks-nav-toggle').addEventListener('click', ()=>{
     S.tasksNavOpen = !S.tasksNavOpen; renderSidebar();
   });
-  // Global click handler — close open dropdowns/menus
-  document.addEventListener('click',()=>{ document.getElementById('ai-menu').classList.remove('open'); });
   // Hidden DB file input (for settings panel open)
   document.getElementById('open-db-hidden').addEventListener('change', async e => {
     const f = e.target.files[0]; if(!f) return;
     // Do NOT call setupEvents() here — listeners are already attached and
     // re-attaching duplicates every handler (double task creation, etc.)
-    await initDB(f); markSaved(); ruleRank(); render(); checkLM(); checkWiki();
+    await initDB(f); markSaved(); ruleRank(); render();
     e.target.value = '';
   });
-  // Wiki dot toggle
-  document.getElementById('wiki-dot').addEventListener('click', toggleWikiServer);
-  // AI dropdown
-  document.getElementById('ai-menu-btn').addEventListener('click',e=>{ e.stopPropagation(); document.getElementById('ai-menu').classList.toggle('open'); });
-  document.getElementById('prioritize-btn').addEventListener('click',()=>{ document.getElementById('ai-menu').classList.remove('open'); prioritize(); });
-  document.getElementById('digest-btn').addEventListener('click',()=>{ document.getElementById('ai-menu').classList.remove('open'); openDigestModal(); });
-  document.getElementById('insight-btn').addEventListener('click',()=>{ document.getElementById('ai-menu').classList.remove('open'); runInsight(); });
   // Confirm dialog
   document.getElementById('confirm-cancel').addEventListener('click', closeConfirm);
   document.getElementById('confirm-ok').addEventListener('click', ()=>{
     const fn=_confirmFn; closeConfirm(); if (fn) fn();   // close first — fn may open another dialog
   });
   document.getElementById('confirm-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('confirm-overlay')) closeConfirm(); });
-  // Digest modal
-  document.getElementById('digest-modal-cancel').addEventListener('click', closeDigestModal);
-  document.getElementById('digest-modal-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('digest-modal-overlay')) closeDigestModal(); });
-  document.getElementById('digest-single-btn').addEventListener('click',()=>{
-    document.getElementById('digest-end-wrap').style.display='none';
-    document.getElementById('digest-start-label').textContent='Date';
-    document.getElementById('digest-single-btn').classList.add('active');
-    document.getElementById('digest-range-btn').classList.remove('active');
-  });
-  document.getElementById('digest-range-btn').addEventListener('click',()=>{
-    document.getElementById('digest-end-wrap').style.display='';
-    document.getElementById('digest-start-label').textContent='Start Date';
-    document.getElementById('digest-range-btn').classList.add('active');
-    document.getElementById('digest-single-btn').classList.remove('active');
-  });
-  document.getElementById('digest-generate-btn').addEventListener('click',()=>{
-    const start = document.getElementById('digest-start').value;
-    const end = document.getElementById('digest-end-wrap').style.display==='none' ? start : document.getElementById('digest-end').value;
-    if (!start) { showToast('Please select a date'); return; }
-    closeDigestModal();
-    runDigest(start, end);
-  });
-  // AI output modal
-  document.getElementById('ai-output-close').addEventListener('click', closeAIOutput);
-  document.getElementById('ai-output-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('ai-output-overlay')) closeAIOutput(); });
-  document.getElementById('ai-output-copy').addEventListener('click',()=>{
-    const text = document.getElementById('ai-output-text').textContent;
-    navigator.clipboard.writeText(text).then(()=>showToast('Copied to clipboard')).catch(()=>showToast('Copy failed'));
-  });
   // Add category
   document.getElementById('cats-nav-toggle').addEventListener('click', () => {
     S.catsNavOpen = !S.catsNavOpen; renderSidebar();
   });
-  // Wiki modal
-  document.getElementById('wiki-modal-close').addEventListener('click', closeWikiModal);
-  document.getElementById('wiki-modal-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('wiki-modal-overlay')) closeWikiModal(); });
   document.getElementById('add-category-btn').addEventListener('click',()=>{
     const f=document.getElementById('add-category-form'); f.classList.toggle('open');
     if (f.classList.contains('open')) document.getElementById('new-cat-name').focus();
@@ -8859,7 +7762,7 @@ function setupEvents() {
       S.ideas.push(idea); e.target.value=''; markUnsaved(); render();
       setTimeout(()=>openIdeaModal(S.ideas.find(i=>i.id===idea.id)),50);
     } else {
-      const task={id:nextId(),title,priority:3,category:S.lastCat||(S.categories[0]?.name||''),due:today(),recur:'',description:'',done:false,completedAt:'',subtasks:[],aiRank:null,aiReason:'',created:new Date().toISOString(),notes:'',teamFlag:false,wikiPage:''};
+      const task={id:nextId(),title,priority:3,category:S.lastCat||(S.categories[0]?.name||''),due:today(),recur:'',description:'',done:false,completedAt:'',subtasks:[],aiRank:null,aiReason:'',created:new Date().toISOString(),notes:'',teamFlag:false};
       S.tasks.push(task); markJustAdded(task.id); e.target.value=''; markUnsaved(); render();
       setTimeout(()=>openModal(S.tasks.find(t=>t.id===task.id)),50);
     }
@@ -8950,7 +7853,6 @@ function setupEvents() {
     }
     if (e.key==='Escape') {
       closeModal(); closeProjectModal(); closeIdeaModal(); closeSuccessModal(); closeHelp();
-      closeDigestModal(); closeAIOutput(); closeWikiModal();
       document.getElementById('link-picker-overlay').classList.remove('open');
       document.getElementById('import-proj-overlay').classList.remove('open');
     }
@@ -8959,21 +7861,6 @@ function setupEvents() {
 
 init();
 
-// Periodic wiki health recheck — detects idle timeout shutdowns and updates the dot
-setInterval(async () => {
-  const wasOnline = S.wikiOnline;
-  try {
-    const ctrl = new AbortController(); setTimeout(()=>ctrl.abort(), 1500);
-    const r = await fetch('http://localhost:8765/health', {signal: ctrl.signal});
-    S.wikiOnline = r.ok;
-    if (S.wikiOnline && !S.wikiPages.length)
-      S.wikiPages = await fetch('http://localhost:8765/pages').then(r=>r.json());
-  } catch(e) { S.wikiOnline = false; }
-  if (wasOnline !== S.wikiOnline) {
-    _updateWikiDot();
-    if (!S.wikiOnline) showToast('Wiki server went offline (idle timeout)');
-  }
-}, 30_000); // check every 30 seconds
 </script>
 </body>
 </html>

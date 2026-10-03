@@ -4,7 +4,6 @@
 #  Double-click in Finder  OR  run from terminal:  bash focal.command
 #  Options:
 #    --no-browser    don't open Chrome automatically
-#    --lm            also open LM Studio
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Resolve to wherever this script lives, whatever python3 is on PATH
@@ -17,12 +16,10 @@ fi
 PORT=8080
 URL="http://localhost:$PORT"
 OPEN_BROWSER=true
-OPEN_LM=false
 
 for arg in "$@"; do
   case $arg in
     --no-browser) OPEN_BROWSER=false ;;
-    --lm)         OPEN_LM=true ;;
   esac
 done
 
@@ -58,12 +55,6 @@ for i in $(seq 1 20); do
   echo -n "."
   sleep 0.5
 done
-
-# ── Open LM Studio (optional) ─────────────────────────────────────────────────
-if [ "$OPEN_LM" = true ]; then
-  echo -e "  ${green}→${reset} Opening LM Studio…"
-  open -a "LM Studio"
-fi
 
 # ── Open browser ──────────────────────────────────────────────────────────────
 if [ "$OPEN_BROWSER" = true ]; then

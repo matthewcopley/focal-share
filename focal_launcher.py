@@ -1,9 +1,7 @@
 """
 focal_launcher.py — Focal app launcher
 
-Runs two things:
-  • Static file server on port 8080 (serves index.html and any other local files)
-  • Manager for wiki_server.py (start/stop via /api/* endpoints)
+Serves index.html on port 8080, plus the /db, /images and /pending-tasks endpoints.
 
 Usage:
   python3 focal_launcher.py
@@ -14,18 +12,14 @@ from flask import Flask, send_from_directory, jsonify, request, Response
 from pathlib import Path
 from datetime import datetime, timezone
 import sqlite3
-import subprocess
 import threading
 import time
 import os
-import signal
-import sys
 import json
 import re
 import secrets
 
 FOCAL_DIR = Path(__file__).parent
-WIKI_SCRIPT = FOCAL_DIR / 'wiki_server.py'
 
 # ---------------------------------------------------------------------------
 # Task handoff inbox (external agents/scripts → Focal)
@@ -62,29 +56,7 @@ def _read_inbox():
             pass
     return items
 
-# ---------------------------------------------------------------------------
-# Load .env from the Focal folder for optional settings like FOCAL_WIKI_ROOT
-# (only fills gaps — existing env vars always take precedence). See .env.example.
-# ---------------------------------------------------------------------------
-def _load_dotenv(path: Path):
-    if not path.exists():
-        return
-    for line in path.read_text(encoding='utf-8').splitlines():
-        line = line.strip()
-        if not line or line.startswith('#') or '=' not in line:
-            continue
-        k, _, v = line.partition('=')
-        k = k.strip()
-        v = v.strip().strip('"').strip("'")
-        if k and k not in os.environ:
-            os.environ[k] = v
-
-_load_dotenv(FOCAL_DIR / '.env')
-
 app = Flask(__name__, static_folder=None)
-
-_wiki_proc = None
-_wiki_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -133,14 +105,7 @@ def static_file(filename):
     return send_from_directory(FOCAL_DIR, filename)
 
 
-# ---------------------------------------------------------------------------
-# Wiki server management API
-# ---------------------------------------------------------------------------
 DB_PATH = FOCAL_DIR / 'focal.db'
-
-
-def _wiki_running():
-    return _wiki_proc is not None and _wiki_proc.poll() is None
 
 
 # ---------------------------------------------------------------------------
@@ -327,76 +292,6 @@ def ack_pending():
     return jsonify(ok=True, removed=removed)
 
 
-@app.route('/api/wiki-status')
-def wiki_status():
-    return jsonify(running=_wiki_running())
-
-
-@app.route('/api/start-wiki', methods=['POST', 'OPTIONS'])
-def start_wiki():
-    if request.method == 'OPTIONS':
-        return Response('', status=200)
-
-    global _wiki_proc
-    with _wiki_lock:
-        if _wiki_running():
-            return jsonify(ok=True, msg='already running')
-        if not WIKI_SCRIPT.exists():
-            return jsonify(ok=False, msg=f'wiki_server.py not found at {WIKI_SCRIPT}'), 404
-
-        try:
-            _wiki_proc = subprocess.Popen(
-                [sys.executable, str(WIKI_SCRIPT)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            # Give it a moment to bind to port 8765
-            time.sleep(0.8)
-            if _wiki_proc.poll() is not None:
-                stderr = _wiki_proc.stderr.read().decode(errors='replace')
-                return jsonify(ok=False, msg=f'wiki server exited immediately: {stderr}'), 500
-            print(f'[launcher] Wiki server started (pid {_wiki_proc.pid})')
-            return jsonify(ok=True, msg='started', pid=_wiki_proc.pid)
-        except Exception as e:
-            return jsonify(ok=False, msg=str(e)), 500
-
-
-@app.route('/api/stop-wiki', methods=['POST', 'OPTIONS'])
-def stop_wiki():
-    if request.method == 'OPTIONS':
-        return Response('', status=200)
-
-    global _wiki_proc
-    with _wiki_lock:
-        if not _wiki_running():
-            return jsonify(ok=True, msg='not running')
-        try:
-            _wiki_proc.terminate()
-            _wiki_proc.wait(timeout=5)
-        except Exception:
-            _wiki_proc.kill()
-        pid = _wiki_proc.pid
-        _wiki_proc = None
-        print(f'[launcher] Wiki server stopped (pid {pid})')
-        return jsonify(ok=True, msg='stopped')
-
-
-# ---------------------------------------------------------------------------
-# Reap zombie wiki process if it dies on its own (e.g. idle timeout)
-# ---------------------------------------------------------------------------
-def _reaper():
-    global _wiki_proc
-    while True:
-        time.sleep(10)
-        with _wiki_lock:
-            if _wiki_proc is not None and _wiki_proc.poll() is not None:
-                print(f'[launcher] Wiki server exited on its own (pid {_wiki_proc.pid})')
-                _wiki_proc = None
-
-
-threading.Thread(target=_reaper, daemon=True).start()
-
-
 # ---------------------------------------------------------------------------
 # Inbox flusher — write queued tasks straight to focal.db when Focal is not running.
 # Only fires after INBOX_FLUSH_GRACE seconds with no /pending-tasks poll, so an open
@@ -452,8 +347,8 @@ def _flush_inbox_to_disk():
                         con.execute(
                             'INSERT INTO tasks '
                             '(title,priority,category,due,recur,description,done,subtasks,'
-                            ' created,notes,projectId,teamFlag,wikiPage) '
-                            "VALUES (?,?,?,?,?,?,0,'[]',?,?,?,?,'')",
+                            ' created,notes,projectId,teamFlag) '
+                            "VALUES (?,?,?,?,?,?,0,'[]',?,?,?,?)",
                             [title, pr, cat, str(d.get('due', '')),
                              str(d.get('recur', '')), str(d.get('description', '')),
                              str(d.get('created') or _now_iso()), str(d.get('notes', '')),
@@ -476,26 +371,9 @@ except Exception as e:
 threading.Thread(target=_flush_inbox_to_disk, daemon=True).start()
 
 
-# ---------------------------------------------------------------------------
-# Graceful shutdown: kill wiki server when launcher exits
-# ---------------------------------------------------------------------------
-def _on_exit(signum=None, frame=None):
-    global _wiki_proc
-    with _wiki_lock:
-        if _wiki_running():
-            print(f'[launcher] Shutting down wiki server (pid {_wiki_proc.pid})…')
-            _wiki_proc.terminate()
-    sys.exit(0)
-
-
-signal.signal(signal.SIGINT, _on_exit)
-signal.signal(signal.SIGTERM, _on_exit)
-
-
 if __name__ == '__main__':
     print('─' * 50)
     print('  Focal launcher')
     print('  App  →  http://localhost:8080')
-    print('  Wiki →  http://localhost:8765  (start from app UI)')
     print('─' * 50)
     app.run(port=8080, debug=False, use_reloader=False)

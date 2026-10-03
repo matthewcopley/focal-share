@@ -9,8 +9,6 @@ A personal productivity app — tasks, projects, ideas, wins, streaks, and a mom
 - **Focus view** — top 5 tasks with a daily goal progress bar
 - **Projects, ideas, and a wins tracker**, all cross-linkable
 - **Changelog** — an audit trail of everything you create, edit, and complete
-- **Optional AI features** — task prioritization, daily digests, "what's next?" suggestions — powered by any OpenAI-compatible endpoint (LM Studio locally, or a hosted API like OpenAI/OpenRouter)
-- **Optional wiki integration** — link tasks/projects to pages in a personal markdown wiki
 
 ## Requirements
 
@@ -39,28 +37,6 @@ On macOS you can instead double-click `focal.command`, which starts the server a
 - The app auto-saves 2 seconds after any change and keeps its own rotating backups (last 7 snapshots, downloadable from Settings).
 - `focal.db` is gitignored — never commit it if you fork this repo.
 
-## Optional: AI features
-
-Focal's AI features (Prioritize, digests, What's next?) talk to any **OpenAI-compatible API**, configured entirely in **Settings**:
-
-- **AI endpoint** — the API base URL. Defaults to LM Studio's local server (`http://127.0.0.1:1234`); point it at `https://api.openai.com`, OpenRouter, Ollama, or any other OpenAI-compatible server.
-- **API key** — optional; needed for hosted services, blank for local servers. Stored only in your browser's localStorage.
-- **Model name** — the model id sent with each request. Leave blank to auto-detect the first model the server reports; hosted APIs usually need it set explicitly (e.g. `gpt-4.1-mini`).
-
-Easiest local setup: install [LM Studio](https://lmstudio.ai), load a model, start its local server — Focal finds it automatically. Prefer a non-reasoning model — Focal caps responses at ~600 tokens, which a reasoning model will burn on thinking.
-
-If you skip this, everything else in the app works normally.
-
-## Optional: wiki integration
-
-If you keep a folder of markdown notes, Focal can link tasks/projects to pages and let the AI read them for context:
-
-1. Set `FOCAL_WIKI_ROOT` in `.env` (default `~/Documents/focal-wiki`). Pages go in `<root>/wiki/*.md`.
-2. Start the wiki server by clicking the purple dot in Focal's top bar.
-3. AI daily summaries (Settings) are written to `<root>/raw/focal/`.
-
-The wiki server auto-shuts down after 30 idle minutes (`WIKI_IDLE_MINUTES` in `.env`).
-
 ## Optional: task handoff from scripts/agents
 
 External tools should **not** write `focal.db` directly (the app's auto-save would clobber their rows). Instead, drop a JSON file into `.focal_inbox/` next to the database:
@@ -88,8 +64,7 @@ Tools that can't write files (a macOS Shortcut, a script on another machine) can
 | File | Purpose |
 |---|---|
 | `index.html` | The entire app — HTML, CSS, and JS in one file (sql.js runs SQLite in the browser via WebAssembly) |
-| `focal_launcher.py` | Flask server on :8080 — serves the app, loads/saves `focal.db`, task-handoff inbox, wiki server management |
-| `wiki_server.py` | Flask wiki bridge on :8765 — reads markdown wiki pages (started from the app UI) |
+| `focal_launcher.py` | Flask server on :8080 — serves the app, loads/saves `focal.db`, task-handoff inbox, pasted images |
 | `focal.command` | macOS double-click launcher |
 
-Frontend dependencies (sql.js, marked.js, Tabler Icons) load from CDN at runtime — no build step, no `node_modules`.
+Frontend dependencies (sql.js, Tabler Icons) load from CDN at runtime — no build step, no `node_modules`.
