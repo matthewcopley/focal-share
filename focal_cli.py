@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""focal — read and add to Focal from the command line (for people, scripts and agents).
+"""focal — read and change Focal from the command line (for people, scripts and agents).
 
 Everything goes through the launcher over HTTP, so it works the same on the machine
 running Focal and on any other that can reach it:
@@ -19,9 +19,17 @@ insert.
     focal search invoice       title / description / notes / next step
     focal projects | project 3 | ideas | cats
     focal add "Send W-9" --due fri --cat Admin -p high
+    focal done 589             also reopen, snooze 589 fri, unsnooze, note 589 "text",
+    focal edit 589 -d +2d -p 1      sub add 589 "text", sub done 589 2
+
+Adds go through the inbox. Changes to existing tasks are queued with the launcher and
+applied by an open Focal tab, using the app's own logic, and the CLI waits for the
+result. Exit 4 means queued but not applied yet (no tab open, or a background tab that
+hasn't checked in).
 
 Every read takes --json. `--db FILE` reads a local copy instead, including a backup
-snapshot (.db.gz). Exit codes: 0 ok, 1 can't reach Focal, 2 bad input, 3 duplicate.
+snapshot (.db.gz). Exit codes: 0 ok, 1 can't reach Focal, 2 bad input or refused,
+3 duplicate, 4 queued but not applied yet.
 
 Deliberately not called: GET /pending-tasks. The launcher treats every call as the open
 app's heartbeat, and a CLI polling it would stop the closed-app flusher from running.
@@ -35,6 +43,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from datetime import date, datetime, timedelta
@@ -335,8 +344,8 @@ def cmd_show(f, a):
             print('  ' + text.strip().replace('\n', '\n  '))
     if t['subtasks']:
         print('\nsubtasks:')
-        for st in t['subtasks']:
-            print(f"  [{'x' if st.get('done') else ' '}] {st.get('title', '')}")
+        for i, st in enumerate(t['subtasks'], 1):
+            print(f"  {i}. [{'x' if st.get('done') else ' '}] {st.get('title', '')}")
     if links:
         print('\nlinks:')
         for l in links:
@@ -454,6 +463,21 @@ def parse_day(v):
     die(f'bad date "{v}" (try 2026-10-15, tomorrow, +3d, fri)')
 
 
+def check_category(f, name, allow_new):
+    """The existing category matching `name` case-insensitively. Tasks store the category
+    as a name, not an id, so "bilings" would fork a phantom category with no colour that
+    filters miss. Insist on an existing one unless asked."""
+    if not name.strip():
+        return ''
+    known = {c.lower(): c for c in f.categories}
+    cat = known.get(name.strip().lower())
+    if not cat:
+        if not allow_new:
+            die(f'no category "{name}". Existing: {", ".join(f.categories)} (--new-category to create)')
+        cat = name.strip()
+    return cat
+
+
 def cmd_add(f, a):
     title = a.title.strip()
     if not title:
@@ -461,16 +485,7 @@ def cmd_add(f, a):
     dupes = [t for t in f.tasks if not t['done'] and t['title'].strip().lower() == title.lower()]
     if dupes and not a.force:
         die(f'already open: #{dupes[0]["id"]} "{dupes[0]["title"]}" (use --force to add anyway)', 3)
-    cat = ''
-    if a.cat:
-        # Tasks store the category as a name, not an id, so "bilings" would fork a phantom
-        # category with no colour that filters miss. Insist on an existing one unless asked.
-        known = {c.lower(): c for c in f.categories}
-        cat = known.get(a.cat.strip().lower())
-        if not cat:
-            if not a.new_category:
-                die(f'no category "{a.cat}". Existing: {", ".join(f.categories)} (--new-category to create)')
-            cat = a.cat.strip()
+    cat = check_category(f, a.cat, a.new_category) if a.cat else ''
     if a.project is not None and a.project not in f.projects:
         die(f'no project {a.project}')
     if a.recur and not re.fullmatch(r'daily|weekly|monthly|every:[1-9]\d{0,2}', a.recur):
@@ -490,6 +505,111 @@ def cmd_add(f, a):
     else:
         print(f'Queued: "{title}"' + (f" (due {body['due']})" if body['due'] else '')
               + '. Focal adds it within a few seconds while open, or within ~2 min if closed.')
+
+
+# ── Changes to existing tasks ────────────────────────────────────────────────
+# Completing, snoozing and editing run app logic (recurring spawns, deferral counts,
+# changelog wording), so they're queued with the launcher (POST /ops) and applied by an
+# open Focal tab with the app's own functions. We wait for its result. With no tab open
+# the change stays queued for the next one, and the app refuses one more than a day old.
+
+def run_op(f, a, op, **kw):
+    t = f.by_id.get(a.id)
+    if not t:
+        die(f'no task {a.id}')
+    body = {'op': op, 'id': a.id, 'source': a.source or 'CLI', **kw}
+    q = json.loads(http('POST', '/ops', body))
+    op_id, result = q['op_id'], None
+    if q.get('tab_alive'):
+        deadline = time.time() + a.wait
+        while time.time() < deadline:
+            st = json.loads(http('GET', '/ops/' + op_id))
+            if st.get('status') == 'done':
+                result = st['result']
+                break
+            time.sleep(0.5)
+    if a.json:
+        print(json.dumps({'op_id': op_id, 'applied': result is not None, 'result': result}, indent=2, ensure_ascii=False))
+    elif result is None:
+        print(f'Queued ({op_id}), not applied yet: '
+              + ('Focal is open but hasn\'t picked it up (a background tab checks about once a minute).'
+                 if q.get('tab_alive') else 'no Focal tab is open; the next one to open applies it.')
+              + f'\nCheck on it with: focal op {op_id}')
+    elif result.get('ok'):
+        print(result.get('message', 'done'))
+    else:
+        print('focal: ' + result.get('error', 'refused'), file=sys.stderr)
+    sys.exit(4 if result is None else 0 if result.get('ok') else 2)
+
+
+def cmd_done(f, a):
+    run_op(f, a, 'done', closeSubs=a.close_subs)
+
+
+def cmd_reopen(f, a):
+    run_op(f, a, 'reopen')
+
+
+def cmd_snooze(f, a):
+    until = parse_day(a.until)
+    if until <= f.today:
+        die('snooze needs a date after today')
+    run_op(f, a, 'snooze', until=until)
+
+
+def cmd_unsnooze(f, a):
+    run_op(f, a, 'unsnooze')
+
+
+def cmd_note(f, a):
+    run_op(f, a, 'note', text=a.text)
+
+
+def cmd_sub(f, a):
+    if a.action == 'add':
+        run_op(f, a, 'subtask', text=a.arg)
+    elif a.arg.isdigit():
+        run_op(f, a, 'subdone', sub=int(a.arg))
+    else:
+        die('sub done takes the subtask\'s number, as `focal show` lists it')
+
+
+def cmd_edit(f, a):
+    fields = {}
+    if a.title is not None:
+        fields['title'] = a.title
+    if a.due is not None or a.no_due:
+        fields['due'] = '' if a.no_due else parse_day(a.due)
+    if a.priority:
+        fields['priority'] = parse_priority(a.priority)
+    if a.cat is not None:
+        fields['category'] = check_category(f, a.cat, a.new_category)
+    if a.desc is not None:
+        fields['description'] = a.desc
+    if a.recur is not None or a.no_recur:
+        if a.recur and not re.fullmatch(r'daily|weekly|monthly|every:[1-9]\d{0,2}', a.recur):
+            die('recur must be daily, weekly, monthly or every:N')
+        fields['recur'] = '' if a.no_recur else a.recur
+    if a.project is not None or a.no_project:
+        if a.project is not None and a.project not in f.projects:
+            die(f'no project {a.project}')
+        fields['projectId'] = None if a.no_project else a.project
+    if a.team is not None:
+        fields['teamFlag'] = a.team
+    if not fields:
+        die('nothing to change (see focal edit -h)')
+    run_op(f, a, 'edit', fields=fields)
+
+
+def cmd_op(f, a):
+    st = json.loads(http('GET', '/ops/' + a.op_id))
+    if a.json:
+        print(json.dumps(st, indent=2, ensure_ascii=False))
+    elif st.get('status') == 'done':
+        r = st['result']
+        print(r.get('message') if r.get('ok') else 'refused: ' + r.get('error', ''))
+    else:
+        print('still queued' + ('' if st.get('tab_alive') else ' (no Focal tab is open)'))
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
@@ -543,6 +663,38 @@ def main(argv=None):
     sp.add_argument('--source', help='who added it, shown in Review (default CLI)')
     sp.add_argument('--review', action='store_true', help='send to the Review queue instead of adding')
     sp.add_argument('--force', action='store_true', help='add even if an open task has this title')
+
+    def change(name, fn, help_, action=None):
+        sp = cmd(name, fn, help_)
+        if action:
+            sp.add_argument('action', choices=action)
+        sp.add_argument('id', type=int, help='task id')
+        sp.add_argument('--wait', type=float, default=20, help='seconds to wait for Focal to apply it (20)')
+        sp.add_argument('--source', help='who made the change, shown in Focal and the changelog (default CLI)')
+        return sp
+
+    change('done', cmd_done, 'complete a task (spawns the next one if it repeats)').add_argument(
+        '--close-subs', action='store_true', help='also complete its open subtasks (otherwise refused)')
+    change('reopen', cmd_reopen, 'un-complete a task')
+    change('snooze', cmd_snooze, 'snooze a task until a date').add_argument('until', help='fri, +3d, 2026-10-20…')
+    change('unsnooze', cmd_unsnooze, 'cancel a snooze, restoring the original due date')
+    change('note', cmd_note, 'append a stamped line to a task\'s notes').add_argument('text')
+    sp = change('sub', cmd_sub, 'add a subtask, or complete one by number', action=['add', 'done'])
+    sp.add_argument('arg', metavar='TEXT|N', help='subtask text (add) or its number from `focal show` (done)')
+    sp = change('edit', cmd_edit, 'change a task\'s fields')
+    sp.add_argument('--title')
+    sp.add_argument('-d', '--due', help='2026-10-15, tomorrow, +3d, fri…')
+    sp.add_argument('--no-due', action='store_true', help='clear the due date')
+    sp.add_argument('-p', '--priority', help='1–4 or critical/high/medium/low')
+    sp.add_argument('-c', '--cat', help='an existing category; "" clears it')
+    sp.add_argument('--new-category', action='store_true')
+    sp.add_argument('--desc', help='replace the description')
+    sp.add_argument('--recur', help='daily | weekly | monthly | every:N')
+    sp.add_argument('--no-recur', action='store_true', help='stop repeating')
+    sp.add_argument('--project', type=int, help='project id')
+    sp.add_argument('--no-project', action='store_true')
+    sp.add_argument('--team', action=argparse.BooleanOptionalAction, help='flag (or --no-team unflag) for the team agenda')
+    cmd('op', cmd_op, 'check on a queued change').add_argument('op_id')
 
     a = p.parse_args(argv)
     if not a.cmd:  # bare `focal` = the Focus list

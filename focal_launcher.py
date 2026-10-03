@@ -43,7 +43,19 @@ INBOX_FLUSH_GRACE = 90          # seconds with no Focal poll before the launcher
 _db_lock = threading.Lock()
 _last_pending_poll = 0.0        # updated on every GET /pending-tasks (Focal liveness signal)
 LEASE_SECONDS = 60
-_leases = {}                    # inbox file name -> (tab id, expiry): who is adding it
+_leases = {}                    # inbox/op file name -> (tab id, expiry): who is handling it
+_last_ops_poll = 0.0            # last poll from a tab that applies ops (X-Focal-Client >= 3)
+
+
+def _lease(name, tab, now):
+    """True if `tab` may take inbox or op file `name` now. Polling doesn't renew a lease,
+    so a tab that never acks (closed, or stuck failing to save) loses it after
+    LEASE_SECONDS and another tab can pick the file up."""
+    holder, until = _leases.get(name, ('', 0))
+    if until > now:
+        return holder == tab
+    _leases[name] = (tab, now + LEASE_SECONDS)
+    return True
 
 
 def _read_inbox():
@@ -239,9 +251,10 @@ def pending_tasks():
     A tab from before versioned saves sends no X-Focal-Client. It gets an empty list and
     doesn't count as alive: its saves are refused (see POST /db), so a task it drained
     would be acked without ever reaching focal.db. The flusher or a current tab takes it."""
-    if request.headers.get('X-Focal-Client') is None:
+    client = request.headers.get('X-Focal-Client')
+    if client is None:
         return jsonify(tasks=[])
-    global _last_pending_poll
+    global _last_pending_poll, _last_ops_poll
     _last_pending_poll = now = time.time()
     # Each task to add goes to one tab at a time. Two tabs draining the same file would
     # both add it, and since saves now merge instead of overwrite, both copies would
@@ -249,15 +262,18 @@ def pending_tasks():
     tab = request.headers.get('X-Focal-Tab', '')
     tasks = []
     for f, d in _read_inbox():
-        if not d.get('review'):
-            holder, until = _leases.get(f.name, ('', 0))
-            if holder and holder != tab and until > now:
-                continue
-            _leases[f.name] = (tab, now + LEASE_SECONDS)
+        if not d.get('review') and not _lease(f.name, tab, now):
+            continue
         item = dict(d)
         item['queue_id'] = f.name        # Focal echoes this back to ack (delete) the file
         tasks.append(item)
-    return jsonify(tasks=tasks, db_version=_current_version())
+    # Ops go only to tabs that know how to apply them, or an older tab would hold the
+    # lease on every one without ever acking.
+    ops = []
+    if client.isdigit() and int(client) >= 3:
+        _last_ops_poll = now
+        ops = [d for f, d in _read_ops() if _lease(f.name, tab, now)]
+    return jsonify(tasks=tasks, ops=ops, db_version=_current_version())
 
 
 _DUE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
@@ -348,6 +364,95 @@ def ack_pending():
         except Exception:
             pass
     return jsonify(ok=True, removed=removed)
+
+
+# ---------------------------------------------------------------------------
+# Task operations from outside the app: the focal CLI's done, reopen, edit, snooze,
+# unsnooze, note and subtask commands.
+#
+# These run app logic that lives only in index.html (recurring spawns, deferral counts,
+# snooze history, changelog wording the stats depend on), so the launcher never applies
+# them itself. POST /ops queues one as a file in .focal_ops/. The poll hands it to one
+# open tab (leased like inbox tasks), which applies it with the app's own functions,
+# saves, and acks with a result. The caller polls GET /ops/<op_id> for that result.
+# With no tab open the op waits for the next one; the app refuses ops more than a day
+# old rather than apply something long stale.
+# ---------------------------------------------------------------------------
+OPS_DIR = FOCAL_DIR / '.focal_ops'
+OPS_RESULTS = OPS_DIR / 'results'
+OPS = {'done', 'reopen', 'edit', 'snooze', 'unsnooze', 'note', 'subtask', 'subdone'}
+OP_ID_RE = re.compile(r'^op-\d{8}-\d{6}-[0-9a-f]{6}$')
+OPS_TAB_ALIVE = 15              # seconds since an ops-capable tab polled
+
+
+def _read_ops():
+    if not OPS_DIR.exists():
+        return []
+    out = []
+    for f in sorted(OPS_DIR.glob('op-*.json')):
+        try:
+            out.append((f, json.loads(f.read_text(encoding='utf-8'))))
+        except Exception:
+            pass
+    return out
+
+
+def _write_json(path, obj):
+    tmp = path.with_name('.' + path.name + '.tmp')
+    tmp.write_text(json.dumps(obj), encoding='utf-8')
+    os.replace(tmp, path)
+
+
+@app.route('/ops', methods=['POST'])
+def queue_op():
+    d = request.get_json(force=True, silent=True)
+    if not isinstance(d, dict) or d.get('op') not in OPS:
+        return jsonify(ok=False, error='op must be one of ' + ', '.join(sorted(OPS))), 400
+    try:
+        task_id = int(d.get('id'))
+    except (TypeError, ValueError):
+        return jsonify(ok=False, error='id must be a task id'), 400
+    op_id = f"op-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}"
+    item = {k: d[k] for k in ('op', 'fields', 'until', 'text', 'sub', 'closeSubs', 'source') if k in d}
+    item.update(id=task_id, op_id=op_id, created=_now_iso())
+    if len(json.dumps(item)) > 100_000:
+        return jsonify(ok=False, error='too large'), 400
+    OPS_DIR.mkdir(exist_ok=True)
+    _write_json(OPS_DIR / (op_id + '.json'), item)
+    return jsonify(ok=True, op_id=op_id, tab_alive=time.time() - _last_ops_poll < OPS_TAB_ALIVE), 201
+
+
+@app.route('/ops/<op_id>', methods=['GET'])
+def op_status(op_id):
+    if not OP_ID_RE.match(op_id):
+        return jsonify(ok=False, error='bad op id'), 400
+    res = OPS_RESULTS / (op_id + '.json')
+    if res.exists():
+        return jsonify(status='done', result=json.loads(res.read_text(encoding='utf-8')))
+    if (OPS_DIR / (op_id + '.json')).exists():
+        return jsonify(status='queued', tab_alive=time.time() - _last_ops_poll < OPS_TAB_ALIVE)
+    return jsonify(status='unknown'), 404
+
+
+@app.route('/ops/ack', methods=['POST'])
+def ack_ops():
+    """The tab calls this AFTER saving the ops it applied: {results: {op_id: result}}."""
+    results = (request.get_json(force=True, silent=True) or {}).get('results') or {}
+    OPS_RESULTS.mkdir(parents=True, exist_ok=True)
+    done = 0
+    for op_id, result in results.items():
+        if not isinstance(op_id, str) or not OP_ID_RE.match(op_id):
+            continue
+        _write_json(OPS_RESULTS / (op_id + '.json'), result if isinstance(result, dict) else {})
+        (OPS_DIR / (op_id + '.json')).unlink(missing_ok=True)
+        _leases.pop(op_id + '.json', None)
+        done += 1
+    # Results only need to outlive the caller's wait; keep a day of them.
+    cutoff = time.time() - 86400
+    for f in OPS_RESULTS.glob('op-*.json'):
+        if f.stat().st_mtime < cutoff:
+            f.unlink(missing_ok=True)
+    return jsonify(ok=True, acked=done)
 
 
 # ---------------------------------------------------------------------------

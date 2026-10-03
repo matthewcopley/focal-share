@@ -56,7 +56,7 @@ Tools that can't write files (a macOS Shortcut, a script on another machine) can
 
 ## Command line: `focal`
 
-`focal_cli.py` reads and adds to Focal from a terminal, a script or an AI agent. It needs only Python 3.9+, with no Flask, and talks to the launcher over HTTP, so it always sees the live data:
+`focal_cli.py` reads and changes Focal from a terminal, a script or an AI agent. It needs only Python 3.9+, with no Flask, and talks to the launcher over HTTP, so it always sees the live data:
 
 ```bash
 ln -s "$PWD/focal_cli.py" ~/.local/bin/focal   # or anywhere on your PATH
@@ -68,9 +68,18 @@ focal search invoice --all   # include done tasks
 focal projects; focal project 3; focal ideas; focal cats
 focal add "Send W-9" --due fri --cat Admin -p high
 focal add "Maybe this" --review   # into the Review queue instead
+focal done 42                # complete it (the next one is created if it repeats)
+focal done 42 --close-subs   # ...and its open subtasks
+focal reopen 42
+focal snooze 42 fri; focal unsnooze 42
+focal edit 42 -d +2d -p high --cat Admin    # also --title, --desc, --recur, --project, --team…
+focal note 42 "Called them, waiting on a reply"
+focal sub add 42 "Draft the email"; focal sub done 42 1
 ```
 
 Every read takes `--json`. `--db FILE` reads a copy of the database (`.db` or `.db.gz`) instead of the running app. Set `FOCAL_URL` if the launcher isn't at `http://localhost:8080`. `focal add` refuses (exit code 3) a title that matches an open task, and refuses categories that don't exist yet unless you pass `--new-category`. It never writes `focal.db` itself: the add goes through `POST /pending-tasks`, and the app does the insert.
+
+Changes to existing tasks (`done`, `edit`, `snooze`…) are applied by an open Focal tab, using the same code as the buttons, so a repeating task still spawns its next occurrence and the changelog records the change (tagged `via CLI`, or `--source NAME`). The command waits for the tab to apply the change and prints the result. If no Focal tab is open, the change waits for the next one, the command exits with code 4, and `focal op <id>` checks on it later. A change more than a day old is refused rather than applied stale.
 
 ## Security notes
 

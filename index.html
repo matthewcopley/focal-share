@@ -2211,16 +2211,18 @@ async function drainPendingTasks() {
     try {
       // X-Focal-Client marks this as a tab with versioned saves; the launcher hands
       // queued tasks only to those (see GET /pending-tasks).
-      const r = await fetch('/pending-tasks', {headers: {'X-Focal-Client': '2', 'X-Focal-Tab': TAB_ID}});
+      const r = await fetch('/pending-tasks', {headers: {'X-Focal-Client': '3', 'X-Focal-Tab': TAB_ID}});
       if (!r.ok) return;
       const j = await r.json();
       list = j.tasks || [];
+      for (const op of j.ops || []) if (!_opsQueue.some(q => q.op_id === op.op_id)) _opsQueue.push(op);
       if (j.db_version != null && j.db_version !== S.dbVersion) syncFromServer();
       else if (_staleView && !typingNow()) rerenderAfterSync();
     } catch(e) { return; }
 
     syncReview(list.filter(q => q.review));
     list = list.filter(q => !q.review);
+    if (_opsQueue.length) runOps();
     if (!list.length) return;
 
     const added = [], ids = [];
@@ -2243,6 +2245,129 @@ async function drainPendingTasks() {
   } finally {
     _draining = false;
   }
+}
+
+// ─────────────────────────────────────────────
+// OPS — task changes queued by the focal CLI (POST /ops): done, reopen, edit, snooze,
+// unsnooze, note, subtask, subdone. The launcher can't apply these itself, because
+// they run app logic (recurring spawns, deferrals, snooze history, changelog wording),
+// so the poll leases each one to a single tab, which applies it here with the same
+// functions the UI uses, saves, and acks with a result the CLI is waiting on.
+// ─────────────────────────────────────────────
+const OP_MAX_AGE = 24 * 3600 * 1000;   // older than this, refuse rather than apply it stale
+const _opsQueue = [];
+const _opsDone = new Map();            // op_id → result: a retried save never re-applies one
+let _opsRunning = false;
+
+async function runOps() {
+  if (_opsRunning) return;
+  _opsRunning = true;
+  try {
+    const batch = _opsQueue.splice(0);
+    const results = {};
+    for (const op of batch) {
+      if (!_opsDone.has(op.op_id)) {
+        let r;
+        try { r = applyOp(op); } catch(e) { r = { ok:false, error: String(e && e.message || e) }; }
+        _opsDone.set(op.op_id, r);
+        if (r.ok && !r.noop) showToast((op.source || 'CLI') + ': ' + r.message, {duration: 4000});
+      }
+      results[op.op_id] = _opsDone.get(op.op_id);
+    }
+    if (!batch.length) return;
+    if (!(await saveDB())) return;     // ack only once saved; the lease keeps them ours
+    try {
+      await fetch('/ops/ack', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({results})});
+    } catch(e) { /* unacked: the next poll hands them back and _opsDone re-acks */ }
+  } finally {
+    _opsRunning = false;
+  }
+}
+
+function opTask(t) {
+  return { id:t.id, title:t.title, done:t.done, due:t.due, priority:t.priority, category:t.category,
+           recur:t.recur, snoozedUntil:snoozeLive(t) ? t.snoozedUntil : '' };
+}
+
+// One op → {ok, message, task} or {ok:false, error}. noop means it was already so.
+function applyOp(op) {
+  if (!(Date.now() - new Date(op.created) < OP_MAX_AGE)) return { ok:false, error:'expired: queued more than a day ago, not applied' };
+  const t = S.tasks.find(x => x.id === op.id);
+  if (!t) return { ok:false, error:`no task #${op.id}` };
+  const via = op.source || 'CLI', name = `"${shortTitle(t.title)}"`;
+  const done = (message, extra) => ({ ok:true, message, task: opTask(t), ...extra });
+  const noop = message => ({ ok:true, noop:true, message, task: opTask(t) });
+  switch (op.op) {
+    case 'done': {
+      if (t.done) return noop(`${name} was already done`);
+      const open = (t.subtasks || []).filter(s => !s.done).length;
+      if (open && !op.closeSubs) return { ok:false, error:`${name} has ${open} open subtask${open === 1 ? '' : 's'}; pass --close-subs to complete ${open === 1 ? 'it' : 'them'} too` };
+      completeTask(t.id, !!op.closeSubs, via);
+      const spawnId = S.pendingDone.get(t.id)?.spawnId ?? null;
+      const spawn = spawnId != null ? S.tasks.find(x => x.id === spawnId) : null;
+      return done(`completed ${name}` + (spawn ? ` (next one: #${spawn.id}, due ${spawn.due})` : ''), { spawnId });
+    }
+    case 'reopen':
+      if (!t.done) return noop(`${name} is already open`);
+      uncompleteTask(t.id);
+      return done(`reopened ${name}`);
+    case 'snooze': {
+      const until = String(op.until || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || until <= today()) return { ok:false, error:'snooze needs a date after today' };
+      if (snoozeLive(t) && t.snoozedUntil === until) return noop(`${name} was already snoozed until ${until}`);
+      snooze(t.id, until, via);
+      return done(`snoozed ${name} until ${until}`);
+    }
+    case 'unsnooze':
+      if (!snoozeLive(t)) return noop(`${name} wasn't snoozed`);
+      unsnooze(t.id, via);
+      return done(`unsnoozed ${name}` + (t.due ? ` (due ${t.due})` : ''));
+    case 'note': {
+      const text = String(op.text || '').trim();
+      if (!text) return { ok:false, error:'empty note' };
+      // Stamped like Launch's park notes, at the time the note was written
+      const stamp = new Date(op.created).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+      t.notes = (t.notes ? t.notes.replace(/\s+$/, '') + '\n' : '') + `[${stamp}] ${text}`;
+      logChange('task', t.id, 'update', `"${t.title}" — Note added · via ${via}`);
+      markUnsaved(); render();
+      return done(`added a note to ${name}`);
+    }
+    case 'subtask': {
+      const title = String(op.text || '').trim();
+      if (!title) return { ok:false, error:'empty subtask' };
+      t.subtasks = [...(t.subtasks || []), { id: nextSubId(t), title, done: false }];
+      logChange('task', t.id, 'update', `"${t.title}" — Subtask added: "${title}" · via ${via}`);
+      markUnsaved(); render();
+      return done(`added subtask ${t.subtasks.length} to ${name}`);
+    }
+    case 'subdone': {
+      const s = (t.subtasks || [])[(op.sub | 0) - 1];
+      if (!s) return { ok:false, error:`${name} has no subtask ${op.sub}` };
+      if (s.done) return noop(`subtask ${op.sub} of ${name} was already done`);
+      toggleSub(t.id, s.id);
+      return done(`completed subtask "${shortTitle(s.title)}" of ${name}`);
+    }
+    case 'edit': {
+      const f = op.fields || {}, data = {};
+      if ('title' in f) { const v = String(f.title || '').trim(); if (!v) return { ok:false, error:'title cannot be empty' }; data.title = v; }
+      if ('priority' in f) { const v = +f.priority; if (!(v >= 1 && v <= 4)) return { ok:false, error:'priority must be 1–4' }; data.priority = v; }
+      if ('due' in f) { const v = String(f.due || ''); if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return { ok:false, error:'bad due date' }; data.due = v; }
+      if ('recur' in f) { const v = String(f.recur || ''); if (v && !/^(daily|weekly|monthly|every:[1-9]\d{0,2})$/.test(v)) return { ok:false, error:'bad recur' }; data.recur = v; }
+      if ('category' in f) data.category = normalizeCategory(f.category);
+      if ('description' in f) data.description = String(f.description || '');
+      if ('teamFlag' in f) data.teamFlag = !!f.teamFlag;
+      if ('projectId' in f) {
+        const v = f.projectId == null || f.projectId === '' ? null : +f.projectId;
+        if (v != null && !S.projects.some(p => p.id === v)) return { ok:false, error:`no project #${f.projectId}` };
+        data.projectId = v;
+      }
+      if (Object.keys(data).every(k => _same(t[k], data[k]))) return noop(`${name} already had those values`);
+      const diff = applyTaskEdit(t, data, ` · via ${via}`);
+      markUnsaved(); render();
+      return done(`edited ${name}: ${diff}`);
+    }
+  }
+  return { ok:false, error:`unknown op "${op.op}"` };
 }
 
 // ─────────────────────────────────────────────
@@ -7330,7 +7455,7 @@ function toggleDone(id) {
 
 // The completing half of toggleDone(), split out so the confirm dialog can call it
 // after the fact. closeSubs marks any still-open subtasks done along with the task.
-function completeTask(id, closeSubs) {
+function completeTask(id, closeSubs, quiet=false) {
   const t=S.tasks.find(x=>x.id===id); if(!t||t.done) return;
   // Where the burst starts — read before the re-render replaces the card
   const cbRect=document.querySelector(`.task-card[data-id="${id}"] .task-checkbox`)?.getBoundingClientRect();
@@ -7375,6 +7500,7 @@ function completeTask(id, closeSubs) {
   if (S.launch && S.launch.taskId===id) endLaunch('done');
   checkRingCloses();
   markUnsaved(); render();
+  if (quiet) return;      // an op from the CLI: no confetti, no follow-up prompt
   celebrateCompletion(t, origin);
   offerFollowUp(t);
 }
@@ -7457,25 +7583,26 @@ function fmtSnoozeDate(d) {
 
 // Snooze a task until `until` (YYYY-MM-DD, after today). Re-snoozing keeps the
 // original due date, so unsnoozing and recurrence both see the pre-snooze schedule.
-function snooze(id, until) {
-  const t=S.tasks.find(x=>x.id===id); if(!t) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(until||'') || until<=today()) { showToast('Pick a date after today'); return; }
+function snooze(id, until, quiet=false) {
+  const t=S.tasks.find(x=>x.id===id); if(!t) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(until||'') || until<=today()) { if (!quiet) showToast('Pick a date after today'); return false; }
   const prev={due:t.due, snoozedUntil:t.snoozedUntil||'', snoozedFrom:t.snoozedFrom||'', aiRank:t.aiRank, deferrals:t.deferrals||0};
   if (!snoozeLive(t)) t.snoozedFrom=t.due||'';
   t.snoozedUntil=until; t.due=until; t.aiRank=null;
   t.deferrals=(t.deferrals||0)+1;
-  logChange('task', id, 'update', `"${t.title}" — Snoozed until ${until}`);
+  logChange('task', id, 'update', `"${t.title}" — Snoozed until ${until}${quiet ? ' · via ' + quiet : ''}`);
   markUnsaved(); render();
-  showToast('Snoozed until '+fmtSnoozeDate(until),{label:'Undo',action:()=>{ Object.assign(t,prev); markUnsaved(); render(); }});
+  if (!quiet) showToast('Snoozed until '+fmtSnoozeDate(until),{label:'Undo',action:()=>{ Object.assign(t,prev); markUnsaved(); render(); }});
+  return true;
 }
 
 // Cancel a snooze and put the task back on its original due date.
-function unsnooze(id) {
+function unsnooze(id, quiet=false) {
   const t=S.tasks.find(x=>x.id===id); if(!t||!snoozeLive(t)) return;
   t.due=t.snoozedFrom||''; t.snoozedUntil=''; t.snoozedFrom='';
-  logChange('task', id, 'update', `"${t.title}" — Unsnoozed${t.due?' (due '+t.due+')':''}`);
+  logChange('task', id, 'update', `"${t.title}" — Unsnoozed${t.due?' (due '+t.due+')':''}${quiet ? ' · via ' + quiet : ''}`);
   markUnsaved(); render();
-  showToast(t.due ? 'Back to due '+fmtSnoozeDate(t.due) : 'Snooze cleared');
+  if (!quiet) showToast(t.due ? 'Back to due '+fmtSnoozeDate(t.due) : 'Snooze cleared');
 }
 
 function duplicateTask(task) {
@@ -7556,6 +7683,18 @@ function addModalSub() {
   renderModalSubs(); inp.value=''; inp.focus();
 }
 
+// Apply edited fields to a task: the changelog diff, and a deferral when the due date
+// moved later. `data` may hold only some fields. Returns the diff text ('' if nothing
+// changed).
+function applyTaskEdit(t, data, suffix='') {
+  const snap = {...t};
+  const diff = diffLog(snap, data, TASK_DIFF_FIELDS.filter(([k]) => k in data));
+  Object.assign(t, data);
+  if ('due' in data && isDeferral(snap.due, data.due) && !snap.done) t.deferrals=(snap.deferrals||0)+1;
+  logChange('task', t.id, 'update', `"${t.title}"${diff ? ' — ' + diff : ''}${suffix}`);
+  return diff;
+}
+
 function saveModal() {
   const title=document.getElementById('f-title').value.trim();
   if (!title) { document.getElementById('f-title').focus(); return; }
@@ -7575,11 +7714,7 @@ function saveModal() {
   const teamFlag=document.getElementById('f-team').checked;
   const data={title,priority:+document.getElementById('f-priority').value,category:cat,due:document.getElementById('f-due').value,recur,description:document.getElementById('f-desc').value.trim(),subtasks:S.modalSubs,projectId:projVal?parseInt(projVal):null,teamFlag};
   if (S.editingTask) {
-    const snap = {...S.editingTask};
-    const diff = diffLog(snap, data, TASK_DIFF_FIELDS);
-    Object.assign(S.editingTask, data);
-    if (isDeferral(snap.due, data.due) && !snap.done) S.editingTask.deferrals=(snap.deferrals||0)+1;
-    logChange('task', S.editingTask.id, 'update', `"${S.editingTask.title}"${diff ? ' — ' + diff : ''}`);
+    applyTaskEdit(S.editingTask, data);
   } else {
     const cf=S.copyFrom, rq=S.reviewing;
     const task={id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',created:rq?.created||new Date().toISOString(),notes:cf?.notes||'',...data};

@@ -10,6 +10,7 @@ focal_images/
 
 # Task handoff inbox
 .focal_inbox/
+.focal_ops/
 
 # Secrets
 .env
