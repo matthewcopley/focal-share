@@ -49,9 +49,27 @@ The running app drains the inbox every few seconds; if the app is closed, the la
 
 ### Review queue: `POST /pending-tasks`
 
-Tools that can't write files (a macOS Shortcut, a script on another machine) can POST the same JSON to `http://localhost:8080/pending-tasks` instead. These tasks are **held for review** rather than added: a **Review** entry appears in Focal's sidebar, where each one can be approved, edited (it opens the normal task form) or discarded, with Undo. Fields are coerced rather than rejected, since they often come from a language model: priority words (`high`, `low`, …) map to 1–4, and a malformed `due` is dropped. Only `title` is required, and an optional `source` (e.g. `"Mail"`) is shown on the card.
+Tools that can't write files (a macOS Shortcut, a script on another machine) can POST the same JSON to `http://localhost:8080/pending-tasks` instead. These tasks are **held for review** rather than added: a **Review** entry appears in Focal's sidebar, where each one can be approved, edited (it opens the normal task form) or discarded, with Undo. Fields are coerced rather than rejected, since they often come from a language model: priority words (`high`, `low`, …) map to 1–4, and a malformed `due` is dropped. Only `title` is required, and an optional `source` (e.g. `"Mail"`) is shown on the card. Send `"review": false` to skip the review and add the task directly, as if it had been dropped in `.focal_inbox/`.
 
 [`add-to-focal-shortcut.md`](add-to-focal-shortcut.md) builds an "Add to Focal" macOS Shortcut that turns the selected email into a task with Apple Intelligence and sends it here. `message://` links in a task's description render as **Open email**.
+
+## Command line: `focal`
+
+`focal_cli.py` reads and adds to Focal from a terminal, a script or an AI agent. It needs only Python 3.9+, with no Flask, and talks to the launcher over HTTP, so it always sees the live data:
+
+```bash
+ln -s "$PWD/focal_cli.py" ~/.local/bin/focal   # or anywhere on your PATH
+focal                        # top 5 by the Focus ranking
+focal ls today               # also overdue, upcoming, all, done, recent, snoozed, sticky, team
+focal ls upcoming --cat Admin -n 10
+focal show 42                # one task: notes, subtasks, links, history
+focal search invoice --all   # include done tasks
+focal projects; focal project 3; focal ideas; focal cats
+focal add "Send W-9" --due fri --cat Admin -p high
+focal add "Maybe this" --review   # into the Review queue instead
+```
+
+Every read takes `--json`. `--db FILE` reads a copy of the database (`.db` or `.db.gz`) instead of the running app. Set `FOCAL_URL` if the launcher isn't at `http://localhost:8080`. `focal add` refuses (exit code 3) a title that matches an open task, and refuses categories that don't exist yet unless you pass `--new-category`. It never writes `focal.db` itself: the add goes through `POST /pending-tasks`, and the app does the insert.
 
 ## Security notes
 
@@ -65,6 +83,7 @@ Tools that can't write files (a macOS Shortcut, a script on another machine) can
 |---|---|
 | `index.html` | The entire app — HTML, CSS, and JS in one file (sql.js runs SQLite in the browser via WebAssembly) |
 | `focal_launcher.py` | Flask server on :8080 — serves the app, loads/saves `focal.db`, task-handoff inbox, pasted images |
+| `focal_cli.py` | The `focal` command line: read views and add tasks over HTTP |
 | `focal.command` | macOS double-click launcher |
 
 Frontend dependencies (sql.js, Tabler Icons) load from CDN at runtime — no build step, no `node_modules`.

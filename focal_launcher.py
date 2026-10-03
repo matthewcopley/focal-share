@@ -215,6 +215,7 @@ def pending_tasks():
 
 _DUE_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
 _PRIORITY_WORDS = {'critical': 1, 'urgent': 1, 'high': 2, 'medium': 3, 'normal': 3, 'low': 4}
+_RECUR_RE = re.compile(r'^(daily|weekly|monthly|every:[1-9]\d{0,2})$')
 
 
 @app.route('/pending-tasks', methods=['POST'])
@@ -223,7 +224,11 @@ def queue_task_for_review():
     review. It lands in the same inbox as agent-dropped tasks, but flagged
     review=true: Focal lists it under Review instead of adding it, and the closed-app
     flusher leaves it alone, so nothing reaches the task list until it's approved.
-    Fields are coerced rather than rejected — they usually come from a language model."""
+    Fields are coerced rather than rejected — they usually come from a language model.
+
+    "review": false (the focal CLI's default) skips the review and queues an ordinary
+    inbox task instead, exactly like a file dropped in .focal_inbox: the open app adds it
+    on its next drain, or the flusher writes it to focal.db if the app is closed."""
     d = request.get_json(force=True, silent=True)
     if not isinstance(d, dict):
         return jsonify(ok=False, error='expected a JSON object'), 400
@@ -257,13 +262,18 @@ def queue_task_for_review():
         if lines:
             description = (description + '\n\n' + '\n'.join(lines)).strip()
         source = source or ('Mail' if 'message://' in head else 'Selection')
+    recur = s('recur', 12)
+    proj = d.get('projectId')
+    proj = int(proj) if isinstance(proj, (int, str)) and str(proj).isdigit() else None
+    review = d.get('review') is not False
     item = {
         'title': title, 'description': description, 'notes': s('notes', 20000),
         'due': due, 'priority': pr, 'category': s('category', 80), 'source': source,
-        'review': True, 'created': _now_iso(),
+        'recur': recur if _RECUR_RE.match(recur) else '', 'projectId': proj,
+        'teamFlag': bool(d.get('teamFlag')), 'review': review, 'created': _now_iso(),
     }
     INBOX_DIR.mkdir(exist_ok=True)
-    name = f"review-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}.json"
+    name = f"{'review' if review else 'task'}-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}.json"
     tmp = INBOX_DIR / ('.' + name + '.tmp')     # never matched by the *.json glob
     tmp.write_text(json.dumps(item), encoding='utf-8')
     os.replace(tmp, INBOX_DIR / name)

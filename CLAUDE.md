@@ -32,6 +32,9 @@ differences, were removed from both copies in Oct 2026.
 `focal_launcher.py` likewise matches the private copy apart from two inbox
 comments and `ALLOWED_ORIGINS` (localhost only here). Its endpoints are identical:
 `/db`, `/images` and `/pending-tasks*`.
+`focal_cli.py` is identical in both copies. Its views and ranking reimplement
+`index.html`'s `score()`, `stickyInfo()`, `isSnoozed()` and `viewTasks()` in Python,
+so change them together.
 `focal.command` is this repo's own path-independent version.
 
 **Keep it that way.** Make app changes in a form that applies to both copies:
