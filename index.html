@@ -7221,11 +7221,12 @@ function renderCheckin() {
       + `<div class="launch-field"${d.brk ? ' style="display:none"' : ''}><label>Difficulty</label><div class="launch-boxes">`
       + DIFF_LEVELS.map(l => `<button data-diff="${l.v}"${d.difficulty === l.v ? ' class="active"' : ''}>${l.label}</button>`).join('')
       + `</div></div>`
+      + `<div class="launch-field"${d.brk ? ' style="display:none"' : ''}><label>What got in the way <span class="ci-opt">(optional)</span></label><div class="ci-chips">`
+      + CHECKIN_TAGS.map(tg => `<button class="ci-chip${d.tags.includes(tg) ? ' on' : ''}" data-tag="${esc(tg)}"><span>${esc(tg)}</span></button>`).join('')
+      + `</div></div>`
       + (d.more
-        ? `<div class="launch-field"><label>What got in the way <span class="ci-opt">(optional)</span></label><div class="ci-chips">`
-          + CHECKIN_TAGS.map(tg => `<button class="ci-chip${d.tags.includes(tg) ? ' on' : ''}" data-tag="${esc(tg)}"><span>${esc(tg)}</span></button>`).join('')
-          + `</div></div><div class="launch-field"><label for="ci-note">Note <span class="ci-opt">(optional)</span></label><input type="text" id="ci-note" maxlength="300" placeholder="Anything worth remembering about this stretch" value="${esc(d.note)}"></div>`
-        : `<button class="ci-more" data-ci="more"><i class="ti ti-plus"></i> Note, or what got in the way</button>`)
+        ? `<div class="launch-field"><label for="ci-note">Note <span class="ci-opt">(optional)</span></label><input type="text" id="ci-note" maxlength="300" placeholder="Anything worth remembering about this stretch" value="${esc(d.note)}"></div>`
+        : `<button class="ci-more" data-ci="more"><i class="ti ti-plus"></i> Add a note</button>`)
       + `<div class="launch-footer">` + (d.mode === 'edit' ? `<button class="launch-small-btn ci-del" data-ci="delete">Delete</button>`
           : editing ? '<span></span>' : `<button class="launch-small-btn" data-ci="skip" title="Leave this stretch unlogged">Skip this one</button>`)
       + `<div class="launch-footer-right"><span class="launch-hint" style="margin:0;align-self:center">${ready ? (editing ? 'Enter to save' : 'Enter to log') : d.focus && !d.brk ? 'Pick a difficulty' : 'Pick a focus level'}</span>`
@@ -7345,7 +7346,7 @@ function submitCheckin() {
   if (d.mode) return saveCheckinEdit(d);
   const k = { id: S.checkins.reduce((mx, x) => Math.max(mx, x.id), 0) + 1, started: d.from, ended: new Date().toISOString(),
     focus: d.brk ? 0 : d.focus, difficulty: d.brk ? 0 : d.difficulty, taskIds: d.brk ? [] : [...d.taskIds],
-    tags: d.more ? d.tags.join(', ') : '', note: d.more ? d.note.trim() : '', nextTaskId: null };
+    tags: d.brk ? '' : d.tags.join(', '), note: d.more ? d.note.trim() : '', nextTaskId: null };
   S.checkins.push(k);
   try { localStorage.setItem(CHECKIN_COVER_KEY, k.ended); } catch(e) {}
   markUnsaved();
@@ -7368,7 +7369,7 @@ function openCheckinEditor(k) {
     day: localDate(en), t0: hm(st), t1: hm(en), from: st.toISOString(),
     taskIds: k ? [...k.taskIds] : [], sug: [], doneIds: [], lastIds: k ? [] : sg.lastIds,
     focus: k ? k.focus : 0, difficulty: k ? k.difficulty : 0, brk: !!k && !k.focus,
-    tags, note: k?.note || '', more: !!(tags.length || k?.note), logged: null };
+    tags, note: k?.note || '', more: !!k?.note, logged: null };
   ciEditSuggest(d);
   document.getElementById('checkin-overlay').classList.add('open');
   renderCheckin(); updateCheckinPill();
@@ -7395,7 +7396,7 @@ function saveCheckinEdit(d) {
   }
   const fields = { started: st.toISOString(), ended: en.toISOString(),
     focus: d.brk ? 0 : d.focus, difficulty: d.brk ? 0 : d.difficulty, taskIds: d.brk ? [] : [...d.taskIds],
-    tags: d.more ? d.tags.join(', ') : '', note: d.more ? d.note.trim() : '' };
+    tags: d.brk ? '' : d.tags.join(', '), note: d.more ? d.note.trim() : '' };
   if (d.mode === 'edit') {
     const k = S.checkins.find(x => x.id === d.editId);
     if (!k) { closeCheckin(); return; }
