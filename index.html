@@ -754,6 +754,9 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .ci-legend i{display:inline-block;width:9px;height:9px}
 .ci-sum{font-size:11px;color:var(--text-muted);margin:2px 0 10px}
 .ci-svg{width:100%;display:block}
+.ci-fill-card{display:flex;flex-direction:column}
+.ci-fill{flex:1;min-height:130px;position:relative}
+.ci-fill>.ci-svg{position:absolute;inset:0;height:100%}
 .ci-view-card{margin-bottom:18px}
 .ci-days{display:flex;gap:4px;flex-wrap:wrap}
 .ci-days button{padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text-dim);cursor:pointer;font-family:inherit;font-size:11px}
@@ -4378,8 +4381,9 @@ function ciBuckets(from, to, weekly, byDay) {
 
 // Tracked hours per bucket, stacked by focus with the focused part on the
 // baseline, against your own typical focused time. `onPick(bucket)` makes the
-// bars clickable.
-function ciHoursChart(card, buckets, weekly, byDay, onPick) {
+// bars clickable. `fill` (the dashboard) sizes the chart to whatever height
+// its grid row gives the card, redrawn 1:1, instead of a fixed 130px.
+function ciHoursChart(card, buckets, weekly, byDay, onPick, fill) {
   const svgNS = 'http://www.w3.org/2000/svg', todayStr = today();
   let typ = null;
   if (weekly) {
@@ -4387,50 +4391,70 @@ function ciHoursChart(card, buckets, weekly, byDay, onPick) {
     typ = done.length >= 2 ? ciMedian(done) : null;
   } else typ = ciTypicalDay(byDay, todayStr);
 
-  const W = Math.max(240, card.clientWidth - 34), H = 130, padL = 26, padB = 16, plotW = W - padL, plotH = H - padB - 6;
-  const maxS = Math.max(3600, ...buckets.map(bk => bk.t.tracked), typ || 0);
-  const stepH = maxS / 3600 > 8 ? (weekly ? 10 : 4) : maxS / 3600 > 4 ? 2 : 1;
-  const yMax = Math.ceil(maxS / 3600 / stepH) * stepH * 3600;
-  const Y = s => 6 + plotH - s / yMax * plotH;
-  const svg = document.createElementNS(svgNS, 'svg');
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'ci-svg');
-  const el = (tag, attrs, parent = svg) => { const n = document.createElementNS(svgNS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); parent.appendChild(n); return n; };
-  for (let h = 0; h <= yMax / 3600; h += stepH) {
-    const y = Y(h * 3600);
-    el('line', { x1: padL, x2: W, y1: y + .5, y2: y + .5, stroke: h ? '#1d1d22' : '#2c2c32' });
-    el('text', { x: padL - 5, y: y + 3, 'text-anchor': 'end', 'font-size': 9, fill: '#777780' }).textContent = h + 'h';
-  }
-  const slot = plotW / buckets.length, bw = Math.max(3, Math.min(28, slot - 4));
-  const every = Math.ceil(buckets.length / Math.max(1, Math.floor(plotW / 34)));
-  buckets.forEach((bk, i) => {
-    const cx = padL + slot * i + slot / 2, g = el('g', {});
-    let acc = 0;
-    [4, 3, 2, 1].forEach(f => {
-      const s = bk.t.byFocus[f]; if (!s) return;
-      const y0 = Y(acc), y1 = Y(acc + s), h = y0 - y1;
-      el('rect', { x: cx - bw / 2, y: y1 + (acc ? 1 : 0), width: bw, height: Math.max(1, h - (acc ? 1 : 0)), fill: FOCUS_LEVELS[f - 1].color }, g);
-      acc += s;
-    });
-    el('rect', { x: padL + slot * i, y: 0, width: slot, height: H - padB, fill: 'transparent' }, g);
-    const tt = bk.t;
-    el('title', {}, g).textContent = `${bk.tip}\n` + (tt.tracked
-      ? `${fmtHrs(tt.tracked)} tracked · ${fmtHrs(tt.focused)} focused · ${fmtHrs(tt.hard)} hard\n`
-        + FOCUS_LEVELS.slice().reverse().filter(l => tt.byFocus[l.v]).map(l => `${l.label} ${fmtHrs(tt.byFocus[l.v])}`).join(' · ')
-      : 'No check-ins') + (onPick ? `\nClick to see this ${weekly ? 'week' : 'day'}` : '');
-    if (onPick) { g.style.cursor = 'pointer'; g.addEventListener('click', () => onPick(bk)); }
-    if (i % every === 0 || i === buckets.length - 1) {
-      el('text', { x: cx, y: H - 3, 'text-anchor': 'middle', 'font-size': 9, fill: bk.key === todayStr || (weekly && bk.to === todayStr) ? '#d0d0c8' : '#777780' }).textContent = bk.label;
+  const draw = (W, H) => {
+    const padL = 26, padB = 16, plotW = W - padL, plotH = H - padB - 6;
+    const maxS = Math.max(3600, ...buckets.map(bk => bk.t.tracked), typ || 0);
+    const stepH = maxS / 3600 > 8 ? (weekly ? 10 : 4) : maxS / 3600 > 4 ? 2 : 1;
+    const yMax = Math.ceil(maxS / 3600 / stepH) * stepH * 3600;
+    const Y = s => 6 + plotH - s / yMax * plotH;
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'ci-svg');
+    const el = (tag, attrs, parent = svg) => { const n = document.createElementNS(svgNS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); parent.appendChild(n); return n; };
+    for (let h = 0; h <= yMax / 3600; h += stepH) {
+      const y = Y(h * 3600);
+      el('line', { x1: padL, x2: W, y1: y + .5, y2: y + .5, stroke: h ? '#1d1d22' : '#2c2c32' });
+      el('text', { x: padL - 5, y: y + 3, 'text-anchor': 'end', 'font-size': 9, fill: '#777780' }).textContent = h + 'h';
     }
-  });
-  if (typ) {
-    const y = Y(typ);
-    el('line', { x1: padL, x2: W, y1: y, y2: y, stroke: '#c8a537', 'stroke-dasharray': '4 3', 'stroke-width': 1, opacity: .8 });
-  }
-  card.appendChild(svg);
+    const slot = plotW / buckets.length, bw = Math.max(3, Math.min(28, slot - 4));
+    const every = Math.ceil(buckets.length / Math.max(1, Math.floor(plotW / 34)));
+    buckets.forEach((bk, i) => {
+      const cx = padL + slot * i + slot / 2, g = el('g', {});
+      let acc = 0;
+      [4, 3, 2, 1].forEach(f => {
+        const s = bk.t.byFocus[f]; if (!s) return;
+        const y0 = Y(acc), y1 = Y(acc + s), h = y0 - y1;
+        el('rect', { x: cx - bw / 2, y: y1 + (acc ? 1 : 0), width: bw, height: Math.max(1, h - (acc ? 1 : 0)), fill: FOCUS_LEVELS[f - 1].color }, g);
+        acc += s;
+      });
+      el('rect', { x: padL + slot * i, y: 0, width: slot, height: H - padB, fill: 'transparent' }, g);
+      const tt = bk.t;
+      el('title', {}, g).textContent = `${bk.tip}\n` + (tt.tracked
+        ? `${fmtHrs(tt.tracked)} tracked · ${fmtHrs(tt.focused)} focused · ${fmtHrs(tt.hard)} hard\n`
+          + FOCUS_LEVELS.slice().reverse().filter(l => tt.byFocus[l.v]).map(l => `${l.label} ${fmtHrs(tt.byFocus[l.v])}`).join(' · ')
+        : 'No check-ins') + (onPick ? `\nClick to see this ${weekly ? 'week' : 'day'}` : '');
+      if (onPick) { g.style.cursor = 'pointer'; g.addEventListener('click', () => onPick(bk)); }
+      if (i % every === 0 || i === buckets.length - 1) {
+        el('text', { x: cx, y: H - 3, 'text-anchor': 'middle', 'font-size': 9, fill: bk.key === todayStr || (weekly && bk.to === todayStr) ? '#d0d0c8' : '#777780' }).textContent = bk.label;
+      }
+    });
+    if (typ) {
+      const y = Y(typ);
+      el('line', { x1: padL, x2: W, y1: y, y2: y, stroke: '#c8a537', 'stroke-dasharray': '4 3', 'stroke-width': 1, opacity: .8 });
+    }
+    return svg;
+  };
+  let box = null;
+  if (fill) {
+    box = document.createElement('div'); box.className = 'ci-fill';
+    card.classList.add('ci-fill-card'); card.appendChild(box);
+  } else card.appendChild(draw(Math.max(240, card.clientWidth - 34), 130));
   // The typical line is labelled in the legend, where it can't sit on a bar
   card.insertAdjacentHTML('beforeend', ciLegend(false).replace(/<\/div>$/, (typ
     ? `<span><i style="height:0;border-top:1px dashed #c8a537;width:14px"></i>your typical focused ${weekly ? 'week' : 'day'}: ${fmtHrs(typ)}</span>`
     : `<span>· your typical shows after ${weekly ? '2 weeks' : '5 days'} of check-ins</span>`) + '</div>'));
+  if (!box) return;
+  // The row's height settles only once every module has drawn, so redraw
+  // whenever the box changes size (the SVG is absolute, so it can't feed back)
+  let size = '';
+  const fit = () => {
+    const W = Math.max(240, box.clientWidth), H = Math.max(130, box.clientHeight);
+    if (W + 'x' + H === size) return;
+    size = W + 'x' + H; box.replaceChildren(draw(W, H));
+  };
+  fit();
+  if (typeof ResizeObserver === 'undefined') return;
+  const ro = new ResizeObserver(() => { if (!box.isConnected) ro.disconnect(); else fit(); });
+  ro.observe(box);
 }
 
 // Tracked hours per day (or per week past 14 days) on the dashboard
@@ -4440,7 +4464,7 @@ function dashHourTrend(b, x) {
   const from = addDays(x.todayStr, -(x.days - 1));
   const buckets = ciBuckets(weekly ? startOfWeek(from) : from, x.todayStr, weekly, byDay);
   if (!buckets.some(bk => bk.t.tracked)) return dashMuted(card, `No check-ins in the last ${x.days} days.`);
-  ciHoursChart(card, buckets, weekly, byDay);
+  ciHoursChart(card, buckets, weekly, byDay, null, true);
 }
 
 function renderFocus(c) {
