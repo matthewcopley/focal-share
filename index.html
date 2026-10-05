@@ -295,6 +295,10 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 #recur-days-wrap.show{display:flex}
 #recur-days-wrap input[type=number]{width:60px;padding:5px 8px;border:1px solid var(--border);border-radius:var(--r-btn);font-size:13px;color:var(--text);background:var(--surface);outline:none;font-family:inherit}
 #recur-days-wrap input[type=number]:focus{border-color:var(--accent-dim)}
+#f-recur-anchor{display:none;align-items:center;flex-wrap:wrap;gap:4px 6px;margin:-4px 0 14px;font-size:12px;color:var(--text-muted)}
+#f-recur-anchor.show{display:flex}
+#f-recur-anchor b{font-weight:500;color:var(--text)}
+#f-recur-anchor .ti{font-size:14px}
 /* ── Project status badges ── */
 .proj-status{padding:2px 8px;border-radius:var(--r-pill);font-size:11px;font-weight:600;white-space:nowrap}
 .proj-status-not-started{background:var(--border);color:var(--text-muted)}
@@ -986,6 +990,7 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
         </div>
       </div>
     </div>
+    <div id="f-recur-anchor"></div>
     <div class="form-group">
       <label>Description</label>
       <textarea id="f-desc" placeholder="Optional notes..."></textarea>
@@ -1342,6 +1347,7 @@ const S = {
   editingProject: null,
   modalSubs: [],
   copyFrom: null,
+  modalAnchor: null,     // {due, anchor, snoozed} of the recurring task the modal opened on
   saveTimer: null,
   lastCat: null,
   sort: 'due',   // task lists open sorted by due date — see setView()
@@ -1488,42 +1494,101 @@ function nextOccurrence(dateStr, recur) {
 function snoozeLive(t) { return !!t.snoozedUntil && t.due === t.snoozedUntil; }
 function isSnoozed(t)  { return !t.done && snoozeLive(t) && t.snoozedUntil > today(); }
 
-// Due date of the occurrence that follows `t`. A snoozed occurrence steps from its
-// *original* due date, so snoozing one instance never shifts the rest of the series;
-// occurrences the snooze jumped past are skipped rather than spawned overdue.
-function nextRecurDue(t) {
-  if (!t.recur) return null;
-  if (!snoozeLive(t) || !t.snoozedFrom) return nextOccurrence(t.due || today(), t.recur);
-  let nx = nextOccurrence(t.snoozedFrom, t.recur), guard = 0;
-  while (nx && nx <= t.due && guard++ < 5000) {
-    const n2 = nextOccurrence(nx, t.recur);
-    if (!n2 || n2 <= nx) break;
-    nx = n2;
+// ── Weekend dates on recurring tasks ────────────────────────────────────────
+// An occurrence that lands on a Saturday or Sunday is due on the following Monday
+// (or the Friday before, or left alone: prefs row `recur_weekend`, Settings). The
+// date the schedule produced is kept as the occurrence's anchor (tasks.recurAnchor),
+// and the next occurrence counts from the anchor, not from the moved due date.
+// Otherwise a monthly task on the 1st would slide to the 2nd for good the first
+// time the 1st fell on a Sunday. recurAnchor is '' when it equals due.
+const RECUR_WEEKEND_PREF = 'recur_weekend';   // 'next' (default) | 'prev' | 'off'
+function recurWeekendMode() {
+  const v = getPref(RECUR_WEEKEND_PREF);
+  return v === 'prev' || v === 'off' ? v : 'next';
+}
+// Back off a weekend day to the Friday before (Sat→Fri, Sun→Fri)
+function backWeekend(dateStr) {
+  const day = new Date(dateStr + 'T12:00:00').getDay();
+  if (day === 6) return addDays(dateStr, -1);
+  if (day === 0) return addDays(dateStr, -2);
+  return dateStr;
+}
+// The due date for an occurrence the schedule put on `anchor`
+function recurShift(anchor, mode = recurWeekendMode()) {
+  if (!anchor || mode === 'off') return anchor;
+  return mode === 'prev' ? backWeekend(anchor) : skipWeekend(anchor);
+}
+// The schedule date this occurrence counts from. The stored anchor holds only while the
+// due date (the pre-snooze one, if snoozed) is still that anchor moved off the weekend
+// in either direction, so it survives a change of setting. Edit the due date by hand
+// and it lapses, the way a snooze does: the new date becomes the schedule.
+function recurAnchor(t) {
+  const base = (snoozeLive(t) && t.snoozedFrom) ? t.snoozedFrom : (t.due || '');
+  const a = t.recurAnchor || '';
+  if (a && base && (base === a || base === skipWeekend(a) || base === backWeekend(a))) return a;
+  return base;
+}
+// The first occurrence after `anchor` whose due date falls after `after`. The floor
+// skips occurrences a snooze jumped past, and two anchors moved onto the same Monday
+// (every:1 over a weekend) so they don't stack up as duplicates.
+function stepRecur(anchor, recur, after) {
+  let a = nextOccurrence(anchor, recur), guard = 0;
+  while (a && recurShift(a) <= after && guard++ < 5000) {
+    const n = nextOccurrence(a, recur);
+    if (!n || n <= a) break;
+    a = n;
   }
-  return nx;
+  return a ? { anchor: a, due: recurShift(a) } : null;
 }
 
+// The occurrence that follows `t`: {anchor, due}. A snoozed occurrence steps from its
+// *original* date, so snoozing one instance never shifts the rest of the series.
+function nextRecur(t) {
+  if (!t.recur) return null;
+  return stepRecur(recurAnchor(t) || today(), t.recur, t.due || '');
+}
+function nextRecurDue(t) { const n = nextRecur(t); return n ? n.due : null; }
+
+// Bring an open recurring task's due date in line with its anchor and the weekend
+// setting. A live snooze is left alone: its due date is one the user picked.
+function normalizeRecurDue(t) {
+  if (!t.recur || t.done || snoozeLive(t)) return false;
+  const a = recurAnchor(t); if (!a) return false;
+  const due = recurShift(a), anchor = due === a ? '' : a;
+  if (t.due === due && (t.recurAnchor || '') === anchor) return false;
+  t.due = due; t.recurAnchor = anchor;
+  return true;
+}
+// Every task, on load, on each poll (catches tasks the inbox or the launcher's flusher
+// added) and when the setting changes. Not logged: it isn't the user moving a date, and
+// a "Due:" changelog line would be counted as a deferral by backfillDeferrals().
+function normalizeRecurDues() {
+  let n = 0;
+  for (const t of S.tasks) if (normalizeRecurDue(t)) n++;
+  return n;
+}
+
+// Upcoming occurrences of `task` for the next year: [{anchor, due}], soonest first
 function recurOccurrences(task) {
   if (!task.recur || task.done) return [];
   const start = today();
   const end   = addDays(start, 365);
   const out   = [];
-  let cur = task.due || start;
-  // The task's own due date may be a snoozed one — step off it on the original schedule
-  const step = d => d === task.due ? nextRecurDue(task) : nextOccurrence(d, task.recur);
+  let cur = { anchor: recurAnchor(task) || task.due || start, due: task.due || start };
+  const step = c => stepRecur(c.anchor, task.recur, c.due);
   // advance past already-elapsed occurrences
   let guard = 0;
-  while (cur < start && guard++ < 5000) {
+  while (cur.due < start && guard++ < 5000) {
     const nx = step(cur);
-    if (!nx || nx <= cur) break;
+    if (!nx || nx.anchor <= cur.anchor) break;
     cur = nx;
   }
   // collect
   guard = 0;
-  while (cur <= end && guard++ < 500) {
+  while (cur.due <= end && guard++ < 500) {
     out.push(cur);
     const nx = step(cur);
-    if (!nx || nx <= cur) break;
+    if (!nx || nx.anchor <= cur.anchor) break;
     cur = nx;
   }
   return out;
@@ -1667,7 +1732,7 @@ function downloadBackup(ts) {
 // of the database; rows() is what gets saved; order is how dbLoadAll sorts.
 const DB_TABLES = [
   { name:'tasks', key:'id', order:'id',
-    cols:['id','title','priority','category','due','recur','description','done','subtasks','aiRank','aiReason','created','notes','projectId','teamFlag','completedAt','snoozedUntil','snoozedFrom','deferrals','nextStep'],
+    cols:['id','title','priority','category','due','recur','description','done','subtasks','aiRank','aiReason','created','notes','projectId','teamFlag','completedAt','snoozedUntil','snoozedFrom','deferrals','nextStep','recurAnchor'],
     rows: () => S.tasks, set: v => { S.tasks = v; },
     from: o => {
       let subs=[]; try { subs=JSON.parse(o.subtasks||'[]'); } catch(e){}
@@ -1678,7 +1743,7 @@ const DB_TABLES = [
         projectId:o.projectId!=null?o.projectId:null,
         teamFlag:o.teamFlag===1, completedAt:o.completedAt||'',
         snoozedUntil:o.snoozedUntil||'', snoozedFrom:o.snoozedFrom||'',
-        deferrals:toInt(o.deferrals, 0), nextStep:o.nextStep||'' };
+        deferrals:toInt(o.deferrals, 0), nextStep:o.nextStep||'', recurAnchor:o.recurAnchor||'' };
     },
     to: t => [
       toInt(t.id, 0), String(t.title || ''), toInt(t.priority, 3), String(t.category || ''),
@@ -1687,6 +1752,7 @@ const DB_TABLES = [
       String(t.created || new Date().toISOString()), String(t.notes || ''), toIntOrNull(t.projectId),
       t.teamFlag ? 1 : 0, String(t.completedAt || ''), String(t.snoozedUntil || ''),
       String(t.snoozedFrom || ''), toInt(t.deferrals, 0), String(t.nextStep || ''),
+      String(t.recurAnchor || ''),
     ] },
   { name:'projects', key:'id', order:'id',
     cols:['id','title','status','progress','progressManual','startDate','dueDate','type','jobNumber','notes','created','noteList'],
@@ -2007,6 +2073,7 @@ function migrateDB(db = S.db) {
     "ALTER TABLE tasks ADD COLUMN snoozedFrom TEXT DEFAULT ''",
     "ALTER TABLE tasks ADD COLUMN deferrals INTEGER DEFAULT 0",
     "ALTER TABLE tasks ADD COLUMN nextStep TEXT DEFAULT ''",
+    "ALTER TABLE tasks ADD COLUMN recurAnchor TEXT DEFAULT ''",
     `CREATE TABLE IF NOT EXISTS changelog (id INTEGER PRIMARY KEY, ts TEXT DEFAULT '', entityType TEXT DEFAULT '', entityId INTEGER, action TEXT DEFAULT '', description TEXT DEFAULT '')`,
     // Billing module removed 2026-07 — drop leftover tables from older DBs
     "DROP TABLE IF EXISTS billing_jobs",
@@ -2183,7 +2250,7 @@ const _reviewSeen = new Set();   // queue_ids already announced with a toast
 
 function taskFromQueued(q) {
   const p = parseInt(q.priority, 10);
-  return {
+  const t = {
     title: String(q.title || '').trim(),
     priority: (p >= 1 && p <= 4) ? p : 3,
     category: normalizeCategory(q.category), due: String(q.due || ''),
@@ -2194,6 +2261,8 @@ function taskFromQueued(q) {
     projectId: (q.projectId != null && q.projectId !== '') ? parseInt(q.projectId, 10) : null,
     teamFlag: !!q.teamFlag, completedAt: '',
   };
+  normalizeRecurDue(t);     // a weekend first occurrence moves like any other
+  return t;
 }
 
 async function ackQueued(ids) {
@@ -2226,6 +2295,9 @@ async function drainPendingTasks() {
 
     syncReview(list.filter(q => q.review));
     list = list.filter(q => !q.review);
+    // Recurring tasks the launcher's flusher inserted, or another device saved, can still
+    // be due on a weekend; this also picks up a weekend setting changed elsewhere
+    if (normalizeRecurDues()) { markUnsaved(); rerenderAfterSync(); }
     if (_opsQueue.length) runOps();
     if (!list.length) return;
 
@@ -2991,16 +3063,16 @@ function renderRecurring(c) {
   const tasks=S.tasks.filter(t=>(!t.done||S.pendingDone.has(t.id))&&t.recur);
   if (!tasks.length) { c.appendChild(mkEmpty('ti-refresh','No recurring tasks')); return; }
 
-  // Build flat list of {date, task}
+  // Build flat list of {date, anchor, task}
   const rows=[];
-  tasks.forEach(task=>{ recurOccurrences(task).forEach(date=>rows.push({date,task})); });
+  tasks.forEach(task=>{ recurOccurrences(task).forEach(o=>rows.push({date:o.due,anchor:o.anchor,task})); });
   rows.sort((a,b)=>a.date.localeCompare(b.date));
 
   if (!rows.length) { c.appendChild(mkEmpty('ti-refresh','No upcoming occurrences')); return; }
 
   const t=today();
   let curMonth='';
-  rows.forEach(({date,task})=>{
+  rows.forEach(({date,anchor,task})=>{
     // Month header
     const month=date.slice(0,7);
     if (month!==curMonth) {
@@ -3020,6 +3092,13 @@ function renderRecurring(c) {
     const cc=catColor(task.category);
 
     row.innerHTML=`<span class="recur-date">${dateLabel}</span><span class="recur-title">${esc(task.title)}</span><span class="recur-meta">${task.category?`<span class="cat-pill" style="background:${cc}">${esc(task.category)}</span>`:''}<span class="recur-interval">${rl}</span></span>`;
+    if (anchor && anchor!==date) {
+      // Moved off a weekend: say from where, since the next one counts from that date
+      const mv=document.createElement('span'); mv.className='recur-interval';
+      mv.textContent='from '+fmtSnoozeDate(anchor);
+      mv.title='Scheduled for '+fmtSnoozeDate(anchor)+', a weekend; moved per Settings';
+      row.querySelector('.recur-meta').prepend(mv);
+    }
     c.appendChild(row);
   });
 }
@@ -5141,6 +5220,24 @@ async function renderSettings(c) {
       style="width:200px;font-size:12px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">`;
   fuRow.querySelector('input').onchange = e => { localStorage.setItem('focal_followup_cats', e.target.value.trim()); showToast('Follow-up categories saved'); };
   genSec.appendChild(fuRow);
+
+  // Recurring tasks that land on a weekend — in prefs, so every device moves them alike
+  const rwRow = document.createElement('div');
+  rwRow.className = 'settings-row';
+  const rwMode = recurWeekendMode();
+  rwRow.innerHTML = `<div><div style="font-size:13px">Recurring tasks due on a weekend</div><label>The schedule still counts from the weekend date. Daily tasks always skip weekends.</label></div>
+    <select style="font-size:12px;padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit">
+      <option value="next"${rwMode==='next'?' selected':''}>Move to Monday</option>
+      <option value="prev"${rwMode==='prev'?' selected':''}>Move to Friday before</option>
+      <option value="off"${rwMode==='off'?' selected':''}>Leave on the weekend</option>
+    </select>`;
+  rwRow.querySelector('select').onchange = e => {
+    setPref(RECUR_WEEKEND_PREF, e.target.value === 'next' ? null : e.target.value);
+    const n = normalizeRecurDues();
+    if (n) { markUnsaved(); ruleRank(); }
+    showToast(n ? `${n} recurring task${n>1?'s':''} rescheduled` : 'Saved');
+  };
+  genSec.appendChild(rwRow);
 
   // ── Streak pause ──────────────────────────────────
   const pauseRow = document.createElement('div');
@@ -7636,9 +7733,9 @@ function completeTask(id, closeSubs, quiet=false) {
   // deferring it past the 2s auto-save means a tab close mid-grace kills the recurrence chain
   let spawnId=null;
   if (t.recur) {
-    const nextDue = nextRecurDue(t);
-    if (nextDue) {
-      const spawn={...t,id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',due:nextDue,snoozedUntil:'',snoozedFrom:'',deferrals:0,nextStep:'',created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
+    const nx = nextRecur(t);
+    if (nx) {
+      const spawn={...t,id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',due:nx.due,recurAnchor:nx.due===nx.anchor?'':nx.anchor,snoozedUntil:'',snoozedFrom:'',deferrals:0,nextStep:'',created:new Date().toISOString(),subtasks:(t.subtasks||[]).map(s=>{const c={...s,done:false}; delete c.doneAt; return c;})};
       S.tasks.push(spawn);
       spawnId=spawn.id;
     }
@@ -7770,6 +7867,9 @@ function duplicateTask(task) {
 function openModal(task, presetProjectId, asCopy) {
   S.editingTask=(task && !asCopy) ? task : null;
   S.copyFrom=asCopy ? {notes:task.notes||'', teamFlag:!!task.teamFlag} : null;
+  // The schedule date behind the due date shown, so the hint (and a duplicate) keep it
+  // while the due date is left as it is
+  S.modalAnchor=(task && task.recur) ? {due:task.due||'', anchor:recurAnchor(task), snoozed:snoozeLive(task)} : null;
   S.modalSubs=task ? JSON.parse(JSON.stringify(task.subtasks||[])) : [];
   document.getElementById('modal-title').textContent=S.reviewing?'Review Task':asCopy?'Duplicate Task':(task?'Edit Task':'New Task');
   document.getElementById('f-title').value=task?task.title:'';
@@ -7784,6 +7884,7 @@ function openModal(task, presetProjectId, asCopy) {
     document.getElementById('f-recur').value=rv;
     document.getElementById('recur-days-wrap').classList.remove('show');
   }
+  updateRecurHint();
   document.getElementById('f-desc').value=task?task.description:'';
   _syncDescImgs?.();
   // Category select
@@ -7813,7 +7914,7 @@ function closeModal() {
   const fresh = S.editingTask && _justAdded.has(S.editingTask.id) ? S.editingTask : null;
   document.getElementById('modal-overlay').classList.remove('open');
   document.getElementById('f-desc-imgs').innerHTML='';
-  S.editingTask=null; S.modalSubs=[]; S.copyFrom=null; S.reviewing=null;
+  S.editingTask=null; S.modalSubs=[]; S.copyFrom=null; S.reviewing=null; S.modalAnchor=null;
   if (fresh) announceNewTask(fresh);
 }
 
@@ -7840,11 +7941,46 @@ function addModalSub() {
 // changed).
 function applyTaskEdit(t, data, suffix='') {
   const snap = {...t};
+  // A due date typed onto a recurring task is its new schedule date: it becomes the
+  // anchor, and the due date moves off a weekend (Settings). Done before the diff, so
+  // the changelog and the deferral count see the date the task is actually due.
+  const recur = 'recur' in data ? data.recur : t.recur;
+  if (!recur) data = {...data, recurAnchor: ''};
+  else if ('due' in data && (data.due !== snap.due || !snap.recur)) {
+    const due = recurShift(data.due);
+    data = {...data, due, recurAnchor: due === data.due ? '' : data.due};
+  }
   const diff = diffLog(snap, data, TASK_DIFF_FIELDS.filter(([k]) => k in data));
   Object.assign(t, data);
   if ('due' in data && isDeferral(snap.due, data.due) && !snap.done) t.deferrals=(snap.deferrals||0)+1;
   logChange('task', t.id, 'update', `"${t.title}"${diff ? ' — ' + diff : ''}${suffix}`);
   return diff;
+}
+
+function modalRecur() {
+  const v=document.getElementById('f-recur').value;
+  if (v!=='every') return v;
+  return 'every:'+Math.max(1, parseInt(document.getElementById('f-recur-days').value)||7);
+}
+
+// Under the due date of a recurring task: the date its schedule counts from, the due
+// date it gets (moved off a weekend, per Settings) and the one after. Mirrors what
+// applyTaskEdit() will save: leave the due date alone and the anchor stays; type one
+// and that date becomes the anchor.
+function updateRecurHint() {
+  const el=document.getElementById('f-recur-anchor');
+  const recur=modalRecur(), typed=document.getElementById('f-due').value;
+  el.classList.toggle('show', !!recur);
+  if (!recur) return;
+  if (!typed) { el.innerHTML='<i class="ti ti-calendar-repeat"></i>Set a due date: the schedule counts from it'; return; }
+  const m=S.modalAnchor, kept=m && m.anchor && typed===m.due;
+  const anchor=kept ? m.anchor : typed, due=kept ? typed : recurShift(typed);
+  const why=due===anchor ? '' : (kept && m.snoozed) ? 'snoozed' : 'weekend';
+  const nx=stepRecur(anchor, recur, due);
+  el.innerHTML=`<i class="ti ti-calendar-repeat"></i><span>Anchor <b>${esc(fmtSnoozeDate(anchor))}</b></span>`
+    + (why ? `<span>· due <b>${esc(fmtSnoozeDate(due))}</b> (${why})</span>` : '')
+    + (nx ? `<span>· next due ${esc(fmtSnoozeDate(nx.due))}${nx.due!==nx.anchor?' (weekend)':''}</span>` : '');
+  el.title='The schedule counts from the anchor, so moving a due date off a weekend never shifts the rest of the series. Weekend handling is in Settings.';
 }
 
 function saveModal() {
@@ -7860,8 +7996,7 @@ function saveModal() {
     } else cat='';
   }
   S.lastCat=cat;
-  let recur=document.getElementById('f-recur').value;
-  if (recur==='every') { const d=Math.max(1, parseInt(document.getElementById('f-recur-days').value)||7); recur='every:'+d; }
+  const recur=modalRecur();
   const projVal=document.getElementById('f-project').value;
   const teamFlag=document.getElementById('f-team').checked;
   const data={title,priority:+document.getElementById('f-priority').value,category:cat,due:document.getElementById('f-due').value,recur,description:document.getElementById('f-desc').value.trim(),subtasks:S.modalSubs,projectId:projVal?parseInt(projVal):null,teamFlag};
@@ -7870,6 +8005,9 @@ function saveModal() {
   } else {
     const cf=S.copyFrom, rq=S.reviewing;
     const task={id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',created:rq?.created||new Date().toISOString(),notes:cf?.notes||'',...data};
+    const ma=S.modalAnchor;   // a duplicate keeps the original's schedule date
+    if (cf && ma && task.recur && task.due===ma.due && !ma.snoozed) task.recurAnchor=ma.anchor;
+    normalizeRecurDue(task);
     S.tasks.push(task);
     logChange('task', task.id, 'create', (rq?'Approved from review: "':cf?'Duplicated task: "':'Created task: "') + task.title + '"');
     announceNewTask(task);
@@ -8117,7 +8255,7 @@ async function init() {
       await _bootFromBytes(await res.arrayBuffer());
       _base = readRows(S.db);     // the launcher's copy, before this tab changes anything
       S.usingLauncher = true;
-      markSaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true);
+      markSaved(); if (normalizeRecurDues()) markUnsaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true);
       // Pull any tasks external agents queued while Focal was closed, then keep
       // watching. Background tabs throttle the interval, so also drain on refocus.
       drainPendingTasks();
@@ -8135,7 +8273,7 @@ async function init() {
         const perm = await handle.queryPermission({mode:'readwrite'});
         if (perm === 'granted') {
           await initDB(handle);
-          markSaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true); return;
+          markSaved(); if (normalizeRecurDues()) markUnsaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true); return;
         } else {
           S.dbHandle = handle; // keep for later prompt on first save
         }
@@ -8145,7 +8283,7 @@ async function init() {
 
   // 3. Nothing found — start with an empty DB, no dialog
   await initDB();
-  markSaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true);
+  markSaved(); if (normalizeRecurDues()) markUnsaved(); ruleRank(); render(); setupEvents(); launchBoot(); autoBackup(true);
 }
 
 async function importFromCSV() {
@@ -8209,7 +8347,7 @@ function setupEvents() {
     const f = e.target.files[0]; if(!f) return;
     // Do NOT call setupEvents() here — listeners are already attached and
     // re-attaching duplicates every handler (double task creation, etc.)
-    await initDB(f); markSaved(); ruleRank(); render();
+    await initDB(f); markSaved(); if (normalizeRecurDues()) markUnsaved(); ruleRank(); render();
     // With the launcher, opening a file means "use this data": replace its copy
     // outright instead of merging (merging would keep rows the file doesn't have).
     if (S.usingLauncher) { _forcePush = true; markUnsaved(); }
@@ -8276,7 +8414,8 @@ function setupEvents() {
   });
   document.getElementById('add-subtask-btn').addEventListener('click',addModalSub);
   document.getElementById('subtask-input').addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();addModalSub();} });
-  document.getElementById('f-recur').addEventListener('change',e=>{ document.getElementById('recur-days-wrap').classList.toggle('show',e.target.value==='every'); });
+  document.getElementById('f-recur').addEventListener('change',e=>{ document.getElementById('recur-days-wrap').classList.toggle('show',e.target.value==='every'); updateRecurHint(); });
+  ['f-due','f-recur-days'].forEach(id=>document.getElementById(id).addEventListener('input',updateRecurHint));
   // Idea modal
   document.getElementById('idea-modal-cancel').addEventListener('click', closeIdeaModal);
   document.getElementById('idea-modal-save').addEventListener('click', saveIdeaModal);
