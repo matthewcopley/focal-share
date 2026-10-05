@@ -750,6 +750,7 @@ body.dash-sizing,body.dash-sizing *{cursor:ew-resize!important;user-select:none}
 .ci-legend i{display:inline-block;width:9px;height:9px}
 .ci-sum{font-size:11px;color:var(--text-muted);margin:2px 0 10px}
 .ci-svg{width:100%;display:block}
+.ci-view-card{margin-bottom:18px}
 .ci-days{display:flex;gap:4px;flex-wrap:wrap}
 .ci-days button{padding:4px 8px;border:1px solid var(--border);background:var(--bg);color:var(--text-dim);cursor:pointer;font-family:inherit;font-size:11px}
 .ci-days button.on{border-color:var(--accent);color:var(--accent)}
@@ -1369,7 +1370,7 @@ const S = {
   checkins: [],          // hourly check-ins — permanent, like sessions
   checkinDraft: null,    // the open check-in panel's fields
   hoursDay: '',          // day shown by the dashboard's Hours timeline ('' = today)
-  ciFilter: 'week',      // Check-ins view — same keys as doneFilter, over the day a check-in ended
+  ciFilter: 'today',     // Check-ins view — same keys as doneFilter, over the day a check-in ended
   ciFrom: '',
   ciTo: '',
 };
@@ -2933,6 +2934,7 @@ function setView(v) {
   S.sort = v==='focus' ? 'default' : 'due';
   if (v==='done') { S.doneFilter='today'; S.doneFrom=''; S.doneTo=''; }
   if (v==='recent') { S.addedFilter='week'; S.addedFrom=''; S.addedTo=''; }
+  if (v==='checkins') { S.ciFilter='today'; S.ciFrom=''; S.ciTo=''; }
   if (v==='upcoming') S.upcomingFilter='all';
   if (!isTaskView(v)) S.taskSearch='';
   if (v!=='projects') S.projFilters={ statusSingle:'', type:'', sort:'default', search:'' };
@@ -4166,20 +4168,13 @@ const ciLegend = withBreak => `<div class="ci-legend">` + FOCUS_LEVELS.map(l => 
 // One day as a strip: a block per check-in, colour = focus, height = difficulty.
 // Underneath, what the hours went into, finished or not.
 function dashHourDay(b, x) {
-  const svgNS = 'http://www.w3.org/2000/svg', cfg = checkinCfg();
+  const cfg = checkinCfg();
   const day = S.hoursDay && S.hoursDay <= x.todayStr ? S.hoursDay : x.todayStr, isToday = day === x.todayStr;
   const list = (ciByDay()[day] || []).sort((p, q) => p.started.localeCompare(q.started));
   const card = document.createElement('div');
   card.className = 'dash-breakdown-card';
-  const label = isToday ? 'Today' : day === addDays(x.todayStr, -1) ? 'Yesterday'
-    : new Date(day + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  card.innerHTML = `<div class="dash-breakdown-title ci-card-head"><span>Hours · ${label}</span><span class="ci-nav">`
-    + `<button class="launch-small-btn" data-d="-1" title="Previous day">‹</button>`
-    + `<button class="launch-small-btn" data-d="1" title="Next day"${isToday ? ' disabled' : ''}>›</button></span></div>`;
   b.appendChild(card);
-  card.querySelectorAll('[data-d]').forEach(btn => btn.onclick = () => {
-    const nd = addDays(day, +btn.dataset.d); S.hoursDay = nd >= x.todayStr ? '' : nd; renderContent();
-  });
+  ciDayHead(card, day, nd => { S.hoursDay = nd >= x.todayStr ? '' : nd; renderContent(); });
   const nowBtn = () => {
     if (!isToday) return;
     const more = document.createElement('div');
@@ -4194,7 +4189,26 @@ function dashHourDay(b, x) {
   }
   const t = ciTotals(list);
   card.insertAdjacentHTML('beforeend', `<div class="ci-sum">${fmtHrs(t.focused)} focused · ${fmtHrs(t.tracked)} tracked · ${fmtHrs(t.hard)} hard${t.brk ? ` · ${fmtHrs(t.brk)} break` : ''}</div>`);
+  ciDayStrip(card, day, list);
+  ciMovedForward(card, list, day, day, 6);
+  nowBtn();
+}
 
+// "Hours · Today" with ‹ › to step a day at a time; `go(day)` moves there
+function ciDayHead(card, day, go) {
+  const td = today(), isToday = day === td;
+  const label = isToday ? 'Today' : day === addDays(td, -1) ? 'Yesterday'
+    : new Date(day + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  card.insertAdjacentHTML('beforeend', `<div class="dash-breakdown-title ci-card-head"><span>Hours · ${label}</span><span class="ci-nav">`
+    + `<button class="launch-small-btn" data-d="-1" title="Previous day">‹</button>`
+    + `<button class="launch-small-btn" data-d="1" title="Next day"${isToday ? ' disabled' : ''}>›</button></span></div>`);
+  card.querySelectorAll('.ci-nav [data-d]').forEach(btn => btn.onclick = () => go(addDays(day, +btn.dataset.d)));
+}
+
+// The strip itself, plus its legend. `list` is that day's check-ins; the card
+// must already be in the DOM, since the strip is drawn for its width.
+function ciDayStrip(card, day, list) {
+  const svgNS = 'http://www.w3.org/2000/svg', cfg = checkinCfg(), isToday = day === today();
   // Time axis: the scheduled day, stretched to whatever was actually logged
   const slots = checkinSlots(day, cfg);
   let t0 = checkinDayStart(day, cfg).getTime(), t1 = (slots.length ? slots[slots.length - 1] : atMin(day, hmToMin(cfg.last))).getTime();
@@ -4235,50 +4249,64 @@ function dashHourDay(b, x) {
   if (isToday) { const px = Math.min(W - 1, X(Date.now())); el('line', { x1: px, x2: px, y1: top, y2: base + 3, stroke: '#c8a537', 'stroke-width': 1.5 }); }
   card.appendChild(svg);
   card.insertAdjacentHTML('beforeend', ciLegend(true));
+}
 
-  // Moved forward: each check-in's time split evenly across its tasks
+// Moved forward: each check-in's time split evenly across its tasks, over the
+// days from..to. A task finished in that window is "✓ done"; after it, "done later".
+function ciMovedForward(card, list, from, to, limit) {
   const per = new Map();
   list.forEach(k => { if (!k.focus || !k.taskIds.length) return; const s = ciSecs(k) / k.taskIds.length; k.taskIds.forEach(id => per.set(id, (per.get(id) || 0) + s)); });
   const rows = [...per.entries()].map(([id, s]) => ({ t: S.tasks.find(tt => tt.id === id), s })).filter(r => r.t).sort((p, q) => q.s - p.s);
-  if (rows.length) {
-    card.insertAdjacentHTML('beforeend', `<div class="dash-ft-part-label" style="margin:14px 0 2px">Moved forward</div>`);
-    rows.slice(0, 6).forEach(({ t: tk, s }) => {
-      const done = tk.done && tk.completedAt && localDate(new Date(tk.completedAt)) === day;
-      const r = document.createElement('div');
-      r.className = 'dash-list-row';
-      r.innerHTML = `<span class="dash-list-when" style="color:var(--text-muted)">${fmtMins(s)}</span><span class="dash-list-title">${esc(tk.title)}</span>`
-        + `<span class="dash-list-meta"${done ? ' style="color:#5fd59a"' : ''}>${done ? '✓ done' : tk.done ? 'done later' : 'in progress'}</span>`;
-      r.onclick = () => openModal(tk);
-      card.appendChild(r);
-    });
+  if (!rows.length) return;
+  card.insertAdjacentHTML('beforeend', `<div class="dash-ft-part-label" style="margin:14px 0 2px">Moved forward</div>`);
+  const mkRow = ({ t: tk, s }) => {
+    const cd = tk.done && tk.completedAt ? localDate(new Date(tk.completedAt)) : '';
+    const done = cd && cd >= from && cd <= to;
+    const r = document.createElement('div');
+    r.className = 'dash-list-row';
+    r.innerHTML = `<span class="dash-list-when" style="color:var(--text-muted)">${fmtMins(s)}</span><span class="dash-list-title">${esc(tk.title)}</span>`
+      + `<span class="dash-list-meta"${done ? ' style="color:#5fd59a"' : ''}>${done ? '✓ done' : tk.done ? (cd && cd < from ? 'done' : 'done later') : 'in progress'}</span>`;
+    r.onclick = () => openModal(tk);
+    return r;
+  };
+  rows.slice(0, limit).forEach(r => card.appendChild(mkRow(r)));
+  if (rows.length > limit) {
+    const more = document.createElement('div');
+    more.className = 'dash-list-more'; more.textContent = `+ ${rows.length - limit} more`;
+    more.onclick = () => { more.replaceWith(...rows.slice(limit).map(mkRow)); };
+    card.appendChild(more);
   }
-  nowBtn();
 }
 
-// Tracked hours per day (or per week past 14 days), stacked by focus with the
-// focused part on the baseline, against your own typical focused time
-function dashHourTrend(b, x) {
-  const svgNS = 'http://www.w3.org/2000/svg', byDay = ciByDay(), weekly = x.days > 14;
-  const card = mkDashCard(b, weekly ? 'Hours by week' : 'Hours by day');
-  const buckets = [];
+// Days from..to as chart buckets: one per day, or one per Monday-start week
+// (each clipped to from..to)
+function ciBuckets(from, to, weekly, byDay) {
+  const buckets = [], fmt = (d, o) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', o);
   if (weekly) {
-    for (let w = startOfWeek(addDays(x.todayStr, -(x.days - 1))); w <= x.todayStr; w = addDays(w, 7)) {
-      const l = []; for (let j = 0; j < 7; j++) l.push(...(byDay[addDays(w, j)] || []));
-      buckets.push({ key: w, label: new Date(w + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), tip: 'Week of ' + new Date(w + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), t: ciTotals(l) });
+    for (let w = startOfWeek(from); w <= to; w = addDays(w, 7)) {
+      const l = []; let a = '', z = '';
+      for (let j = 0; j < 7; j++) { const d = addDays(w, j); if (d < from || d > to) continue; a ||= d; z = d; l.push(...(byDay[d] || [])); }
+      buckets.push({ key: w, from: a, to: z, label: fmt(w, { month: 'short', day: 'numeric' }), tip: 'Week of ' + fmt(w, { month: 'short', day: 'numeric' }), t: ciTotals(l) });
     }
   } else {
-    for (let d = addDays(x.todayStr, -(x.days - 1)); d <= x.todayStr; d = addDays(d, 1)) {
-      const dt = new Date(d + 'T12:00:00');
-      buckets.push({ key: d, label: x.days <= 7 ? dt.toLocaleDateString('en-US', { weekday: 'short' }) : String(dt.getDate()),
-        tip: dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }), t: ciTotals(byDay[d] || []) });
-    }
+    const n = dayDiff(from, to) + 1;
+    for (let d = from; d <= to; d = addDays(d, 1))
+      buckets.push({ key: d, from: d, to: d, label: n <= 7 ? fmt(d, { weekday: 'short' }) : String(new Date(d + 'T12:00:00').getDate()),
+        tip: fmt(d, { weekday: 'short', month: 'short', day: 'numeric' }), t: ciTotals(byDay[d] || []) });
   }
-  if (!buckets.some(bk => bk.t.tracked)) return dashMuted(card, `No check-ins in the last ${x.days} days.`);
+  return buckets;
+}
+
+// Tracked hours per bucket, stacked by focus with the focused part on the
+// baseline, against your own typical focused time. `onPick(bucket)` makes the
+// bars clickable.
+function ciHoursChart(card, buckets, weekly, byDay, onPick) {
+  const svgNS = 'http://www.w3.org/2000/svg', todayStr = today();
   let typ = null;
   if (weekly) {
     const done = buckets.slice(0, -1).filter(bk => bk.t.tracked).map(bk => bk.t.focused);
     typ = done.length >= 2 ? ciMedian(done) : null;
-  } else typ = ciTypicalDay(byDay, x.todayStr);
+  } else typ = ciTypicalDay(byDay, todayStr);
 
   const W = Math.max(240, card.clientWidth - 34), H = 130, padL = 26, padB = 16, plotW = W - padL, plotH = H - padB - 6;
   const maxS = Math.max(3600, ...buckets.map(bk => bk.t.tracked), typ || 0);
@@ -4309,9 +4337,10 @@ function dashHourTrend(b, x) {
     el('title', {}, g).textContent = `${bk.tip}\n` + (tt.tracked
       ? `${fmtHrs(tt.tracked)} tracked · ${fmtHrs(tt.focused)} focused · ${fmtHrs(tt.hard)} hard\n`
         + FOCUS_LEVELS.slice().reverse().filter(l => tt.byFocus[l.v]).map(l => `${l.label} ${fmtHrs(tt.byFocus[l.v])}`).join(' · ')
-      : 'No check-ins');
+      : 'No check-ins') + (onPick ? `\nClick to see this ${weekly ? 'week' : 'day'}` : '');
+    if (onPick) { g.style.cursor = 'pointer'; g.addEventListener('click', () => onPick(bk)); }
     if (i % every === 0 || i === buckets.length - 1) {
-      el('text', { x: cx, y: H - 3, 'text-anchor': 'middle', 'font-size': 9, fill: bk.key === x.todayStr || (weekly && i === buckets.length - 1) ? '#d0d0c8' : '#777780' }).textContent = bk.label;
+      el('text', { x: cx, y: H - 3, 'text-anchor': 'middle', 'font-size': 9, fill: bk.key === todayStr || (weekly && bk.to === todayStr) ? '#d0d0c8' : '#777780' }).textContent = bk.label;
     }
   });
   if (typ) {
@@ -4323,6 +4352,16 @@ function dashHourTrend(b, x) {
   card.insertAdjacentHTML('beforeend', ciLegend(false).replace(/<\/div>$/, (typ
     ? `<span><i style="height:0;border-top:1px dashed #c8a537;width:14px"></i>your typical focused ${weekly ? 'week' : 'day'}: ${fmtHrs(typ)}</span>`
     : `<span>· your typical shows after ${weekly ? '2 weeks' : '5 days'} of check-ins</span>`) + '</div>'));
+}
+
+// Tracked hours per day (or per week past 14 days) on the dashboard
+function dashHourTrend(b, x) {
+  const byDay = ciByDay(), weekly = x.days > 14;
+  const card = mkDashCard(b, weekly ? 'Hours by week' : 'Hours by day');
+  const from = addDays(x.todayStr, -(x.days - 1));
+  const buckets = ciBuckets(weekly ? startOfWeek(from) : from, x.todayStr, weekly, byDay);
+  if (!buckets.some(bk => bk.t.tracked)) return dashMuted(card, `No check-ins in the last ${x.days} days.`);
+  ciHoursChart(card, buckets, weekly, byDay);
 }
 
 function renderFocus(c) {
@@ -7258,8 +7297,28 @@ function deleteCheckin(id) {
   showToast('Check-in deleted', { label: 'Undo', duration: 6000, action: () => { S.checkins.splice(i, 0, k); markUnsaved(); render(); updateCheckinPill(); } });
 }
 
-// The Check-ins view: every check-in, newest first, grouped by day, in the same
-// date window as Done. Click a row to edit it.
+// The Check-ins view's date window as [from, to] days, inclusive
+function ciRange() {
+  const td = today(), f = S.ciFilter;
+  const first = () => S.checkins.reduce((m, k) => { const d = ciDay(k); return !m || d < m ? d : m; }, '') || td;
+  if (f === 'yesterday') { const y = addDays(td, -1); return [y, y]; }
+  if (f === 'week') return [startOfWeek(td), td];
+  if (f === 'month') return [startOfMonth(td), td];
+  if (f === 'all') return [first(), td];
+  if (f === 'custom') { let a = S.ciFrom || first(), z = S.ciTo || td; if (a > z) [a, z] = [z, a]; return [a, z]; }
+  return [td, td];
+}
+// Point the Check-ins view at from..to (today alone is the 'today' preset)
+function setCiRange(from, to) {
+  const td = today();
+  if (from >= td) { S.ciFilter = 'today'; S.ciFrom = S.ciTo = ''; }
+  else { S.ciFilter = 'custom'; S.ciFrom = from; S.ciTo = to > td ? td : to; }
+  renderContent();
+}
+
+// The Check-ins view: the hours for the window (one day as the timeline strip,
+// longer as hours by day or week), what they moved forward, then every
+// check-in, newest first, grouped by day. Click a row to edit it.
 function renderCheckins(c) {
   c.innerHTML = '';
   const hdr = document.createElement('div'); hdr.className = 'content-header';
@@ -7268,7 +7327,7 @@ function renderCheckins(c) {
   c.appendChild(hdr);
   hdr.querySelector('#ci-past-btn').onclick = () => openCheckinEditor(null);
   hdr.querySelector('#ci-now-btn').onclick = openCheckin;
-  c.appendChild(mkDateRangeBar({ label: 'Logged on', filterKey: 'ciFilter', fromKey: 'ciFrom', toKey: 'ciTo', fallback: 'week' }));
+  c.appendChild(mkDateRangeBar({ label: 'Logged on', filterKey: 'ciFilter', fromKey: 'ciFrom', toKey: 'ciTo', fallback: 'today' }));
 
   if (!S.checkins.length) {
     const cfg = checkinCfg(), next = checkinSlots(today(), cfg).find(x => x > new Date());
@@ -7277,10 +7336,34 @@ function renderCheckins(c) {
     return;
   }
   const list = filterByDayRange(S.checkins, ciDay, 'ciFilter', 'ciFrom', 'ciTo').sort((p, q) => q.started.localeCompare(p.started));
-  if (!list.length) { c.appendChild(mkEmpty('ti-clock-check', 'No check-ins in this range')); return; }
+  const [from, to] = ciRange(), oneDay = from === to;
+  if (!list.length) {
+    const cfg = checkinCfg(), next = to === today() && checkinSlots(to, cfg).find(x => x > new Date());
+    const msg = !oneDay ? 'No check-ins in this range' : to !== today() ? 'No check-ins this day'
+      : !cfg.on ? 'No check-ins today. Hourly check-ins are off (Settings).' : next ? `No check-ins yet today. The next one comes up at ${fmtHM(next)}.` : 'No check-ins today';
+    c.appendChild(mkEmpty('ti-clock-check', msg));
+    if (oneDay) {   // keep ‹ › so an empty day isn't a dead end
+      const card = document.createElement('div'); card.className = 'dash-breakdown-card ci-view-card';
+      c.insertBefore(card, c.lastChild);
+      ciDayHead(card, to, d => setCiRange(d, d));
+    }
+    return;
+  }
 
   const tot = ciTotals(list);
   c.insertAdjacentHTML('beforeend', `<div class="ci-sum">${list.length} check-in${list.length === 1 ? '' : 's'} · ${fmtHrs(tot.focused)} focused · ${fmtHrs(tot.tracked)} tracked · ${fmtHrs(tot.hard)} hard${tot.brk ? ` · ${fmtHrs(tot.brk)} break` : ''}</div>`);
+  const card = document.createElement('div'); card.className = 'dash-breakdown-card ci-view-card';
+  c.appendChild(card);
+  if (oneDay) {
+    ciDayHead(card, to, d => setCiRange(d, d));
+    ciDayStrip(card, to, [...list].reverse());
+  } else {
+    // Daily bars up to a month; past that, a bar per week
+    const weekly = dayDiff(from, to) > 31, byDay = ciByDay();
+    card.insertAdjacentHTML('beforeend', `<div class="dash-breakdown-title">${weekly ? 'Hours by week' : 'Hours by day'}</div>`);
+    ciHoursChart(card, ciBuckets(from, to, weekly, byDay), weekly, byDay, bk => setCiRange(bk.from, bk.to));
+  }
+  ciMovedForward(card, list, from, to, oneDay ? 8 : 10);
   const byDay = new Map();
   list.forEach(k => { const d = ciDay(k); if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(k); });
   for (const [day, ks] of byDay) {
