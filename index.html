@@ -250,6 +250,9 @@ body{font-family:var(--font-mono);font-size:13px;font-weight:300;color:var(--tex
 .new-task-btn{padding:5px 12px;border-radius:var(--r-btn);border:1px solid var(--border);background:transparent;cursor:pointer;font-size:11px;font-family:inherit;letter-spacing:0.05em;color:var(--text-dim);display:flex;align-items:center;gap:5px;transition:background .1s,color .1s}
 .new-task-btn:hover{background:rgba(255,255,255,.03);color:var(--text)}
 .new-task-btn i{font-size:15px}
+.hdr-right{display:flex;gap:8px}
+.new-task-btn.ci-due{border-color:#2f6b4b;color:var(--text)}
+.new-task-btn.ci-due i{color:#5fd59a}
 /* ── Sort control ── */
 .sort-wrap{display:flex;gap:0;background:var(--bg);border:1px solid var(--border);padding:0;flex-shrink:0}
 .sort-btn{padding:3px 9px;border:none;border-right:1px solid var(--border);background:transparent;cursor:pointer;font-size:10px;color:var(--text-dim);font-family:inherit;letter-spacing:0.05em;text-transform:uppercase;transition:background .1s,color .1s}
@@ -2977,7 +2980,8 @@ function renderQuickAdd() {
 function renderRecurring(c) {
   c.innerHTML='';
   const hdr=document.createElement('div'); hdr.className='content-header';
-  hdr.innerHTML='<h2>Recurring — Next 12 Months</h2>';
+  hdr.innerHTML='<h2>Recurring — Next 12 Months</h2><div class="hdr-right"></div>';
+  hdr.lastChild.append(mkCheckinBtn());
   c.appendChild(hdr);
 
   c.appendChild(mkDailyGoalBar());
@@ -3021,7 +3025,8 @@ function renderRecurring(c) {
 function renderSnoozed(c) {
   c.innerHTML='';
   const hdr=document.createElement('div'); hdr.className='content-header';
-  hdr.innerHTML='<h2>Snoozed</h2>';
+  hdr.innerHTML='<h2>Snoozed</h2><div class="hdr-right"></div>';
+  hdr.lastChild.append(mkCheckinBtn());
   c.appendChild(hdr);
 
   const tasks=S.tasks.filter(isSnoozed).sort((a,b)=>a.snoozedUntil.localeCompare(b.snoozedUntil)||a.title.localeCompare(b.title));
@@ -4325,7 +4330,8 @@ function renderFocus(c) {
   let tasks=[...S.tasks.filter(t=>!t.done||S.pendingDone.has(t.id))];
   tasks.sort((a,b)=>(a.aiRank??999)-(b.aiRank??999));
   const hdr=document.createElement('div'); hdr.className='content-header';
-  hdr.innerHTML=`<h2>Focus</h2><button class="new-task-btn" id="hdr-new-btn"><i class="ti ti-plus"></i>New task</button>`;
+  hdr.innerHTML=`<h2>Focus</h2><div class="hdr-right"><button class="new-task-btn" id="hdr-new-btn"><i class="ti ti-plus"></i>New task</button></div>`;
+  hdr.lastChild.prepend(mkCheckinBtn());
   c.appendChild(hdr);
   hdr.querySelector('#hdr-new-btn').onclick=()=>openModal(null);
 
@@ -4511,6 +4517,7 @@ function renderList(c) {
   const label=LABELS[S.view]||(S.view.startsWith('cat:')?S.view.slice(4):S.view);
   const hdr=document.createElement('div'); hdr.className='content-header';
   hdr.innerHTML=`<h2>${esc(label)}</h2><div class="hdr-right">${S.view!=='done'?'<button class="new-task-btn" id="hdr-new-btn"><i class="ti ti-plus"></i>New task</button>':''}</div>`;
+  hdr.lastChild.prepend(mkCheckinBtn());
   c.appendChild(hdr);
   if (S.view!=='done') hdr.querySelector('#hdr-new-btn').onclick=()=>openModal(null);
 
@@ -6910,9 +6917,18 @@ function checkinFrom(now = new Date()) {
   return new Date(start < n - 15 * 60000 ? start : n - cfg.every * 60000);
 }
 
-// Prefill: Launch sessions and completions in the window are picked already;
-// tasks edited in it and last check-in's tasks are offered.
-function checkinSuggestions(from, to) {
+// Tasks ticked off in a window, oldest first
+function ciDoneIn(from, to) {
+  const f = from.getTime(), t = to.getTime();
+  return S.tasks.filter(x => x.done && x.completedAt && (c => c >= f && c <= t)(new Date(x.completedAt).getTime()))
+    .sort((p, q) => p.completedAt.localeCompare(q.completedAt)).map(x => x.id);
+}
+
+// Prefill: tasks finished in the window and Launch sessions in it are picked
+// already; tasks edited in it and last check-in's tasks are offered.
+// o.doneFrom / o.doneTo widen the window for finished tasks (only those up to
+// `to` are picked; later ones are offered).
+function checkinSuggestions(from, to, o = {}) {
   const f = from.getTime(), t = to.getTime();
   const inWin = ts => { const x = new Date(ts).getTime(); return x >= f && x <= t; };
   const pre = [], sug = [];
@@ -6921,21 +6937,34 @@ function checkinSuggestions(from, to) {
     if (pick && !pre.includes(id)) pre.push(id);
     if (!sug.includes(id)) sug.push(id);
   };
+  const done = ciDoneIn(o.doneFrom || from, o.doneTo || to);
+  done.forEach(id => add(id, new Date(S.tasks.find(x => x.id === id).completedAt).getTime() <= t));
   S.sessions.forEach(s => { if (new Date(s.ended || Date.now()).getTime() >= f && new Date(s.started).getTime() <= t) add(s.taskId, true); });
   if (S.launch) add(S.launch.taskId, true);
-  S.tasks.forEach(x => { if (x.completedAt && inWin(x.completedAt)) add(x.id, true); });
   S.changelog.forEach(e => { if (e.entityType === 'task' && e.action !== 'create' && inWin(e.ts)) add(e.entityId, false); });
   const prev = [...S.checkins].reverse().find(k => k.taskIds.length);
   const lastIds = prev ? prev.taskIds.filter(id => S.tasks.some(x => x.id === id)) : [];
   lastIds.forEach(id => add(id, false));
-  return { pre, sug: sug.slice(0, 10), lastIds };
+  return { pre, sug: sug.slice(0, 10), lastIds, done };
 }
+
+const CI_DONE_LOOKBACK = 4 * 86400e3;   // a weekend plus a day off, not weeks of history
 
 function openCheckin() {
   if (S.launchView || S.checkinDraft) return;   // Launch owns the screen while it's up
-  const now = new Date(), from = checkinFrom(now), sg = checkinSuggestions(from, now);
+  const now = new Date(), from = checkinFrom(now);
+  // Finished tasks count from the last check-in, not from today's start or the
+  // last skip: one ticked off last night or in a skipped stretch lands here.
+  // Ones already on a recent check-in were credited there (often added after
+  // it, when editing), so they're offered rather than picked.
+  const recent = S.checkins.filter(k => new Date(k.ended) <= now && now - new Date(k.ended) <= CI_DONE_LOOKBACK);
+  const prev = recent.reduce((a, k) => !a || k.ended > a.ended ? k : a, null);
+  const doneFrom = new Date(Math.max(Math.min(prev ? new Date(prev.ended).getTime() : from.getTime(), from.getTime()), now - CI_DONE_LOOKBACK));
+  const credited = new Set(recent.flatMap(k => k.taskIds));
+  const sg = checkinSuggestions(from, now, { doneFrom });
+  sg.pre = sg.pre.filter(id => !(credited.has(id) && sg.done.includes(id)));
   S.checkinDraft = { step: 'log', from: from.toISOString(), slot: dueCheckinSlot(now)?.getTime() || 0,
-    taskIds: sg.pre, sug: sg.sug, lastIds: sg.lastIds, focus: 0, difficulty: 0, brk: false,
+    taskIds: sg.pre, sug: sg.sug, lastIds: sg.lastIds, doneIds: sg.done, focus: 0, difficulty: 0, brk: false,
     tags: [], note: '', more: false, logged: null };
   document.getElementById('checkin-overlay').classList.add('open');
   renderCheckin(); updateCheckinPill();
@@ -6971,6 +7000,43 @@ function maybeOpenCheckin() {
   openCheckin();
 }
 
+// The task chips. Picked ones first, then finished ones not yet picked; a long
+// gap can pick a lot, so the rest wait behind "+N more"
+function ciChipsHtml(d) {
+  const all = [...new Set([...d.taskIds, ...d.doneIds, ...d.sug])].map(id => S.tasks.find(t => t.id === id)).filter(Boolean);
+  const chips = d.allChips ? all : all.slice(0, 8), hidden = all.slice(chips.length);
+  const hiddenPicked = hidden.filter(t => d.taskIds.includes(t.id)).length;
+  const same = d.lastIds.length && !d.lastIds.every(id => d.taskIds.includes(id));
+  const unpickedDone = d.doneIds.filter(id => !d.taskIds.includes(id) && S.tasks.some(t => t.id === id)).length;
+  return chips.map(t => { const on = d.taskIds.includes(t.id);
+      return `<button class="ci-chip${on ? ' on' : ''}" data-task="${t.id}" title="${esc(t.title)}"><i class="ti ${on ? 'ti-check' : 'ti-plus'}"></i><span>${esc(t.title)}</span></button>`; }).join('')
+    + (hidden.length ? `<button class="ci-chip ci-same" data-ci="allchips"><span>+${hidden.length} more${hiddenPicked ? ` (${hiddenPicked} picked)` : ''}</span></button>` : '')
+    + (unpickedDone ? `<button class="ci-chip ci-same" data-ci="done" title="Pick every task ticked off ${d.mode ? 'in or just after this stretch' : 'since the last check-in'}"><i class="ti ti-checks"></i><span>Add finished (${unpickedDone})</span></button>` : '')
+    + (same ? `<button class="ci-chip ci-same" data-ci="same"><i class="ti ti-repeat"></i><span>Same as last time</span></button>` : '');
+}
+function bindCiChips(root) {
+  const d = S.checkinDraft;
+  root.querySelectorAll('[data-task]').forEach(b => b.onclick = () => {
+    const id = +b.dataset.task;
+    d.taskIds = d.taskIds.includes(id) ? d.taskIds.filter(x => x !== id) : [...d.taskIds, id];
+    d.touched = true; renderCheckin();
+  });
+  root.querySelectorAll('[data-ci]').forEach(b => b.onclick = () => checkinAction(b.dataset.ci));
+}
+
+// Editing or logging a past stretch: finished tasks run on to the next
+// check-in, because tasks often get ticked off just after checking in. Only
+// the ones inside the stretch are picked, and only until you change the picks.
+function ciEditSuggest(d) {
+  const [st, en] = ciEditRange(d);
+  if (isNaN(st) || isNaN(en)) return;
+  const next = S.checkins.filter(x => x.id !== d.editId && new Date(x.started) >= en)
+    .reduce((m, x) => Math.min(m, new Date(x.started).getTime()), Date.now());
+  const sg = checkinSuggestions(st, en, { doneTo: new Date(Math.max(next, en.getTime())) });
+  d.doneIds = sg.done; d.sug = sg.sug;
+  if (d.mode === 'new' && !d.touched) d.taskIds = sg.pre;
+}
+
 function renderCheckin() {
   const d = S.checkinDraft, panel = document.getElementById('checkin-panel');
   if (!d) return;
@@ -6978,11 +7044,6 @@ function renderCheckin() {
   const head = (kicker, btn) => `<div class="launch-head"><span class="launch-kicker">${kicker}</span><div class="launch-head-btns">${btn}</div></div>`;
 
   if (d.step === 'log') {
-    // Picked ones first; a long gap can pick a lot, so the rest wait behind "+N more"
-    const all = [...new Set([...d.taskIds, ...d.sug])].map(id => S.tasks.find(t => t.id === id)).filter(Boolean);
-    const chips = d.allChips ? all : all.slice(0, 8), hidden = all.slice(chips.length);
-    const hiddenPicked = hidden.filter(t => d.taskIds.includes(t.id)).length;
-    const same = d.lastIds.length && !d.lastIds.every(id => d.taskIds.includes(id));
     const ready = d.brk || (d.focus && d.difficulty);
     const editing = !!d.mode;   // 'edit' an existing check-in, or log a 'new' past stretch
     panel.innerHTML = (editing
@@ -6993,11 +7054,7 @@ function renderCheckin() {
           + `<div class="launch-title">How did it go since ${fmtHM(from)}?</div>`
           + `<div class="launch-history">${fmtHM(from)} – ${fmtHM(now)} · ${fmtMins((now - from) / 1000)}</div>`)
       + `<div class="launch-field ci-tasks${d.brk ? ' ci-dim' : ''}"><label>What you worked on <span class="ci-opt">(optional)</span></label>`
-      + `<div class="ci-chips">` + chips.map(t => { const on = d.taskIds.includes(t.id);
-          return `<button class="ci-chip${on ? ' on' : ''}" data-task="${t.id}" title="${esc(t.title)}"><i class="ti ${on ? 'ti-check' : 'ti-plus'}"></i><span>${esc(t.title)}</span></button>`; }).join('')
-      + (hidden.length ? `<button class="ci-chip ci-same" data-ci="allchips"><span>+${hidden.length} more${hiddenPicked ? ` (${hiddenPicked} picked)` : ''}</span></button>` : '')
-      + (same ? `<button class="ci-chip ci-same" data-ci="same"><i class="ti ti-repeat"></i><span>Same as last time</span></button>` : '')
-      + `</div><div class="ci-search"><input type="text" id="ci-q" maxlength="200" placeholder="Find a task, or type a new one" autocomplete="off"><div class="ci-results" id="ci-results"></div></div></div>`
+      + `<div class="ci-chips">${ciChipsHtml(d)}</div><div class="ci-search"><input type="text" id="ci-q" maxlength="200" placeholder="Find a task, or type a new one" autocomplete="off"><div class="ci-results" id="ci-results"></div></div></div>`
       + `<div class="launch-field"><label>Focus</label><div class="ci-row"><div class="launch-boxes">`
       + FOCUS_LEVELS.map(l => `<button data-focus="${l.v}" title="${l.hint}"${!d.brk && d.focus === l.v ? ' class="active"' : ''}><span class="ci-swatch" style="background:${l.color}"></span>${l.label}</button>`).join('')
       + `</div><button class="launch-small-btn ci-break${d.brk ? ' active' : ''}" data-ci="break" title="Not working: lunch, errands, away from the desk"><i class="ti ti-coffee"></i> Break / away</button></div></div>`
@@ -7016,20 +7073,18 @@ function renderCheckin() {
 
     if (editing) {
       const dayIn = panel.querySelector('#ci-day'), t0In = panel.querySelector('#ci-t0'), t1In = panel.querySelector('#ci-t1'), dur = panel.querySelector('#ci-dur');
-      const upd = () => {
+      const upd = moved => {
         d.day = dayIn.value; d.t0 = t0In.value; d.t1 = t1In.value;
         const [st, en] = ciEditRange(d);
         dur.textContent = isNaN(st) || isNaN(en) ? '' : fmtMins((en - st) / 1000) + (localDate(st) !== localDate(en) ? ' · starts the day before' : '');
+        // New times, new finished tasks. Only the chips redraw, so the time input keeps focus.
+        if (moved) { ciEditSuggest(d); const box = panel.querySelector('.ci-chips'); box.innerHTML = ciChipsHtml(d); bindCiChips(box); }
       };
-      [dayIn, t0In, t1In].forEach(inp => inp.oninput = upd);
-      upd();
+      [dayIn, t0In, t1In].forEach(inp => inp.oninput = () => upd(true));
+      upd(false);
     }
 
-    panel.querySelectorAll('[data-task]').forEach(b => b.onclick = () => {
-      const id = +b.dataset.task;
-      d.taskIds = d.taskIds.includes(id) ? d.taskIds.filter(x => x !== id) : [...d.taskIds, id];
-      renderCheckin();
-    });
+    bindCiChips(panel);
     panel.querySelectorAll('[data-focus]').forEach(b => b.onclick = () => { d.focus = +b.dataset.focus; d.brk = false; renderCheckin(); });
     panel.querySelectorAll('[data-diff]').forEach(b => b.onclick = () => { d.difficulty = +b.dataset.diff; renderCheckin(); });
     panel.querySelectorAll('[data-tag]').forEach(b => b.onclick = () => {
@@ -7088,7 +7143,8 @@ function checkinAction(act) {
     case 'more':  d.more = true; renderCheckin(); setTimeout(() => document.getElementById('ci-note')?.focus(), 30); break;
     case 'allchips': d.allChips = true; renderCheckin(); break;
     case 'delete': deleteCheckin(d.editId); break;
-    case 'same':  d.taskIds = [...new Set([...d.taskIds, ...d.lastIds])]; renderCheckin(); break;
+    case 'same':  d.taskIds = [...new Set([...d.taskIds, ...d.lastIds])]; d.touched = true; renderCheckin(); break;
+    case 'done':  d.taskIds = [...new Set([...d.taskIds, ...d.doneIds])]; d.touched = true; renderCheckin(); break;
     case 'tolaunch': closeCheckin(); S.launchView = 'run'; showLaunch(); break;
   }
 }
@@ -7105,10 +7161,10 @@ function ciSearch(raw) {
   box.innerHTML = hits.map(t => `<div class="ci-result" data-pick="${t.id}"><span>${esc(t.title)}</span>${t.category ? `<span class="ci-result-meta">${esc(t.category)}</span>` : ''}</div>`).join('')
     + `<div class="ci-result ci-new" data-new="1"><i class="ti ti-plus"></i><span>New task: “${esc(raw.trim())}”</span></div>`;
   box.classList.add('open');
-  box.querySelectorAll('[data-pick]').forEach(r => r.onclick = () => { d.taskIds.unshift(+r.dataset.pick); if (!d.sug.includes(+r.dataset.pick)) d.sug.push(+r.dataset.pick); renderCheckin(); document.getElementById('ci-q')?.focus(); });
+  box.querySelectorAll('[data-pick]').forEach(r => r.onclick = () => { d.taskIds.unshift(+r.dataset.pick); if (!d.sug.includes(+r.dataset.pick)) d.sug.push(+r.dataset.pick); d.touched = true; renderCheckin(); document.getElementById('ci-q')?.focus(); });
   box.querySelector('[data-new]').onclick = () => {
     const id = ciNewTask(raw.trim());
-    d.taskIds.unshift(id); d.sug.push(id); renderCheckin(); document.getElementById('ci-q')?.focus();
+    d.taskIds.unshift(id); d.sug.push(id); d.touched = true; renderCheckin(); document.getElementById('ci-q')?.focus();
   };
 }
 
@@ -7148,11 +7204,12 @@ function openCheckinEditor(k) {
   const hm = x => String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0');
   const sg = checkinSuggestions(st, en);
   const tags = k?.tags ? k.tags.split(',').map(x => x.trim()).filter(Boolean) : [];
-  S.checkinDraft = { step: 'log', mode: k ? 'edit' : 'new', editId: k ? k.id : null, slot: 0,
+  const d = S.checkinDraft = { step: 'log', mode: k ? 'edit' : 'new', editId: k ? k.id : null, slot: 0,
     day: localDate(en), t0: hm(st), t1: hm(en), from: st.toISOString(),
-    taskIds: k ? [...k.taskIds] : sg.pre, sug: sg.sug, lastIds: k ? [] : sg.lastIds,
+    taskIds: k ? [...k.taskIds] : [], sug: [], doneIds: [], lastIds: k ? [] : sg.lastIds,
     focus: k ? k.focus : 0, difficulty: k ? k.difficulty : 0, brk: !!k && !k.focus,
     tags, note: k?.note || '', more: !!(tags.length || k?.note), logged: null };
+  ciEditSuggest(d);
   document.getElementById('checkin-overlay').classList.add('open');
   renderCheckin(); updateCheckinPill();
 }
@@ -7251,6 +7308,17 @@ function renderCheckins(c) {
   }
 }
 
+// "Check in" in the task views' headers: log the stretch since the last one
+// without waiting for the prompt. Tinted green, like the pill, while one is due.
+function mkCheckinBtn() {
+  const b = document.createElement('button');
+  b.className = 'new-task-btn ci-hdr-btn' + (dueCheckinSlot() ? ' ci-due' : '');
+  b.innerHTML = '<i class="ti ti-clock-check"></i>Check in';
+  b.title = `Log what you've worked on since ${fmtHM(checkinFrom())}`;
+  b.onclick = openCheckin;
+  return b;
+}
+
 // The pill and a dot in the tab title wait while a check-in is due. Launch owns
 // the title during a session, so it's left alone then.
 function updateCheckinPill() {
@@ -7260,6 +7328,7 @@ function updateCheckinPill() {
     pill.innerHTML = `<i class="ti ti-clock-check"></i><span class="pill-time">Check in</span><span class="pill-title">since ${fmtHM(checkinFrom())}</span>`;
     pill.classList.add('show');
   } else pill.classList.remove('show');
+  document.querySelectorAll('.ci-hdr-btn').forEach(b => b.classList.toggle('ci-due', !!due));
   if (!S.launch) document.title = due ? '● Check in · ' + BASE_TITLE : BASE_TITLE;
 }
 
@@ -7383,13 +7452,13 @@ function openHelp() {
       <p>${(() => { const c = checkinCfg(), sl = checkinSlots(today(), { ...c, days: [0,1,2,3,4,5,6] });
         return c.on && sl.length ? `On your schedule (${fmtHM(sl[0])} to ${fmtHM(sl[sl.length - 1])}, every ${c.every} min), a dot appears in the tab title, a soft chime plays, and the check-in opens the next time you look at Focal.` : 'Turn them on under Settings → Hourly check-in and pick your hours.'; })()} It takes a few seconds:</p>
       <ul>
-        <li><b>What you worked on</b>: tasks from a Launch session or finished in that stretch are already picked. Tap to add others, <b>Same as last time</b>, or type to find or add a task. Optional.</li>
+        <li><b>What you worked on</b>: tasks you finished since the last check-in, and any from a Launch session, are already picked. Ones you'd already put on an earlier check-in are offered instead, and <b>Add finished</b> picks them too. Tap to add others, <b>Same as last time</b>, or type to find or add a task. Optional.</li>
         <li><b>Focus</b>: Drifted, Light, Steady or Deep. <b>Break / away</b> is separate. Lunch isn't low effort.</li>
         <li><b>Difficulty</b>: Easy, Moderate, Hard or Very hard, rated apart from focus, so a hard, focused hour and an easy one don't look the same.</li>
         <li>Then <b>Next</b>: pick one thing and start five minutes on it, or close.</li>
       </ul>
       <p>Missed a few? The next one covers the whole gap. <b>Later</b> (Esc) leaves the pill in the corner. <b>Skip this one</b> leaves the stretch unlogged. Neither counts against you. During a Launch session the check-in waits until the session ends.</p>
-      <p><b>Check-ins</b> in the sidebar lists every one by day. Click one to fix its times, ratings or tasks, or delete it. <b>Log a past stretch</b> adds one you missed. Clicking a block on the dashboard timeline edits it too.</p>
+      <p><b>Check-ins</b> in the sidebar lists every one by day. Click one to fix its times, ratings or tasks, or delete it. <b>Log a past stretch</b> adds one you missed. When editing, <b>Add finished</b> picks the tasks ticked off in that stretch or just after it, before the next check-in. <b>Check in</b> at the top of every task list starts one any time, due or not. Clicking a block on the dashboard timeline edits it too.</p>
       <p>The dashboard's <b>Hours</b> modules show focused hours (Steady or Deep) today and this week against <b>your own typical</b>, a timeline of each day, and the tasks your hours moved forward, finished or not.</p>
       <div class="help-why">Completions don't measure effort, and a hard day can end with nothing ticked off. This is the record of where the hours went. It rewards checking in, never the numbers, because an honest "Drifted" is worth more than a flattering "Deep".</div>`),
     sec('ti-circle-dashed', 'The three rings', `
