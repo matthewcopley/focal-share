@@ -288,6 +288,7 @@ def queue_task_for_review():
     review=true: Focal lists it under Review instead of adding it, and the closed-app
     flusher leaves it alone, so nothing reaches the task list until it's approved.
     Fields are coerced rather than rejected — they usually come from a language model.
+    A missing or malformed due date becomes today.
 
     "review": false (the focal CLI's default) skips the review and queues an ordinary
     inbox task instead, exactly like a file dropped in .focal_inbox: the open app adds it
@@ -303,9 +304,11 @@ def queue_task_for_review():
     title = s('title', 300)
     if not title:
         return jsonify(ok=False, error='title is required'), 400
+    # No deadline in the text means due today, not undated: a task with no due date
+    # falls out of Today / Upcoming / Overdue and gets lost.
     due = s('due', 10)
     if not _DUE_RE.match(due):
-        due = ''
+        due = time.strftime('%Y-%m-%d')
     pr = d.get('priority')
     try:
         pr = int(pr)
@@ -512,7 +515,7 @@ def _flush_inbox_to_disk():
                             '(title,priority,category,due,recur,description,done,subtasks,'
                             ' created,notes,projectId,teamFlag) '
                             "VALUES (?,?,?,?,?,?,0,'[]',?,?,?,?)",
-                            [title, pr, cat, str(d.get('due', '')),
+                            [title, pr, cat, str(d.get('due') or '') or time.strftime('%Y-%m-%d'),
                              str(d.get('recur', '')), str(d.get('description', '')),
                              str(d.get('created') or _now_iso()), str(d.get('notes', '')),
                              proj, 1 if d.get('teamFlag') else 0],

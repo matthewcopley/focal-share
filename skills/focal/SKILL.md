@@ -49,7 +49,7 @@ Rules for changes:
 - **Act directly when the user named the change and the task is unambiguous**, e.g. "mark 589 done" or "snooze the Verizon task to Friday" when one open task matches. If you found the task by searching and more than one could fit, show the candidates and ask first.
 - **Confirm before changing more than three tasks at once.** List them first.
 - **`done` refuses a task with open subtasks** (exit 2). Tell the user which subtasks are open and ask before retrying with `--close-subs`.
-- **Adding:** `focal add` refuses an exact duplicate of an open task's title (exit 3). Tell the user which task already exists rather than forcing it. A category must already exist (see `focal cats`, case doesn't matter); only use `--new-category` if the user asked for a new one. Use `--review` only if the user wants to approve it in Focal's Review view first.
+- **Adding:** `focal add` refuses an exact duplicate of an open task's title (exit 3). Tell the user which task already exists rather than forcing it. A category must already exist (see `focal cats`, case doesn't matter); only use `--new-category` if the user asked for a new one. Use `--review` only if the user wants to approve it in Focal's Review view first. Without `-d` the task is due today (Focal never adds an undated task), so pass `-d` when the user names a day.
 - There is no delete. If the user wants a task gone, say so and suggest completing it or deleting it in the app.
 
 ## When a change doesn't apply right away

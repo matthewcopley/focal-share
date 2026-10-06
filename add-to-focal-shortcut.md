@@ -123,7 +123,9 @@ message, so these tasks won't get an **Open email** link.
 
 A **Review** entry appears in the sidebar under Focus, along with a toast ("New task
 to review"), within about 4 seconds. Each item shows its priority, due date, category
-(marked *(new)* if it isn't one of yours) and description. From there:
+(marked *(new)* if it isn't one of yours) and description. When the text gives no
+deadline the model leaves `due` empty and the launcher sets it to the day you captured
+it, so a captured task never lands undated. From there:
 
 - **Approve**: adds the task as is.
 - **Edit**: opens the normal task form. Saving adds the task.

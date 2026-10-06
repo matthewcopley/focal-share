@@ -495,7 +495,7 @@ def cmd_add(f, a):
         die('recur must be daily, weekly, monthly or every:N')
     if a.recur and not a.due:
         die('a recurring task needs --due (its first occurrence)')
-    body = {'title': title, 'due': parse_day(a.due) if a.due else '',
+    body = {'title': title, 'due': parse_day(a.due) if a.due else f.today,
             'priority': parse_priority(a.priority) if a.priority else 3, 'category': cat,
             'description': a.desc or '', 'notes': a.notes or '', 'recur': a.recur or '',
             'projectId': a.project, 'teamFlag': a.team, 'source': a.source or 'CLI',
@@ -654,7 +654,7 @@ def main(argv=None):
 
     sp = cmd('add', cmd_add, 'add a task (queued; Focal does the insert)')
     sp.add_argument('title')
-    sp.add_argument('-d', '--due', help='2026-10-15, today, tomorrow, +3d, +2w, fri…')
+    sp.add_argument('-d', '--due', help='2026-10-15, today, tomorrow, +3d, +2w, fri… (default today)')
     sp.add_argument('-p', '--priority', help='1–4 or critical/high/medium/low (default 3)')
     sp.add_argument('-c', '--cat', help='an existing category (case-insensitive)')
     sp.add_argument('--new-category', action='store_true', help='allow a category that doesn\'t exist yet')

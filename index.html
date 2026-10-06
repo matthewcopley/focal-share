@@ -2256,7 +2256,7 @@ function taskFromQueued(q) {
   const t = {
     title: String(q.title || '').trim(),
     priority: (p >= 1 && p <= 4) ? p : 3,
-    category: normalizeCategory(q.category), due: String(q.due || ''),
+    category: normalizeCategory(q.category), due: String(q.due || '') || today(),   // never undated
     recur: String(q.recur || ''), description: String(q.description || ''),
     done: false, subtasks: [], aiRank: null, aiReason: '',
     created: String(q.created || new Date().toISOString()),
@@ -8029,6 +8029,7 @@ function saveModal() {
     applyTaskEdit(S.editingTask, data);
   } else {
     const cf=S.copyFrom, rq=S.reviewing;
+    if (!data.due) data.due=today();   // a new task is never undated: it would drop out of every dated view
     const task={id:nextId(),done:false,completedAt:'',aiRank:null,aiReason:'',created:rq?.created||new Date().toISOString(),notes:cf?.notes||'',...data};
     const ma=S.modalAnchor;   // a duplicate keeps the original's schedule date
     if (cf && ma && task.recur && task.due===ma.due && !ma.snoozed) task.recurAnchor=ma.anchor;
