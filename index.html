@@ -8335,6 +8335,14 @@ async function importFromCSV() {
   showToast('CSV imported — use File › Save Database to create your .db file');
 }
 
+// Click-outside-to-close for a modal backdrop. Only when the press started on the
+// backdrop too: a text selection dragged out of the dialog ends with a click on
+// the backdrop (the common ancestor), which would otherwise close it mid-edit.
+function onBackdropClick(id, fn) {
+  const el=document.getElementById(id); let downOnBackdrop=false;
+  el.addEventListener('mousedown', e=>{ downOnBackdrop = e.target===el; });
+  el.addEventListener('click', e=>{ if (e.target===el && downOnBackdrop) fn(); downOnBackdrop=false; });
+}
 function setupEvents() {
   // Sidebar resize
   const sidebar = document.getElementById('sidebar');
@@ -8384,7 +8392,7 @@ function setupEvents() {
   document.getElementById('confirm-ok').addEventListener('click', ()=>{
     const fn=_confirmFn; closeConfirm(); if (fn) fn();   // close first — fn may open another dialog
   });
-  document.getElementById('confirm-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('confirm-overlay')) closeConfirm(); });
+  onBackdropClick('confirm-overlay', closeConfirm);
   // Add category
   document.getElementById('cats-nav-toggle').addEventListener('click', () => {
     S.catsNavOpen = !S.catsNavOpen; renderSidebar();
@@ -8423,11 +8431,11 @@ function setupEvents() {
   // Modal
   document.getElementById('modal-cancel').addEventListener('click',closeModal);
   document.getElementById('modal-save').addEventListener('click',saveModal);
-  document.getElementById('modal-overlay').addEventListener('click',e=>{ if(e.target===document.getElementById('modal-overlay')) closeModal(); });
+  onBackdropClick('modal-overlay', closeModal);
   // Project modal
   document.getElementById('project-modal-cancel').addEventListener('click',closeProjectModal);
   document.getElementById('project-modal-save').addEventListener('click',saveProjectModal);
-  document.getElementById('project-modal-overlay').addEventListener('click',e=>{ if(e.target===document.getElementById('project-modal-overlay')) closeProjectModal(); });
+  onBackdropClick('project-modal-overlay', closeProjectModal);
   document.getElementById('pf-type-client').addEventListener('click',()=>{
     document.getElementById('pf-type-client').classList.add('active');
     document.getElementById('pf-type-internal').classList.remove('active');
@@ -8445,16 +8453,16 @@ function setupEvents() {
   // Idea modal
   document.getElementById('idea-modal-cancel').addEventListener('click', closeIdeaModal);
   document.getElementById('idea-modal-save').addEventListener('click', saveIdeaModal);
-  document.getElementById('idea-modal-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('idea-modal-overlay')) closeIdeaModal(); });
+  onBackdropClick('idea-modal-overlay', closeIdeaModal);
   // Success modal
   document.getElementById('success-modal-cancel').addEventListener('click', closeSuccessModal);
   document.getElementById('success-modal-save').addEventListener('click', saveSuccessModal);
-  document.getElementById('success-modal-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('success-modal-overlay')) closeSuccessModal(); });
+  onBackdropClick('success-modal-overlay', closeSuccessModal);
   // Import from projects picker
   document.getElementById('import-proj-cancel').addEventListener('click', ()=>document.getElementById('import-proj-overlay').classList.remove('open'));
-  document.getElementById('import-proj-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('import-proj-overlay')) document.getElementById('import-proj-overlay').classList.remove('open'); });
+  onBackdropClick('import-proj-overlay', ()=>document.getElementById('import-proj-overlay').classList.remove('open'));
   // Link picker
-  document.getElementById('link-picker-overlay').addEventListener('click', e=>{ if(e.target===document.getElementById('link-picker-overlay')) closeLinkPicker(); });
+  onBackdropClick('link-picker-overlay', closeLinkPicker);
   document.getElementById('link-search').addEventListener('input', e=>renderLinkResults(e.target.value));
   // Pasted images — modal description field and the full-size viewer
   _syncDescImgs = bindImageField(document.getElementById('f-desc'), document.getElementById('f-desc-imgs'));
@@ -8462,7 +8470,7 @@ function setupEvents() {
   // How-it-works explainer — the ⓘ sits inside the Settings nav row, so stop it navigating too
   document.getElementById('help-btn').addEventListener('click', e=>{ e.stopPropagation(); openHelp(); });
   document.getElementById('help-close').addEventListener('click', closeHelp);
-  document.getElementById('help-overlay').addEventListener('click', e=>{ if (e.target.id==='help-overlay') closeHelp(); });
+  onBackdropClick('help-overlay', closeHelp);
   // Launch — the pill brings a hidden session back
   const pill=document.getElementById('launch-pill');
   pill.addEventListener('click', ()=>{ S.launchView='run'; showLaunch(); });
