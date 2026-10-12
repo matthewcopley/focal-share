@@ -2287,7 +2287,7 @@ async function drainPendingTasks() {
     try {
       // X-Focal-Client marks this as a tab with versioned saves; the launcher hands
       // queued tasks only to those (see GET /pending-tasks).
-      const r = await fetch('/pending-tasks', {headers: {'X-Focal-Client': '3', 'X-Focal-Tab': TAB_ID}});
+      const r = await fetch('/pending-tasks', {headers: {'X-Focal-Client': '4', 'X-Focal-Tab': TAB_ID}});
       if (!r.ok) return;
       const j = await r.json();
       list = j.tasks || [];
@@ -2327,11 +2327,13 @@ async function drainPendingTasks() {
 }
 
 // ─────────────────────────────────────────────
-// OPS — task changes queued by the focal CLI (POST /ops): done, reopen, edit, snooze,
-// unsnooze, note, subtask, subdone. The launcher can't apply these itself, because
-// they run app logic (recurring spawns, deferrals, snooze history, changelog wording),
-// so the poll leases each one to a single tab, which applies it here with the same
-// functions the UI uses, saves, and acks with a result the CLI is waiting on.
+// OPS — changes queued by the focal CLI (POST /ops). On a task: done, reopen, undo, edit,
+// snooze, unsnooze, note, subtask, subdone, subreopen, launch. Otherwise: catadd,
+// catrename, projadd, projdone, projreopen, pref. The launcher can't apply these itself,
+// because they run app logic (recurring spawns, deferrals, snooze history, changelog
+// wording), so the poll leases each one to a single tab, in the order they were queued,
+// which applies it here with the same functions the UI uses, saves, and acks with a
+// result the CLI is waiting on. X-Focal-Client 4 = knows the ops after subdone.
 // ─────────────────────────────────────────────
 const OP_MAX_AGE = 24 * 3600 * 1000;   // older than this, refuse rather than apply it stale
 const _opsQueue = [];
@@ -2368,9 +2370,14 @@ function opTask(t) {
            recur:t.recur, snoozedUntil:snoozeLive(t) ? t.snoozedUntil : '' };
 }
 
-// One op → {ok, message, task} or {ok:false, error}. noop means it was already so.
+// Ops on a task; the rest (categories, projects, prefs) go to applyDataOp()
+const TASK_OPS = new Set(['done', 'reopen', 'undo', 'snooze', 'unsnooze', 'note', 'subtask', 'subdone', 'subreopen', 'edit', 'launch']);
+
+// One op → {ok, message, task} or {ok:false, error}. noop means it was already so;
+// duplicate means it would have counted something twice.
 function applyOp(op) {
   if (!(Date.now() - new Date(op.created) < OP_MAX_AGE)) return { ok:false, error:'expired: queued more than a day ago, not applied' };
+  if (!TASK_OPS.has(op.op)) return applyDataOp(op, op.source || 'CLI');
   const t = S.tasks.find(x => x.id === op.id);
   if (!t) return { ok:false, error:`no task #${op.id}` };
   const via = op.source || 'CLI', name = `"${shortTitle(t.title)}"`;
@@ -2386,10 +2393,60 @@ function applyOp(op) {
       const spawn = spawnId != null ? S.tasks.find(x => x.id === spawnId) : null;
       return done(`completed ${name}` + (spawn ? ` (next one: #${spawn.id}, due ${spawn.due})` : ''), { spawnId });
     }
-    case 'reopen':
+    case 'reopen': {
       if (!t.done) return noop(`${name} is already open`);
-      uncompleteTask(t.id);
-      return done(`reopened ${name}`);
+      const gone = uncompleteTask(t.id);
+      return done(`reopened ${name}` + (gone ? `; removed its next occurrence #${gone.id} (due ${gone.due})` : ''),
+                  { removed: gone ? opTask(gone) : null });
+    }
+    case 'undo': {
+      // Reopen, and take back the repeat it spawned only while nobody has worked on it
+      if (!t.done) return noop(`${name} is already open`);
+      const spawn = spawnOf(t), why = spawn ? spawnTouched(spawn, t) : '';
+      const gone = uncompleteTask(t.id, !!why);
+      return done(`reopened ${name}` + (gone ? `; removed its next occurrence #${gone.id} (due ${gone.due})`
+                  : why ? `; kept its next occurrence #${spawn.id} (due ${spawn.due}) because ${why}` : ''),
+                  { removed: gone ? opTask(gone) : null, kept: why ? { ...opTask(spawn), reason: why } : null });
+    }
+    case 'launch': {
+      // A Launch session run outside this tab (Focus), recorded the way endLaunch() does
+      const s = op.session || {};
+      const iso = v => { const d = new Date(v); return v && !isNaN(d) ? d.toISOString() : ''; };
+      const started = iso(s.started), ended = iso(s.ended), planned = +s.plannedMin, outcome = s.outcome;
+      if (!started || !ended) return { ok:false, error:'started and ended must be ISO timestamps' };
+      if (ended <= started) return { ok:false, error:'ended must be after started' };
+      if (new Date(ended) - Date.now() > 60000) return { ok:false, error:'ended is in the future' };
+      if (!(Number.isInteger(planned) && planned >= 1 && planned <= 600)) return { ok:false, error:'plannedMin must be 1–600' };
+      if (outcome !== 'done' && outcome !== 'parked') return { ok:false, error:'outcome must be done or parked' };
+      const dup = S.sessions.find(x => x.taskId === t.id && iso(x.started) === started);
+      if (dup) return { ok:false, duplicate:true, error:`already logged: session #${dup.id} on ${name} started ${started}`, sessionId: dup.id };
+      const secs = (new Date(ended) - new Date(started)) / 1000;
+      if (outcome !== 'done' && secs < LAUNCH_MIN_SEC) return { ok:false, error:'under a minute: the app doesn\'t log a parked session that short' };
+      const open = (t.subtasks || []).filter(x => !x.done).length;
+      const complete = outcome === 'done' && !t.done;
+      if (complete && open && !op.closeSubs) return { ok:false, error:`${name} has ${open} open subtask${open === 1 ? '' : 's'}; a done Launch completes the task, so pass --close-subs` };
+      const sid = S.sessions.reduce((mx, x) => Math.max(mx, x.id), 0) + 1;
+      const row = { id: sid, taskId: t.id, started, ended, plannedMin: planned, outcome,
+                    step: String(s.step || ''), plan: String(s.plan || ''),
+                    sticky: s.sticky != null ? !!s.sticky : !!stickyInfo(t) };
+      S.sessions.push(row);
+      if (outcome === 'parked') {
+        t.nextStep = String(s.next || '').trim();
+        const where = String(s.where || '').trim();
+        if (where || t.nextStep) {
+          const stamp = new Date(ended).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+          const line = `[${stamp} · ${fmtMins(secs)}] ${where}${where && t.nextStep ? ' ' : ''}${t.nextStep ? '→ Next: ' + t.nextStep : ''}`;
+          t.notes = (t.notes ? t.notes.replace(/\s+$/, '') + '\n' : '') + line;
+        }
+      } else {
+        t.nextStep = '';
+      }
+      logChange('task', t.id, 'launch', `"${t.title}" — Launch: ${fmtMins(secs)}, ${outcome}`);
+      if (complete) completeTask(t.id, !!op.closeSubs, via);
+      checkRingCloses(); markUnsaved(); render();
+      return done(`logged a Launch on ${name}: ${fmtMins(secs)} of ${planned}m, ${outcome}` + (complete ? ', and completed it' : ''),
+                  { session: row, completed: complete });
+    }
     case 'snooze': {
       const until = String(op.until || '');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(until) || until <= today()) return { ok:false, error:'snooze needs a date after today' };
@@ -2426,6 +2483,13 @@ function applyOp(op) {
       toggleSub(t.id, s.id);
       return done(`completed subtask "${shortTitle(s.title)}" of ${name}`);
     }
+    case 'subreopen': {
+      const s = (t.subtasks || [])[(op.sub | 0) - 1];
+      if (!s) return { ok:false, error:`${name} has no subtask ${op.sub}` };
+      if (!s.done) return noop(`subtask ${op.sub} of ${name} is already open`);
+      toggleSub(t.id, s.id);
+      return done(`reopened subtask "${shortTitle(s.title)}" of ${name}`);
+    }
     case 'edit': {
       const f = op.fields || {}, data = {};
       if ('title' in f) { const v = String(f.title || '').trim(); if (!v) return { ok:false, error:'title cannot be empty' }; data.title = v; }
@@ -2444,6 +2508,112 @@ function applyOp(op) {
       const diff = applyTaskEdit(t, data, ` · via ${via}`);
       markUnsaved(); render();
       return done(`edited ${name}: ${diff}`);
+    }
+  }
+  return { ok:false, error:`unknown op "${op.op}"` };
+}
+
+// The project modal's #pf-status options
+const PROJECT_STATUSES = ['not-started', 'in-progress', 'active', 'on-hold', 'complete'];
+
+// Prefs the app itself reads, checked so a bad value from the CLI can't break a view
+const PREF_CHECKS = {
+  recur_weekend:    v => ['next', 'prev', 'off'].includes(v) || 'must be next, prev or off',
+  dash_layout:      v => { try { return typeof JSON.parse(v) === 'object' || 'must be a JSON object'; } catch(e) { return 'must be a JSON object'; } },
+  checkin_schedule: v => { try { return typeof JSON.parse(v) === 'object' || 'must be a JSON object'; } catch(e) { return 'must be a JSON object'; } },
+};
+
+// Ops that aren't on a task: catadd, catrename, projadd, projdone, projreopen, pref
+function applyDataOp(op, via) {
+  const ok = (message, extra) => ({ ok:true, message, ...extra });
+  const noop = (message, extra) => ({ ok:true, noop:true, message, ...extra });
+  const findCat = n => S.categories.find(c => String(c.name).trim().toLowerCase() === String(n || '').trim().toLowerCase());
+  switch (op.op) {
+    case 'catadd': {
+      const n = String(op.name || '').trim();
+      if (!n || n.length > 60) return { ok:false, error:'a category name is 1–60 characters' };
+      const have = findCat(n);
+      if (have) return noop(`category "${have.name}" already exists`, { category: { name: have.name, color: have.color } });
+      const color = /^#[0-9a-f]{6}$/i.test(op.color || '') ? op.color : '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padStart(6, '0');
+      const maxId = S.categories.length ? Math.max(...S.categories.map(c => c.id || 0)) : 0;
+      const cat = { id: maxId + 1, name: n, color };
+      S.categories.push(cat);
+      logChange('category', cat.id, 'create', `Created category: "${n}" · via ${via}`);
+      saveCats(); render();
+      return ok(`added category "${n}"`, { category: { name: n, color } });
+    }
+    case 'catrename': {
+      const cat = findCat(op.name), to = String(op.to || '').trim();
+      if (!cat) return { ok:false, error:`no category "${op.name}"` };
+      if (!to || to.length > 60) return { ok:false, error:'a category name is 1–60 characters' };
+      if (cat.name === to) return noop(`category "${to}" already has that name`);
+      const clash = findCat(to);
+      if (clash && clash !== cat) return { ok:false, error:`category "${clash.name}" already exists` };
+      // Tasks hold the category by name, so they move with it (case variants too,
+      // since normalizeCategory() would have matched them to this one)
+      const from = cat.name, key = from.trim().toLowerCase();
+      let moved = 0;
+      for (const t of S.tasks) if (String(t.category || '').trim().toLowerCase() === key) { t.category = to; moved++; }
+      cat.name = to;
+      if (S.lastCat === from) S.lastCat = to;
+      if (S.view === 'cat:' + from) S.view = 'cat:' + to;
+      logChange('category', cat.id, 'update', `Renamed category: "${from}" → "${to}" (${moved} task${moved === 1 ? '' : 's'} moved) · via ${via}`);
+      saveCats(); render();
+      return ok(`renamed category "${from}" to "${to}" and moved ${moved} task${moved === 1 ? '' : 's'}`, { moved });
+    }
+    case 'projadd': {
+      const f = op.fields || {}, title = String(f.title || '').trim();
+      if (!title) return { ok:false, error:'a project needs a title' };
+      const status = f.status || 'not-started', type = f.type || 'client';
+      if (!PROJECT_STATUSES.includes(status)) return { ok:false, error:'status must be one of ' + PROJECT_STATUSES.join(', ') };
+      if (type !== 'client' && type !== 'internal') return { ok:false, error:'type must be client or internal' };
+      for (const k of ['startDate', 'dueDate'])
+        if (f[k] && !/^\d{4}-\d{2}-\d{2}$/.test(f[k])) return { ok:false, error:`bad ${k}` };
+      // Same shape saveProjectModal() creates
+      const proj = { id: nextProjectId(), progress: 0, progressManual: false, created: new Date().toISOString(),
+                     title, status, type, jobNumber: type === 'client' ? String(f.jobNumber || '').trim() : '',
+                     startDate: f.startDate || '', dueDate: f.dueDate || '', notes: String(f.notes || '').trim() };
+      S.projects.push(proj);
+      logChange('project', proj.id, 'create', `Created project: "${title}" · via ${via}`);
+      markUnsaved(); render();
+      return ok(`added project #${proj.id} "${shortTitle(title)}"`, { project: { id: proj.id, title, status, type } });
+    }
+    case 'projdone':
+    case 'projreopen': {
+      const p = S.projects.find(x => x.id === op.id);
+      if (!p) return { ok:false, error:`no project #${op.id}` };
+      const name = `"${shortTitle(p.title)}"`, info = () => ({ project: { id: p.id, title: p.title, status: p.status } });
+      let status = 'complete';
+      if (op.op === 'projdone') {
+        if (p.status === 'complete') return noop(`project ${name} was already complete`, info());
+      } else {
+        if (p.status !== 'complete') return noop(`project ${name} is already open (${p.status})`, info());
+        // Back to the status it had before it was closed, as the changelog recorded it
+        const prev = S.changelog.filter(e => e.entityType === 'project' && e.entityId === p.id)
+          .map(e => (e.description.match(/Status: "([^"]+)" → "complete"/) || [])[1]).find(Boolean);
+        status = op.status || (PROJECT_STATUSES.includes(prev) && prev !== 'complete' ? prev : 'in-progress');
+        if (!PROJECT_STATUSES.includes(status) || status === 'complete') return { ok:false, error:'reopen status must be one of ' + PROJECT_STATUSES.filter(s => s !== 'complete').join(', ') };
+      }
+      const diff = diffLog(p, { ...p, status }, PROJECT_DIFF_FIELDS);
+      p.status = status;
+      if (!p.progressManual) p.progress = autoProgress(p.id);
+      logChange('project', p.id, 'update', `"${p.title}" — ${diff} · via ${via}`);
+      markUnsaved(); render();
+      const openTasks = S.tasks.filter(t => t.projectId === p.id && !t.done).length;
+      return ok(op.op === 'projdone'
+        ? `marked project ${name} complete` + (openTasks ? ` (${openTasks} open task${openTasks === 1 ? '' : 's'} still in it)` : '')
+        : `reopened project ${name} as ${status}`, info());
+    }
+    case 'pref': {
+      const key = String(op.key || ''), value = op.value == null ? null : String(op.value);
+      if (!/^[A-Za-z0-9_.:-]{1,64}$/.test(key)) return { ok:false, error:'a pref key is 1–64 of A-Z a-z 0-9 _ . : -' };
+      const check = value != null && PREF_CHECKS[key] && PREF_CHECKS[key](value);
+      if (typeof check === 'string') return { ok:false, error:`${key} ${check}` };
+      if (getPref(key) === value) return noop(value == null ? `pref "${key}" wasn't set` : `pref "${key}" already had that value`);
+      setPref(key, value);
+      if (key === 'recur_weekend') normalizeRecurDues();
+      render();
+      return ok(value == null ? `deleted pref "${key}"` : `set pref "${key}"`);
     }
   }
   return { ok:false, error:`unknown op "${op.op}"` };
@@ -2848,12 +3018,32 @@ function backfillCompletions() {
     _clIdCounter = S.changelog.length ? Math.max(...S.changelog.map(c=>c.id))+1 : 1;
   }
 
+  // Until Oct 2026 a subtask title with a double quote in it never matched below, so
+  // it was re-logged on every load (one task had 199 copies). Those rows are 'complete'
+  // entries, which capChangelog() never evicts, so they crowded the rest of the history
+  // out. Drop exact repeats (same task, time and text: toggleSub() stamps real ones to
+  // the millisecond, so only this backfill made them).
+  const seenRows = new Set();
+  const deduped = S.changelog.filter(e => {
+    if (e.action !== 'complete') return true;
+    const k = e.entityId + '|' + e.ts + '|' + e.description;
+    if (seenRows.has(k)) return false;
+    seenRows.add(k); return true;
+  });
+  const removedDupes = S.changelog.length - deduped.length;
+  if (removedDupes) S.changelog = deduped;
+
   // Build sets of what's already logged so we don't duplicate
   const loggedTaskIds   = new Set(S.changelog.filter(e=>e.action==='complete'&&!e.description.includes('Subtask')).map(e=>e.entityId));
-  // For subtasks key on "parentId|subtaskTitle"
-  const loggedSubKeys   = new Set(
-    S.changelog.filter(e=>e.action==='complete'&&e.description.includes('Subtask')).map(e=>e.entityId+'|'+((e.description.match(/✓ Subtask completed: "([^"]+)"/))||[])[1])
-  );
+  // Subtasks: parentId → their logged descriptions. A logged one is matched by the
+  // whole title, up to the `" (in "` before the parent's (which may have been renamed);
+  // a regex stopping at the next quote cut titles that contain one.
+  const loggedSubs = new Map();
+  for (const e of S.changelog) if (e.action==='complete'&&e.description.startsWith('✓ Subtask completed: "')) {
+    if (!loggedSubs.has(e.entityId)) loggedSubs.set(e.entityId, []);
+    loggedSubs.get(e.entityId).push(e.description);
+  }
+  const subLogged = (tid, title) => (loggedSubs.get(tid)||[]).some(d => d.startsWith(`✓ Subtask completed: "${title}" (in "`));
 
   const entries = [];
 
@@ -2868,15 +3058,14 @@ function backfillCompletions() {
     }
     for (const s of (t.subtasks||[])) {
       if (!s.done) continue;
-      const key = t.id + '|' + s.title;
-      if (!loggedSubKeys.has(key)) {
+      if (!subLogged(t.id, s.title)) {
         const ts = s.doneAt ? s.doneAt+'T12:00:00.000Z' : fallbackTs;
         entries.push({ id: _clIdCounter++, ts, entityType:'task', entityId:t.id, action:'complete', description:`✓ Subtask completed: "${s.title}" (in "${t.title}")` });
       }
     }
   }
 
-  if (!entries.length) return;
+  if (!entries.length) { if (removedDupes) markUnsaved(); return; }
   S.changelog.push(...entries);
   S.changelog.sort((a,b) => b.ts.localeCompare(a.ts) || b.id - a.id);
   S.changelog = capChangelog(S.changelog);
@@ -7779,17 +7968,43 @@ function completeTask(id, closeSubs, quiet=false) {
   offerFollowUp(t);
 }
 
-function uncompleteTask(id) {
-  const t=S.tasks.find(x=>x.id===id); if(!t) return;
+// The open occurrence that completing recurring task t spawned, if it's still there:
+// by id inside the grace window, after that by shape (same title and recur, due on
+// the next date). Call it while t is still done.
+function spawnOf(t) {
+  const pending=S.pendingDone.get(t.id);
+  if (pending) return pending.spawnId!=null ? S.tasks.find(x=>x.id===pending.spawnId&&!x.done)||null : null;
+  if (!t.recur) return null;
+  const nextDue=nextRecurDue(t);
+  return S.tasks.find(x=>x.id!==t.id&&!x.done&&x.recur===t.recur&&x.title===t.title&&x.due===nextDue)||null;
+}
+
+// Why a spawned occurrence has been worked on since completeTask() copied it from t
+// ('' if it hasn't), so an undo doesn't throw that work away. Spawns are created
+// without a changelog entry, so any entry for it since then means someone touched it.
+function spawnTouched(spawn, t) {
+  if (S.changelog.some(e=>e.entityType==='task'&&e.entityId===spawn.id&&e.ts>=spawn.created)) return 'it has changes logged';
+  for (const k of ['title','priority','category','description','notes','projectId','teamFlag','nextStep'])
+    if (!_same(spawn[k]??'', t[k]??'')) return `its ${k==='nextStep'?'next step':k==='teamFlag'?'team flag':k==='projectId'?'project':k} changed`;
+  if (snoozeLive(spawn)||spawn.deferrals) return 'it was snoozed or pushed back';
+  const subs=x=>JSON.stringify((x.subtasks||[]).map(s=>s.title));
+  if (subs(spawn)!==subs(t)||(spawn.subtasks||[]).some(s=>s.done)) return 'its subtasks changed';
+  if (S.sessions.some(s=>s.taskId===spawn.id)) return 'it has a Launch session';
+  if (S.checkins.some(k=>(k.taskIds||[]).includes(spawn.id)||k.nextTaskId===spawn.id)) return 'a check-in lists it';
+  if (getLinksFor('task', spawn.id).length) return 'it has links';
+  return '';
+}
+
+// Reopen a task, taking back the occurrence it spawned (unless keepSpawn). Returns
+// that removed occurrence, or null.
+function uncompleteTask(id, keepSpawn=false) {
+  const t=S.tasks.find(x=>x.id===id); if(!t) return null;
+  const spawn=keepSpawn ? null : spawnOf(t);
   const pending=S.pendingDone.get(id);
   if (pending) {
-    // Uncheck within grace — cancel timer and remove the spawned occurrence by id
+    // Uncheck within grace — cancel timer; the spawned occurrence goes below
     clearTimeout(pending.timer);
     S.pendingDone.delete(id);
-    if (pending.spawnId!=null) {
-      const spawnedIdx=S.tasks.findIndex(x=>x.id===pending.spawnId&&!x.done);
-      if (spawnedIdx!==-1) S.tasks.splice(spawnedIdx,1);
-    }
     // ...and reopen the subtasks that completing the task closed on the user's behalf,
     // so an undo inside the grace window puts the card back exactly as it was
     if (pending.autoSubs) pending.autoSubs.forEach(sid=>{
@@ -7797,20 +8012,18 @@ function uncompleteTask(id) {
       s.done=false; delete s.doneAt;
       logChange('task', id, 'uncomplete', `↩ Subtask reopened: "${s.title}" (in "${t.title}")`);
     });
-  } else if (t.recur) {
-    // Grace already expired and the spawn id is gone — match the spawned
-    // occurrence by shape and remove it, otherwise reopening leaves a duplicate
-    const nextDue = nextRecurDue(t);
-    const spawnedIdx = S.tasks.findIndex(x => x.id !== t.id && !x.done && x.recur === t.recur && x.title === t.title && x.due === nextDue);
-    if (spawnedIdx !== -1) {
-      logChange('task', S.tasks[spawnedIdx].id, 'delete', 'Removed next occurrence of "' + (t.title||'') + '" (task reopened)');
-      S.tasks.splice(spawnedIdx, 1);
-    }
+  }
+  if (spawn) {
+    // Past the grace window the spawn has been on the list, so its removal is logged;
+    // otherwise reopening would leave a duplicate
+    if (!pending) logChange('task', spawn.id, 'delete', 'Removed next occurrence of "' + (t.title||'') + '" (task reopened)');
+    S.tasks.splice(S.tasks.indexOf(spawn), 1);
   }
   t.done=false;
   t.completedAt='';
   logChange('task', id, 'uncomplete', '↩ Reopened: "' + (t.title||'') + '"');
   markUnsaved(); render();
+  return spawn;
 }
 
 function toggleTeamFlag(id) {

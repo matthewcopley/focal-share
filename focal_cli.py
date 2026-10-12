@@ -20,16 +20,23 @@ insert.
     focal projects | project 3 | ideas | cats
     focal add "Send W-9" --due fri --cat Admin -p high
     focal done 589             also reopen, snooze 589 fri, unsnooze, note 589 "text",
-    focal edit 589 -d +2d -p 1      sub add 589 "text", sub done 589 2
+    focal edit 589 -d +2d -p 1      sub add 589 "text", sub done|reopen 589 2
+    focal undo 589             reopen, and take back the repeat it spawned if untouched
+    focal launch 589 --started ISO --ended ISO --planned 5 --outcome done [--step "..."]
+    focal cat add Billing | cat rename Billing "Media Billing"
+    focal proj add "New app" --type internal | proj done 3 | proj reopen 3
+    focal pref get [KEY] | pref set KEY VALUE (- = stdin) | pref unset KEY
 
-Adds go through the inbox. Changes to existing tasks are queued with the launcher and
-applied by an open Focal tab, using the app's own logic, and the CLI waits for the
-result. Exit 4 means queued but not applied yet (no tab open, or a background tab that
-hasn't checked in).
+Adds go through the inbox. Every other change (to tasks, categories, projects, prefs,
+Launch sessions) is queued with the launcher and applied by an open Focal tab, in the
+order queued, using the app's own logic, and the CLI waits for the result. Exit 4 means
+queued but not applied yet (no tab open, or a background tab that hasn't checked in).
 
-Every read takes --json. `--db FILE` reads a local copy instead, including a backup
-snapshot (.db.gz). Exit codes: 0 ok, 1 can't reach Focal, 2 bad input or refused,
-3 duplicate, 4 queued but not applied yet.
+Every read takes --json, and so does every change (op_id, applied, and the app's result).
+`--db FILE` reads a local copy instead, including a backup snapshot (.db.gz). Exit codes:
+0 ok (or already so), 1 can't reach Focal, 2 bad input or refused, 3 duplicate (an open
+task or project with that title, a Launch session already logged), 4 queued but not
+applied yet.
 
 Deliberately not called: GET /pending-tasks. The launcher treats every call as the open
 app's heartbeat, and a CLI polling it would stop the closed-app flusher from running.
@@ -46,7 +53,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 URL = os.environ.get('FOCAL_URL', 'http://localhost:8080').rstrip('/')
 
@@ -517,10 +524,15 @@ def cmd_add(f, a):
 # the change stays queued for the next one, and the app refuses one more than a day old.
 
 def run_op(f, a, op, **kw):
-    t = f.by_id.get(a.id)
-    if not t:
+    if a.id not in f.by_id:
         die(f'no task {a.id}')
-    body = {'op': op, 'id': a.id, 'source': a.source or 'CLI', **kw}
+    send_op(a, op, id=a.id, **kw)
+
+
+def send_op(a, op, **kw):
+    """Queue an op, wait up to --wait for an open tab to apply it, report, and exit:
+    0 applied (or already so), 2 refused, 3 refused as a duplicate, 4 not applied yet."""
+    body = {'op': op, 'source': a.source or 'CLI', **kw}
     q = json.loads(http('POST', '/ops', body))
     op_id, result = q['op_id'], None
     if q.get('tab_alive'):
@@ -542,7 +554,7 @@ def run_op(f, a, op, **kw):
         print(result.get('message', 'done'))
     else:
         print('focal: ' + result.get('error', 'refused'), file=sys.stderr)
-    sys.exit(4 if result is None else 0 if result.get('ok') else 2)
+    sys.exit(4 if result is None else 0 if result.get('ok') else 3 if result.get('duplicate') else 2)
 
 
 def cmd_done(f, a):
@@ -551,6 +563,10 @@ def cmd_done(f, a):
 
 def cmd_reopen(f, a):
     run_op(f, a, 'reopen')
+
+
+def cmd_undo(f, a):
+    run_op(f, a, 'undo')
 
 
 def cmd_snooze(f, a):
@@ -572,9 +588,9 @@ def cmd_sub(f, a):
     if a.action == 'add':
         run_op(f, a, 'subtask', text=a.arg)
     elif a.arg.isdigit():
-        run_op(f, a, 'subdone', sub=int(a.arg))
+        run_op(f, a, 'subdone' if a.action == 'done' else 'subreopen', sub=int(a.arg))
     else:
-        die('sub done takes the subtask\'s number, as `focal show` lists it')
+        die(f'sub {a.action} takes the subtask\'s number, as `focal show` lists it')
 
 
 def cmd_edit(f, a):
@@ -602,6 +618,102 @@ def cmd_edit(f, a):
     if not fields:
         die('nothing to change (see focal edit -h)')
     run_op(f, a, 'edit', fields=fields)
+
+
+def parse_iso(v, what):
+    """An ISO timestamp → UTC in JavaScript's toISOString() shape. One with no offset is
+    taken as local time."""
+    try:
+        d = datetime.fromisoformat(v.strip().replace('Z', '+00:00'))
+    except ValueError:
+        die(f'bad {what} "{v}" (try 2026-10-12T21:02:10Z)')
+    d = d.astimezone(timezone.utc)
+    return d.strftime('%Y-%m-%dT%H:%M:%S.') + f'{d.microsecond // 1000:03d}Z'
+
+
+def cmd_launch(f, a):
+    t = f.by_id.get(a.id)
+    if not t:
+        die(f'no task {a.id}')
+    started, ended = parse_iso(a.started, '--started'), parse_iso(a.ended, '--ended')
+    if ended <= started:
+        die('--ended must be after --started')
+    if not 1 <= a.planned <= 600:
+        die('--planned is minutes, 1–600')
+    # Checked again by the app, which also catches one queued but not yet applied
+    for r in f.con.execute('SELECT id, started FROM sessions WHERE taskId=?', (a.id,)):
+        if r['started'] and parse_iso(r['started'], 'started') == started:
+            die(f"already logged: session #{r['id']} on #{a.id} started {started}", 3)
+    session = {'started': started, 'ended': ended, 'plannedMin': a.planned, 'outcome': a.outcome,
+               'step': a.step or '', 'plan': a.plan or '', 'next': a.next or '', 'where': a.where or ''}
+    if a.sticky is not None:
+        session['sticky'] = a.sticky
+    run_op(f, a, 'launch', session=session, closeSubs=a.close_subs)
+
+
+def cmd_cat(f, a):
+    if a.action == 'add':
+        if len(a.names) != 1:
+            die('usage: focal cat add NAME [--color #RRGGBB]')
+        if a.color and not re.fullmatch(r'#[0-9a-fA-F]{6}', a.color):
+            die('--color must be #RRGGBB')
+        send_op(a, 'catadd', name=a.names[0], **({'color': a.color} if a.color else {}))
+    else:
+        if len(a.names) != 2:
+            die('usage: focal cat rename OLD NEW')
+        old, new = a.names
+        if old.strip().lower() not in {c.lower() for c in f.categories}:
+            die(f'no category "{old}". Existing: {", ".join(f.categories)}')
+        send_op(a, 'catrename', name=old, to=new)
+
+
+PROJECT_STATUSES = ['not-started', 'in-progress', 'active', 'on-hold', 'complete']
+
+
+def cmd_proj(f, a):
+    if a.action == 'add':
+        title = a.arg.strip()
+        if not title:
+            die('a project needs a title')
+        dupes = [p for p in f.projects.values() if p['status'] != 'complete' and p['title'].strip().lower() == title.lower()]
+        if dupes and not a.force:
+            die(f'already open: project #{dupes[0]["id"]} "{dupes[0]["title"]}" (use --force to add anyway)', 3)
+        fields = {'title': title, 'status': a.status or 'not-started', 'type': a.type or 'client',
+                  'jobNumber': a.job or '', 'startDate': parse_day(a.start) if a.start else '',
+                  'dueDate': parse_day(a.due) if a.due else '', 'notes': a.notes or ''}
+        return send_op(a, 'projadd', fields=fields)
+    if not a.arg.isdigit():
+        die(f'proj {a.action} takes a project id (see focal projects)')
+    pid = int(a.arg)
+    if pid not in f.projects:
+        die(f'no project {pid}')
+    if a.action == 'done':
+        return send_op(a, 'projdone', id=pid)
+    if a.status == 'complete':
+        die('--status for reopen can\'t be complete')
+    send_op(a, 'projreopen', id=pid, **({'status': a.status} if a.status else {}))
+
+
+def cmd_pref(f, a):
+    if a.action == 'get':
+        prefs = {r['key']: r['value'] for r in f.con.execute('SELECT key, value FROM prefs')} \
+            if f.con.execute("SELECT 1 FROM sqlite_master WHERE name='prefs'").fetchone() else {}
+        if a.key is None:
+            return emit(a, [{'key': k, 'value': v} for k, v in sorted(prefs.items())],
+                        lambda r: f"{r['key']} = {r['value'][:80]}", 'No prefs set.')
+        if a.key not in prefs:
+            die(f'no pref "{a.key}"')
+        print(json.dumps({'key': a.key, 'value': prefs[a.key]}, indent=2, ensure_ascii=False) if a.json else prefs[a.key])
+        return
+    if not a.key or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,64}', a.key):
+        die('a pref key is 1–64 of A-Z a-z 0-9 _ . : -')
+    if a.action == 'unset':
+        if a.value is not None:
+            die('usage: focal pref unset KEY')
+        return send_op(a, 'pref', key=a.key, value=None)
+    if a.value is None:
+        die('usage: focal pref set KEY VALUE  (VALUE - reads stdin)')
+    send_op(a, 'pref', key=a.key, value=sys.stdin.read().rstrip('\n') if a.value == '-' else a.value)
 
 
 def cmd_op(f, a):
@@ -635,6 +747,11 @@ def main(argv=None):
             sp.add_argument('-n', '--limit', type=int, help='at most N tasks')
         return sp
 
+    def op_opts(sp):
+        sp.add_argument('--wait', type=float, default=20, help='seconds to wait for Focal to apply it (20)')
+        sp.add_argument('--source', help='who made the change, shown in Focal and the changelog (default CLI)')
+        return sp
+
     sp = cmd('ls', cmd_ls, 'list tasks in a view (default: focus)', filters=True)
     sp.add_argument('view', nargs='?', choices=VIEWS, metavar='VIEW', help=' | '.join(VIEWS))
     sp.add_argument('--days', type=int, help='upcoming: look N days ahead (14); recent: N days back (7)')
@@ -649,6 +766,19 @@ def main(argv=None):
     cmd('projects', cmd_projects, 'list projects').add_argument('--all', action='store_true',
                                                                help='include complete ones')
     cmd('project', cmd_project, 'one project with its notes and tasks').add_argument('id', type=int)
+    # Not `project add …`: settings.json allows `focal project *` without a prompt, as a read
+    sp = cmd('proj', cmd_proj, 'add a project, or mark one done / reopen it')
+    sp.add_argument('action', choices=['add', 'done', 'reopen'])
+    sp.add_argument('arg', metavar='TITLE|ID', help='add: the title; done, reopen: the project id')
+    sp.add_argument('--status', choices=PROJECT_STATUSES, help='add: initial status (not-started); '
+                    'reopen: the status to reopen as (default: the one it had before it closed)')
+    sp.add_argument('--type', choices=['client', 'internal'], help='add: default client, like the app')
+    sp.add_argument('--job', help='add: job number (client projects)')
+    sp.add_argument('--start', help='add: start date')
+    sp.add_argument('--due', help='add: due date')
+    sp.add_argument('--notes', help='add: notes')
+    sp.add_argument('--force', action='store_true', help='add even if an open project has this title')
+    op_opts(sp)
     cmd('ideas', cmd_ideas, 'list ideas')
     cmd('cats', cmd_cats, 'list categories with open-task counts')
 
@@ -672,18 +802,18 @@ def main(argv=None):
         if action:
             sp.add_argument('action', choices=action)
         sp.add_argument('id', type=int, help='task id')
-        sp.add_argument('--wait', type=float, default=20, help='seconds to wait for Focal to apply it (20)')
-        sp.add_argument('--source', help='who made the change, shown in Focal and the changelog (default CLI)')
-        return sp
+        return op_opts(sp)
 
     change('done', cmd_done, 'complete a task (spawns the next one if it repeats)').add_argument(
         '--close-subs', action='store_true', help='also complete its open subtasks (otherwise refused)')
-    change('reopen', cmd_reopen, 'un-complete a task')
+    change('reopen', cmd_reopen, 'un-complete a task (removes the next occurrence it spawned)')
+    change('undo', cmd_undo, 'undo a completion: reopen it, and remove the next occurrence it '
+           'spawned only if nobody has touched it')
     change('snooze', cmd_snooze, 'snooze a task until a date').add_argument('until', help='fri, +3d, 2026-10-20…')
     change('unsnooze', cmd_unsnooze, 'cancel a snooze, restoring the original due date')
     change('note', cmd_note, 'append a stamped line to a task\'s notes').add_argument('text')
-    sp = change('sub', cmd_sub, 'add a subtask, or complete one by number', action=['add', 'done'])
-    sp.add_argument('arg', metavar='TEXT|N', help='subtask text (add) or its number from `focal show` (done)')
+    sp = change('sub', cmd_sub, 'add a subtask, or complete / reopen one by number', action=['add', 'done', 'reopen'])
+    sp.add_argument('arg', metavar='TEXT|N', help='subtask text (add) or its number from `focal show` (done, reopen)')
     sp = change('edit', cmd_edit, 'change a task\'s fields')
     sp.add_argument('--title')
     sp.add_argument('-d', '--due', help='2026-10-15, tomorrow, +3d, fri…')
@@ -697,6 +827,29 @@ def main(argv=None):
     sp.add_argument('--project', type=int, help='project id')
     sp.add_argument('--no-project', action='store_true')
     sp.add_argument('--team', action=argparse.BooleanOptionalAction, help='flag (or --no-team unflag) for the team agenda')
+    sp = change('launch', cmd_launch, 'record a Launch session run elsewhere (feeds the streak and Launch ring)')
+    sp.add_argument('--started', required=True, help='ISO timestamp (no offset = local time)')
+    sp.add_argument('--ended', required=True, help='ISO timestamp')
+    sp.add_argument('--planned', type=int, required=True, help='planned minutes (the timebox)')
+    sp.add_argument('--outcome', required=True, choices=['done', 'parked'], help='done completes the task, like the app')
+    sp.add_argument('--step', help='the tiny step being worked on')
+    sp.add_argument('--plan', help='the if-stuck plan')
+    sp.add_argument('--next', help='parked: the next step (the task\'s resume cue)')
+    sp.add_argument('--where', help='parked: where you got to (stamped into the notes with --next)')
+    sp.add_argument('--sticky', action=argparse.BooleanOptionalAction,
+                    help='was it a sticky task (default: whether it is now)')
+    sp.add_argument('--close-subs', action='store_true', help='done: also complete its open subtasks')
+
+    sp = op_opts(cmd('cat', cmd_cat, 'add or rename a category'))
+    sp.add_argument('action', choices=['add', 'rename'])
+    sp.add_argument('names', nargs='+', metavar='NAME', help='add NAME | rename OLD NEW')
+    sp.add_argument('--color', help='add: #RRGGBB (default random, like the app)')
+
+    sp = op_opts(cmd('pref', cmd_pref, 'read or write a synced pref (prefs table)'))
+    sp.add_argument('action', choices=['get', 'set', 'unset'])
+    sp.add_argument('key', nargs='?', help='get with no key lists them all')
+    sp.add_argument('value', nargs='?', help='set: the value (a string; - reads stdin)')
+
     cmd('op', cmd_op, 'check on a queued change').add_argument('op_id')
 
     a = p.parse_args(argv)

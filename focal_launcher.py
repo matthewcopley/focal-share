@@ -44,7 +44,7 @@ _db_lock = threading.Lock()
 _last_pending_poll = 0.0        # updated on every GET /pending-tasks (Focal liveness signal)
 LEASE_SECONDS = 60
 _leases = {}                    # inbox/op file name -> (tab id, expiry): who is handling it
-_last_ops_poll = 0.0            # last poll from a tab that applies ops (X-Focal-Client >= 3)
+_last_ops_poll = {}             # X-Focal-Client version (>= 3) -> its last poll: tabs that apply ops
 
 
 def _lease(name, tab, now):
@@ -254,7 +254,7 @@ def pending_tasks():
     client = request.headers.get('X-Focal-Client')
     if client is None:
         return jsonify(tasks=[])
-    global _last_pending_poll, _last_ops_poll
+    global _last_pending_poll
     _last_pending_poll = now = time.time()
     # Each task to add goes to one tab at a time. Two tabs draining the same file would
     # both add it, and since saves now merge instead of overwrite, both copies would
@@ -268,11 +268,17 @@ def pending_tasks():
         item['queue_id'] = f.name        # Focal echoes this back to ack (delete) the file
         tasks.append(item)
     # Ops go only to tabs that know how to apply them, or an older tab would hold the
-    # lease on every one without ever acking.
+    # lease on every one without ever acking. They're handed out in queue order, and a
+    # tab stops at the first one it can't take (another tab holds it, or it needs a newer
+    # tab), so no op is ever applied ahead of one queued before it.
     ops = []
-    if client.isdigit() and int(client) >= 3:
-        _last_ops_poll = now
-        ops = [d for f, d in _read_ops() if _lease(f.name, tab, now)]
+    version = int(client) if client.isdigit() else 0
+    if version >= 3:
+        _last_ops_poll[version] = now
+        for f, d in _read_ops():
+            if OPS.get(d.get('op'), 99) > version or not _lease(f.name, tab, now):
+                break
+            ops.append(d)
     return jsonify(tasks=tasks, ops=ops, db_version=_current_version())
 
 
@@ -370,34 +376,63 @@ def ack_pending():
 
 
 # ---------------------------------------------------------------------------
-# Task operations from outside the app: the focal CLI's done, reopen, edit, snooze,
-# unsnooze, note and subtask commands.
+# Operations from outside the app: the focal CLI's changes to tasks (done, reopen, undo,
+# edit, snooze, unsnooze, note, sub, launch), categories, projects and prefs.
 #
 # These run app logic that lives only in index.html (recurring spawns, deferral counts,
 # snooze history, changelog wording the stats depend on), so the launcher never applies
 # them itself. POST /ops queues one as a file in .focal_ops/. The poll hands it to one
-# open tab (leased like inbox tasks), which applies it with the app's own functions,
-# saves, and acks with a result. The caller polls GET /ops/<op_id> for that result.
+# open tab (leased like inbox tasks), in queue order, which applies it with the app's own
+# functions, saves, and acks with a result. The caller polls GET /ops/<op_id> for that result.
 # With no tab open the op waits for the next one; the app refuses ops more than a day
 # old rather than apply something long stale.
 # ---------------------------------------------------------------------------
 OPS_DIR = FOCAL_DIR / '.focal_ops'
 OPS_RESULTS = OPS_DIR / 'results'
-OPS = {'done', 'reopen', 'edit', 'snooze', 'unsnooze', 'note', 'subtask', 'subdone'}
+# op -> the X-Focal-Client version a tab needs to apply it
+OPS = {op: 3 for op in ('done', 'reopen', 'edit', 'snooze', 'unsnooze', 'note', 'subtask', 'subdone')}
+OPS.update({op: 4 for op in ('undo', 'subreopen', 'launch', 'catadd', 'catrename', 'projadd',
+                             'projdone', 'projreopen', 'pref')})
+TASK_OPS = {'done', 'reopen', 'undo', 'edit', 'snooze', 'unsnooze', 'note', 'subtask', 'subdone',
+            'subreopen', 'launch'}
+PROJECT_OPS = {'projdone', 'projreopen'}       # id is a project id; the other ops take none
+OP_FIELDS = ('fields', 'until', 'text', 'sub', 'closeSubs', 'source', 'session', 'name', 'to',
+             'color', 'key', 'value', 'status')
 OP_ID_RE = re.compile(r'^op-\d{8}-\d{6}-[0-9a-f]{6}$')
 OPS_TAB_ALIVE = 15              # seconds since an ops-capable tab polled
+_ops_lock = threading.Lock()
+_last_seq = 0
+
+
+def _next_seq():
+    """A number that only goes up, so ops apply in the order they were queued. The op id
+    alone sorts by its random suffix within a second, which applied a reopen after the
+    done queued just after it."""
+    global _last_seq
+    with _ops_lock:
+        _last_seq = max(time.time_ns(), _last_seq + 1)
+        return _last_seq
 
 
 def _read_ops():
+    """[(Path, dict)] for each queued op, in queue order. A file from before `seq` was
+    written sorts by its modification time."""
     if not OPS_DIR.exists():
         return []
     out = []
-    for f in sorted(OPS_DIR.glob('op-*.json')):
+    for f in OPS_DIR.glob('op-*.json'):
         try:
-            out.append((f, json.loads(f.read_text(encoding='utf-8'))))
+            d = json.loads(f.read_text(encoding='utf-8'))
+            out.append((d.get('seq') or f.stat().st_mtime_ns, f.name, f, d))
         except Exception:
             pass
-    return out
+    return [(f, d) for _, _, f, d in sorted(out, key=lambda x: x[:2])]
+
+
+def _tab_alive(op):
+    """An open tab new enough to apply `op` has polled in the last OPS_TAB_ALIVE seconds."""
+    need, now = OPS.get(op, 99), time.time()
+    return any(v >= need and now - t < OPS_TAB_ALIVE for v, t in _last_ops_poll.items())
 
 
 def _write_json(path, obj):
@@ -411,18 +446,20 @@ def queue_op():
     d = request.get_json(force=True, silent=True)
     if not isinstance(d, dict) or d.get('op') not in OPS:
         return jsonify(ok=False, error='op must be one of ' + ', '.join(sorted(OPS))), 400
-    try:
-        task_id = int(d.get('id'))
-    except (TypeError, ValueError):
-        return jsonify(ok=False, error='id must be a task id'), 400
+    op = d['op']
+    item = {k: d[k] for k in ('op',) + OP_FIELDS if k in d}
+    if op in TASK_OPS or op in PROJECT_OPS:
+        try:
+            item['id'] = int(d.get('id'))
+        except (TypeError, ValueError):
+            return jsonify(ok=False, error='id must be a ' + ('task' if op in TASK_OPS else 'project') + ' id'), 400
     op_id = f"op-{time.strftime('%Y%m%d-%H%M%S')}-{secrets.token_hex(3)}"
-    item = {k: d[k] for k in ('op', 'fields', 'until', 'text', 'sub', 'closeSubs', 'source') if k in d}
-    item.update(id=task_id, op_id=op_id, created=_now_iso())
+    item.update(op_id=op_id, created=_now_iso(), seq=_next_seq())
     if len(json.dumps(item)) > 100_000:
         return jsonify(ok=False, error='too large'), 400
     OPS_DIR.mkdir(exist_ok=True)
     _write_json(OPS_DIR / (op_id + '.json'), item)
-    return jsonify(ok=True, op_id=op_id, tab_alive=time.time() - _last_ops_poll < OPS_TAB_ALIVE), 201
+    return jsonify(ok=True, op_id=op_id, tab_alive=_tab_alive(op)), 201
 
 
 @app.route('/ops/<op_id>', methods=['GET'])
@@ -432,8 +469,13 @@ def op_status(op_id):
     res = OPS_RESULTS / (op_id + '.json')
     if res.exists():
         return jsonify(status='done', result=json.loads(res.read_text(encoding='utf-8')))
-    if (OPS_DIR / (op_id + '.json')).exists():
-        return jsonify(status='queued', tab_alive=time.time() - _last_ops_poll < OPS_TAB_ALIVE)
+    queued = OPS_DIR / (op_id + '.json')
+    if queued.exists():
+        try:
+            op = json.loads(queued.read_text(encoding='utf-8')).get('op')
+        except Exception:
+            op = None
+        return jsonify(status='queued', tab_alive=_tab_alive(op))
     return jsonify(status='unknown'), 404
 
 

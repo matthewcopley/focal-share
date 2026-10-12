@@ -71,15 +71,21 @@ focal add "Maybe this" --review   # into the Review queue instead
 focal done 42                # complete it (the next one is created if it repeats)
 focal done 42 --close-subs   # ...and its open subtasks
 focal reopen 42
+focal undo 42                # reopen it; take back the repeat it spawned unless that was worked on
 focal snooze 42 fri; focal unsnooze 42
 focal edit 42 -d +2d -p high --cat Admin    # also --title, --desc, --recur, --project, --team…
 focal note 42 "Called them, waiting on a reply"
-focal sub add 42 "Draft the email"; focal sub done 42 1
+focal sub add 42 "Draft the email"; focal sub done 42 1; focal sub reopen 42 1
+focal launch 42 --started 2026-10-12T21:02:10Z --ended 2026-10-12T21:35:21Z --planned 5 --outcome done
+                             # a Launch session run elsewhere: counts for the streak and the Launch ring
+focal cat add Billing --color "#185FA5"; focal cat rename Billing Invoicing
+focal proj add "New intake form" --type internal --due +2w; focal proj done 3; focal proj reopen 3
+focal pref get; focal pref set my_key "value"; focal pref unset my_key   # synced prefs table
 ```
 
 Every read takes `--json`. `--db FILE` reads a copy of the database (`.db` or `.db.gz`) instead of the running app. Set `FOCAL_URL` if the launcher isn't at `http://localhost:8080`. `focal add` refuses (exit code 3) a title that matches an open task, and refuses categories that don't exist yet unless you pass `--new-category`. It never writes `focal.db` itself: the add goes through `POST /pending-tasks`, and the app does the insert.
 
-Changes to existing tasks (`done`, `edit`, `snooze`…) are applied by an open Focal tab, using the same code as the buttons, so a repeating task still spawns its next occurrence and the changelog records the change (tagged `via CLI`, or `--source NAME`). The command waits for the tab to apply the change and prints the result. If no Focal tab is open, the change waits for the next one, the command exits with code 4, and `focal op <id>` checks on it later. A change more than a day old is refused rather than applied stale.
+Every other change (`done`, `edit`, `snooze`, `launch`, `cat`, `proj`, `pref`…) is applied by an open Focal tab, in the order the changes were made, using the same code as the buttons, so a repeating task still spawns its next occurrence and the changelog records the change (tagged `via CLI`, or `--source NAME`). The command waits for the tab to apply the change and prints the result. If no Focal tab is open, the change waits for the next one, the command exits with code 4, and `focal op <id>` checks on it later. A change more than a day old is refused rather than applied stale. Exit code 3 means a duplicate was refused: a `launch` already logged for that task and start time, or `proj add` with an open project's title. Project changes are `focal proj …`, not `focal project …`, so the read-only permission below can't let them through.
 
 ### Using it from Claude Code
 
@@ -103,7 +109,7 @@ To let Claude run the read-only commands without asking each time, add them to `
 |---|---|
 | `index.html` | The entire app — HTML, CSS, and JS in one file (sql.js runs SQLite in the browser via WebAssembly) |
 | `focal_launcher.py` | Flask server on :8080 — serves the app, loads/saves `focal.db`, task-handoff inbox, pasted images |
-| `focal_cli.py` | The `focal` command line: read views and add tasks over HTTP |
+| `focal_cli.py` | The `focal` command line: read views, add and change tasks, categories, projects, prefs and Launch sessions over HTTP |
 | `focal.command` | macOS double-click launcher |
 
 Frontend dependencies (sql.js, Tabler Icons) load from CDN at runtime — no build step, no `node_modules`.

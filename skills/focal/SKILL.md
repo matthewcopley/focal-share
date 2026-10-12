@@ -25,6 +25,7 @@ Read commands never change anything. Run them freely, and add `--json` when you 
 | One task in full | `focal show ID` (description, notes, numbered subtasks, links, history) |
 | Find a task | `focal search TEXT [--all]` (`--all` includes done tasks) |
 | Projects / ideas / categories | `focal projects`, `focal project ID`, `focal ideas`, `focal cats` |
+| Synced prefs | `focal pref get [KEY]` (exit 2 if KEY isn't set) |
 
 `ls` and `search` take `--cat NAME`, `--project ID`, `-p 1-4` and `-n N`. Priorities: 1 Critical, 2 High, 3 Medium, 4 Low.
 
@@ -35,11 +36,15 @@ When answering, lead with the answer and keep task ids and due dates visible (`#
 | Change | Command |
 |---|---|
 | Add | `focal add "Title" [-d DATE] [-p high] [-c CATEGORY] [--desc TEXT] [--recur weekly] [--project ID] [--team]` |
-| Complete / undo | `focal done ID [--close-subs]`, `focal reopen ID` |
+| Complete / undo | `focal done ID [--close-subs]`, `focal undo ID` (reopens it, and takes back the repeat it spawned unless that repeat has been worked on), `focal reopen ID` |
 | Snooze / unsnooze | `focal snooze ID DATE`, `focal unsnooze ID` (restores the original due date) |
 | Edit fields | `focal edit ID [--title T] [-d DATE \| --no-due] [-p P] [-c CAT] [--desc T] [--recur R \| --no-recur] [--project ID \| --no-project] [--team \| --no-team]` |
 | Note | `focal note ID "text"` (appends a timestamped line to the notes) |
-| Subtasks | `focal sub add ID "text"`, `focal sub done ID N` (N as `focal show` numbers them) |
+| Subtasks | `focal sub add ID "text"`, `focal sub done ID N`, `focal sub reopen ID N` (N as `focal show` numbers them) |
+| Categories | `focal cat add NAME [--color #RRGGBB]`, `focal cat rename OLD NEW` (its tasks move with it) |
+| Projects | `focal proj add "Title" [--type client\|internal] [--status S] [--job N] [--start DATE] [--due DATE] [--notes T]`, `focal proj done ID`, `focal proj reopen ID [--status S]` |
+| Launch session done elsewhere | `focal launch ID --started ISO --ended ISO --planned MIN --outcome done\|parked [--step T] [--next T] [--where T]` (`done` also completes the task) |
+| Synced pref | `focal pref set KEY VALUE` (`-` reads stdin), `focal pref unset KEY` |
 
 Dates accept `2026-10-15`, `today`, `tomorrow`, `+3d`, `+2w`, or a weekday (`fri` = the next Friday).
 
@@ -49,6 +54,7 @@ Rules for changes:
 - **Act directly when the user named the change and the task is unambiguous**, e.g. "mark 589 done" or "snooze the Verizon task to Friday" when one open task matches. If you found the task by searching and more than one could fit, show the candidates and ask first.
 - **Confirm before changing more than three tasks at once.** List them first.
 - **`done` refuses a task with open subtasks** (exit 2). Tell the user which subtasks are open and ask before retrying with `--close-subs`.
+- **To undo a completion the user just made, use `undo`, not `reopen`.** `undo` keeps a repeat that has notes, edits or sessions and says why.
 - **Adding:** `focal add` refuses an exact duplicate of an open task's title (exit 3). Tell the user which task already exists rather than forcing it. A category must already exist (see `focal cats`, case doesn't matter); only use `--new-category` if the user asked for a new one. Use `--review` only if the user wants to approve it in Focal's Review view first. Without `-d` the task is due today (Focal never adds an undated task), so pass `-d` when the user names a day.
 - There is no delete. If the user wants a task gone, say so and suggest completing it or deleting it in the app.
 
@@ -59,4 +65,5 @@ Adds land within seconds. Other changes are applied by an open Focal browser tab
 - **Exit 0**: done. Report the printed result, including any "next one" for repeating tasks.
 - **Exit 4**: queued but not applied yet. Either no Focal tab is open, so it applies when one opens, or a background tab hasn't checked in (up to about a minute). Say so plainly, and offer to check with `focal op <op_id>`. Don't re-run the command, which would queue a second copy.
 - **Exit 2**: refused (bad input, or the app rejected it). Relay the reason.
+- **Exit 3**: refused as a duplicate: an open task or project with that title, or a Launch session already logged for that task and start time. Nothing changed.
 - **Exit 1**: can't reach Focal's server. The machine running Focal may be off or asleep, or, away from that machine, `FOCAL_URL` may not be set. Tell the user rather than retrying in a loop.
